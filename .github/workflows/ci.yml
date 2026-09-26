@@ -1,6 +1,7 @@
 # Builds and tests every push and pull request to dev, once more with ASan and
-# UBSan. Tags named v<version>-lcs.<n> additionally produce a signed release
-# tarball with the upstream layout (archive/bin, archive/doc, archive/examples).
+# UBSan, and runs the static analyzer. Tags named v<version>-lcs.<n>
+# additionally produce a signed release tarball with the upstream layout
+# (archive/bin, archive/doc, archive/examples).
 
 name: CI
 
@@ -106,3 +107,12 @@ jobs:
 
       - name: Test
         run: ctest --preset sanitize
+
+  analyze:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run the clang static analyzer
+        run: tools/analyze.sh
