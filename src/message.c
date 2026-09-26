@@ -349,6 +349,9 @@ static bool token_is_positive_integer(struct token token, int *value)
         if (!(c >= '0' && c <= '9')) {
             return false;
         }
+        if (*value > (INT_MAX - token_char_int_table[(int)c]) / 10) {
+            return false;
+        }
         *value = *value * 10 + token_char_int_table[(int)c];
     }
 
@@ -359,7 +362,7 @@ static bool token_is_hexadecimal(struct token token, uint32_t *value)
 {
     *value = 0;
 
-    if (token.length <= 2) return false;
+    if (token.length <= 2 || token.length > 10) return false;
 
     if (!(token.text[0] == '0' &&
          (token.text[1] == 'x' ||
