@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 - Update scripting-addition for macOS 27 Apple Silicon arm64e (space focus, create, destroy and animation removal; moving spaces is not yet supported) [#2802](https://github.com/asmvik/yabai/issues/2802)
 - Scripting-addition validates message lengths and element counts received on its socket instead of reading past the message buffer inside Dock.app
+- Scripting-addition version is now *2.1.31-lcs.1*, so `--load-sa` replaces payloads installed by upstream or by earlier builds of this fork
 - Fixed scripting-addition *add_space* pattern for macOS 26.6 Apple Silicon arm64 [#2799](https://github.com/asmvik/yabai/issues/2799)
 - Fixed minor memory leak on space destruction, and added a few missing null checks to SkyLight API calls [#2791](https://github.com/asmvik/yabai/issues/2791)
 
