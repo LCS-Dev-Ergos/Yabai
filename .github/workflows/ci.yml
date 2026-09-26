@@ -1,0 +1,91 @@
+# Builds every push and pull request to dev. Tags named v<version>-lcs.<n>
+# additionally produce a signed release tarball with the upstream layout
+# (archive/bin, archive/doc, archive/examples).
+
+name: CI
+
+on:
+  push:
+    branches: [dev]
+    tags: ["v*-lcs.*"]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SIGNING_IDENTITY: yabai-lcs-dev
+
+jobs:
+  build:
+    runs-on: macos-26
+    permissions:
+      contents: write
+    env:
+      RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Import the signing certificate
+        if: env.RELEASE == 'true'
+        env:
+          P12: ${{ secrets.YABAI_SIGNING_P12 }}
+          P12_PASSWORD: ${{ secrets.YABAI_SIGNING_P12_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password=$(openssl rand -hex 16)
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/signing.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          existing=()
+          while IFS= read -r line; do existing+=("$(echo "$line" | tr -d '" ')"); done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain" "${existing[@]}"
+          rm "$RUNNER_TEMP/signing.p12"
+
+      - name: Build
+        run: |
+          identity=""
+          if [ "$RELEASE" = "true" ]; then identity="$SIGNING_IDENTITY"; fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DYABAI_CODESIGN_IDENTITY="$identity"
+          cmake --build build --parallel
+
+      - name: Verify
+        run: |
+          build/bin/yabai --version
+          test "$(lipo -archs build/bin/yabai)" = "x86_64 arm64"
+          test "$(lipo -archs build/src/osax/payload)" = "x86_64 arm64e"
+          if [ "$RELEASE" = "true" ]; then
+            codesign --verify --strict build/bin/yabai
+            codesign -dvv build/bin/yabai 2>&1 | grep -qx "Authority=$SIGNING_IDENTITY"
+          fi
+
+      - name: Package and publish the release
+        if: env.RELEASE == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir -p archive/bin
+          cp build/bin/yabai archive/bin/
+          cp -R doc examples archive/
+          tarball="yabai-$TAG.tar.gz"
+          COPYFILE_DISABLE=1 tar -czf "$tarball" archive
+          sha256=$(shasum -a 256 "$tarball" | cut -d ' ' -f 1)
+          requirement=$(codesign -d -r- build/bin/yabai 2>&1 | sed -n 's/^designated => //p')
+          tick='`'
+          cat > notes.md <<EOF
+          Signed with ${tick}${SIGNING_IDENTITY}${tick}.
+
+          - sha256: ${tick}${sha256}${tick}
+          - designated requirement: ${tick}${requirement}${tick}
+          EOF
+          gh release create "$TAG" "$tarball" --verify-tag --title "$TAG" --notes-file notes.md
+
+      - name: Remove the signing keychain
+        if: always() && env.RELEASE == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
