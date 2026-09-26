@@ -25,6 +25,7 @@
 #include <stdio.h>
 
 #include "common.h"
+#include "pattern.h"
 
 #ifdef __x86_64__
 #include "x64_payload.m"
@@ -157,69 +158,6 @@ static uint64_t image_slide(void)
 
     return 0;
 }
-
-static uint64_t hex_find_seq(uint64_t baddr, const char *c_pattern)
-{
-    if (!baddr || !c_pattern) return 0;
-
-    uint64_t addr = baddr;
-    uint64_t pattern_length = (strlen(c_pattern) + 1) / 3;
-    char buffer_a[pattern_length];
-    char buffer_b[pattern_length];
-    memset(buffer_a, 0, sizeof(buffer_a));
-    memset(buffer_b, 0, sizeof(buffer_b));
-
-    char *pattern = (char *) c_pattern + 1;
-    for (int i = 0; i < pattern_length; ++i) {
-        char c = pattern[-1];
-        if (c == '?') {
-            buffer_b[i] = 1;
-        } else {
-            int temp = c <= '9' ? 0 : 9;
-            temp = (temp + c) << 0x4;
-            c = pattern[0];
-            int temp2 = c <= '9' ? 0xd0 : 0xc9;
-            buffer_a[i] = temp2 + c + temp;
-        }
-        pattern += 3;
-    }
-
-loop:
-    for (int counter = 0; counter < pattern_length; ++counter) {
-        if ((buffer_b[counter] == 0) && (((char *)addr)[counter] != buffer_a[counter])) {
-            addr = (uint64_t)((char *)addr + 1);
-            if (addr - baddr < 0x1286a0) {
-                goto loop;
-            } else {
-                return 0;
-            }
-        }
-    }
-
-    return addr;
-}
-
-#if __arm64__
-uint64_t decode_adrp_add(uint64_t addr, uint64_t offset)
-{
-    uint32_t adrp_instr = *(uint32_t *) addr;
-
-    uint32_t immlo = (0x60000000 & adrp_instr) >> 29;
-    uint32_t immhi = (0xffffe0 & adrp_instr) >> 3;
-
-    int32_t value = (immhi | immlo) << 12;
-    int64_t value_64 = value;
-
-    uint32_t add_instr = *(uint32_t *) (addr + 4);
-    uint64_t imm12 = (add_instr & 0x3ffc00) >> 10;
-
-    if (add_instr & 0xc00000) {
-        imm12 <<= 12;
-    }
-
-    return (offset & 0xfffffffffffff000) + value_64 + imm12;
-}
-#endif
 
 static bool verify_os_version(NSOperatingSystemVersion os_version)
 {
