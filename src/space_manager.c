@@ -888,6 +888,39 @@ enum space_op_error space_manager_move_space_to_space(uint64_t acting_sid, uint6
     return success ? SPACE_OP_ERROR_SUCCESS : SPACE_OP_ERROR_SCRIPTING_ADDITION;
 }
 
+//
+// NOTE: The user space shown in place of sid when sid leaves its display, looked up on
+// that display. space_manager_prev_space crosses into the previous display when sid is the
+// first space of its display, which would give the source display a foreign current space.
+//
+
+static uint64_t space_manager_replacement_space(uint32_t did, uint64_t sid)
+{
+    int count = 0;
+    uint64_t *space_list = display_space_list(did, &count);
+    if (!space_list) return 0;
+
+    int index = -1;
+    for (int i = 0; i < count; ++i) {
+        if (space_list[i] == sid) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index == -1) return 0;
+
+    for (int i = index - 1; i >= 0; --i) {
+        if (space_is_user(space_list[i])) return space_list[i];
+    }
+
+    for (int i = index + 1; i < count; ++i) {
+        if (space_is_user(space_list[i])) return space_list[i];
+    }
+
+    return 0;
+}
+
 enum space_op_error space_manager_move_space_to_display(struct space_manager *sm, uint64_t sid, uint32_t did)
 {
     bool is_in_mc = mission_control_is_active();
@@ -911,7 +944,17 @@ enum space_op_error space_manager_move_space_to_display(struct space_manager *sm
 
     bool focus_space = sid == space_manager_active_space();
 
-    if (scripting_addition_move_space_to_display(sid, d_sid,  focus_space ? space_manager_prev_space(sid) : 0, focus_space ? 1 : 0)) {
+    //
+    // NOTE: A space visible on its display, focused or not, is replaced there before it moves.
+    //
+
+    uint64_t replacement_sid = 0;
+    if (space_is_visible(sid)) {
+        replacement_sid = space_manager_replacement_space(s_did, sid);
+        if (!replacement_sid) return SPACE_OP_ERROR_INVALID_SRC;
+    }
+
+    if (scripting_addition_move_space_to_display(sid, d_sid, replacement_sid, focus_space)) {
         space_manager_mark_view_invalid(sm, sid);
         if (focus_space) {
             space_manager_focus_space(sid);
