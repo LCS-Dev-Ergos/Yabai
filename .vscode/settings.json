@@ -66,5 +66,8 @@
   },
 
   //===----- Debug Configuration -----------------===//
-  "debug.internalConsoleOptions": "openOnSessionStart"
+  "debug.internalConsoleOptions": "openOnSessionStart",
+  // yabai is C: evaluate watch and console expressions with LLDB's own C
+  // evaluator, so globals such as g_window_manager.focused_window_id work.
+  "lldb.launch.expressions": "native"
 }

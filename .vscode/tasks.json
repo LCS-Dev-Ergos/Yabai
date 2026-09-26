@@ -5,6 +5,8 @@
   // CMake tasks use the presets in CMakePresets.json; each preset builds into
   // build/<preset>/ and points the root compile_commands.json at itself.
   // The makefile task reproduces the upstream build in bin/ for comparison.
+  // The service tasks stop and start the nix-darwin agent around the launch
+  // configurations in launch.json.
   //
   // Inputs:
   //   ${input:preset} - Debug, Release, ASan/UBSan or TSan/UBSan preset
@@ -64,6 +66,24 @@
       "args": ["--version"],
       "problemMatcher": [],
       "detail": "Smoke test of the selected preset build"
+    },
+
+    //===----- SERVICE ---------------------------------------------------------===//
+    {
+      "label": "yabai: Stop service",
+      "type": "shell",
+      "command": "launchctl bootout \"gui/$(id -u)/org.nixos.yabai\" 2>/dev/null || true",
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent" },
+      "detail": "Stop the nix-darwin agent so a debug build can take over"
+    },
+    {
+      "label": "yabai: Start service",
+      "type": "shell",
+      "command": "launchctl bootstrap \"gui/$(id -u)\" \"$HOME/Library/LaunchAgents/org.nixos.yabai.plist\" 2>/dev/null || launchctl kickstart \"gui/$(id -u)/org.nixos.yabai\"",
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent" },
+      "detail": "Start the nix-darwin agent again after a debug session"
     }
   ],
 
