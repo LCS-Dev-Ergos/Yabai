@@ -72,6 +72,7 @@ static void window_did_receive_focus(struct window_manager *wm, struct mouse_sta
 }
 
 #include "window_focus_events.c"
+#include "space_navigation_queue.c"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -1628,6 +1629,7 @@ static EVENT_HANDLER(DAEMON_MESSAGE)
     TIME_FUNCTION;
 
     FILE *rsp = NULL;
+    space_navigation_queue_claim(param1);
     char *message = daemon_message_read(param1);
 
     if (message && (rsp = fdopen(param1, "w"))) {

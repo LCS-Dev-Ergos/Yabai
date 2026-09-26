@@ -7,6 +7,62 @@ static uint64_t space_navigation_active_space(void)
     return display_space_id(display_manager_active_display_id());
 }
 
+// The space `steps` places after sid in mission-control order, wrapping.
+static uint64_t space_navigation_step(uint64_t sid, int steps)
+{
+    CFArrayRef display_spaces_ref = SLSCopyManagedDisplaySpaces(g_connection);
+    if (!display_spaces_ref) return 0;
+
+    uint64_t *space_list = NULL;
+    int index = 0;
+
+    int display_spaces_count = CFArrayGetCount(display_spaces_ref);
+    for (int i = 0; i < display_spaces_count; ++i) {
+        CFDictionaryRef display_ref = CFArrayGetValueAtIndex(display_spaces_ref, i);
+        CFArrayRef spaces_ref = CFDictionaryGetValue(display_ref, CFSTR("Spaces"));
+
+        int spaces_count = CFArrayGetCount(spaces_ref);
+        for (int j = 0; j < spaces_count; ++j) {
+            CFDictionaryRef space_ref = CFArrayGetValueAtIndex(spaces_ref, j);
+            CFNumberRef sid_ref = CFDictionaryGetValue(space_ref, CFSTR("id64"));
+
+            uint64_t space_id = 0;
+            CFNumberGetValue(sid_ref, CFNumberGetType(sid_ref), &space_id);
+
+            ts_buf_push(space_list, space_id);
+            if (space_id == sid) index = ts_buf_len(space_list);
+        }
+    }
+
+    CFRelease(display_spaces_ref);
+
+    if (!index) return 0;
+
+    int count = ts_buf_len(space_list);
+    return space_list[space_navigation_step_index(index, count, steps) - 1];
+}
+
+// Accept thread. The client sends its whole request right after connecting;
+// a request that is not readable almost at once is posted as usual.
+static bool space_navigation_accept(int sockfd)
+{
+    char bytes[128];
+    int direction = 0;
+    struct pollfd readable = { .fd = sockfd, .events = POLLIN };
+
+    if (poll(&readable, 1, 10) == 1) {
+        ssize_t length = recv(sockfd, bytes, sizeof(bytes), MSG_PEEK);
+        if (length > 0) direction = space_navigation_request_direction(bytes, (int) length);
+    }
+
+    if (!space_navigation_queue_join(sockfd, direction, read_os_timer())) return false;
+
+    while (recv(sockfd, bytes, sizeof(bytes), MSG_DONTWAIT) > 0);
+    socket_close(sockfd);
+
+    return true;
+}
+
 static bool space_navigation_number(struct token token, float *number)
 {
     struct token_value value = token_to_value(token);
@@ -41,6 +97,13 @@ static void space_navigation_command(FILE *rsp, char **message)
 
     if (!selector.sid && token_equals(selector.token, ARGUMENT_COMMON_SEL_PREV)) {
         selector.sid = space_manager_last_space();
+    }
+
+    // Requests that joined this one while it waited move it further.
+    if (!move && g_space_navigation_claim.active && current) {
+        selector.sid = g_space_navigation_claim.steps
+                     ? space_navigation_step(current, g_space_navigation_claim.steps)
+                     : current;
     }
 
     float alpha;

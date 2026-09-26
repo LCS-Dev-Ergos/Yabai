@@ -1,6 +1,16 @@
 // Fork navigation: one event-loop request, no shell queries or global config edits.
 static uint64_t space_navigation_last_time;
 
+// The space `steps` places after the space at `index` (1-based) of `count`,
+// wrapping around at both ends.
+static int space_navigation_step_index(int index, int count, int steps)
+{
+    int result = (index - 1 + steps) % count;
+    if (result < 0) result += count;
+
+    return result + 1;
+}
+
 static bool space_navigation_window(struct window *window)
 {
     return window && window_manager_is_window_eligible(window)

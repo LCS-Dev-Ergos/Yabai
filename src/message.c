@@ -3015,6 +3015,7 @@ static void *message_loop_run(void *context)
     while (g_message_loop.is_running) {
         int sockfd = accept(g_message_loop.sockfd, NULL, 0);
         if (sockfd == -1) continue;
+        if (space_navigation_accept(sockfd)) continue;
 
         event_loop_post(&g_event_loop, DAEMON_MESSAGE, NULL, sockfd);
     }

@@ -22,6 +22,8 @@ editor's root `compile_commands.json` symlink.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
   implementation with simulated OS calls, including rapid repeats and failure
   restoration; numeric arguments are also covered by the unity tests.
+- `navigation_queue_tests` checks how relative requests are recognized and
+  merged while one waits: repeats, separate presses, directions and ordering.
 - `focus_tests` exercises production focus-event handling with simulated OS
   calls: reuse of pending observations, stale activations, invalid/hidden or
   minimized windows, and the normal AX fallback, including no focused window.
@@ -82,8 +84,9 @@ payload and loader when using Homebrew clang. CMake caches the compiler: use
 a fresh build directory when switching toolchains. Both targets use
 libFuzzer, ASan and UBSan:
 
-- `fuzz_daemon_message`: socket framing, tokenization and value parsing;
-  command handlers that manipulate the running window manager are excluded.
+- `fuzz_daemon_message`: socket framing, the accept thread's navigation
+  request check, tokenization and value parsing; command handlers that
+  manipulate the running window manager are excluded.
 - `fuzz_payload_message`: request framing and reachable handler parsing with
   SkyLight calls stubbed and the payload constructor disabled. Dock-dependent
   space handlers return early; threaded opacity fades are excluded.

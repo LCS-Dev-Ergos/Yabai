@@ -1,8 +1,8 @@
 //
 // libFuzzer target for the yabai daemon socket: request framing
-// (daemon_message_read) and the tokenizer and value parsers every command
-// handler builds on. The handlers themselves act on live window-manager state
-// and are not run.
+// (daemon_message_read), the accept thread's navigation request check, and
+// the tokenizer and value parsers every command handler builds on. The
+// handlers themselves act on live window-manager state and are not run.
 //
 
 unsigned char __src_osax_payload[1];
@@ -22,6 +22,9 @@ int LLVMFuzzerInitialize(int *argc, char ***argv)
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
+    // The accept thread peeks at most 128 bytes of a request.
+    space_navigation_request_direction((const char *) data, (int) (size < 128 ? size : 128));
+
     int fds[2];
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == -1) abort();
 

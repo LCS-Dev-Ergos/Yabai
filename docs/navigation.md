@@ -33,14 +33,27 @@ not fade, and moving windows into or out of native fullscreen is rejected.
 Selecting the current space is a successful no-op that preserves focus.
 
 On repeated navigation less than 180 ms apart, the daemon skips starting a
-new fade and still executes the navigation. There is no sleeping debounce,
-discarded key event or animation queue. Once navigation pauses, fades resume.
-An already running fade may finish within its requested duration.
+new fade and still executes the navigation. There is no sleeping debounce or
+animation queue; requests that arrive while another waits are merged as
+described below. Once navigation pauses, fades resume. An already running fade
+may finish within its requested duration.
 
 The scripting addition must be available. A failed space-focus request
 restores any dimmed windows immediately instead of falling back to a gesture.
 As with separate move/focus commands, a successful window move is not rolled
 back if the subsequent focus request fails.
+
+## Relative navigation
+
+A navigation waits on WindowServer and the applications involved for tens of
+milliseconds, while a held key repeats every 30 ms. The daemon's accept thread
+lets a `focus next|prev` request join the one already waiting in the event
+queue and answers it at once, so at most one request waits. A repeat, arriving
+less than 50 ms after the previous request, keeps the pending step; a separate
+key press adds one, and the other direction takes one back. Holding a key
+moves one Desktop per completed switch and stops when it is released; three
+quick presses still move three Desktops. Any other request closes the group,
+so requests keep their order. Absolute selectors and `move` are not merged.
 
 ## Integration
 
@@ -58,9 +71,11 @@ but works with payload `2.1.31-lcs.2`; it does not change the payload protocol.
 
 `navigation_tests` executes the production navigation implementation with
 simulated OS calls. It covers repeat bursts, opacity restoration on failure,
-custom opacity, window eligibility, display focus and window moves. The
-upstream unity-test executable also checks numeric argument validation.
-Neither test establishes visual quality or live Dock behavior.
+custom opacity, window eligibility, display focus and window moves.
+`navigation_queue_tests` covers request recognition and merging, and the
+daemon fuzz target runs the request check. The upstream unity-test executable
+also checks numeric argument validation. None of these tests establishes
+visual quality, application focus behavior or live Dock behavior.
 
 On 2026-09-26, a local 16-switch comparison at 150 ms intervals measured the
 old script at 310 ms median completion latency (926 ms maximum; one failed
