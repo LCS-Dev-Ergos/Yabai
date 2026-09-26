@@ -134,7 +134,7 @@ jobs:
           cmake --build --preset fuzz --parallel
 
       - name: Fuzz socket parsers
-        run: ctest --preset fuzz
+        run: ctest --preset fuzz --verbose --timeout 120
 
       - name: Upload failure inputs and test log
         if: failure()

@@ -74,7 +74,8 @@ libFuzzer, ASan and UBSan:
   SkyLight calls stubbed and the payload constructor disabled. Dock-dependent
   space handlers return early; threaded opacity fades are excluded.
 
-Each target runs for `YABAI_FUZZ_SECONDS` (default 30). CTest's `fuzz` preset
+Each target runs for `YABAI_FUZZ_SECONDS` (default 30), with a 10-second limit
+per input so blocked handlers produce timeout artifacts. CTest's `fuzz` preset
 selects only these two tests. Checked-in seeds and regression cases live in
 `tests/fuzz/corpus/`; generated inputs go to `build/fuzz/fuzz/corpus/`.
 Failure inputs are written under `build/fuzz/fuzz/`. Replay one with its
@@ -84,8 +85,9 @@ matching executable, for example:
 build/fuzz/fuzz/fuzz_payload_message build/fuzz/fuzz/crash-<hash>
 ```
 
-Branch and pull-request CI runs each target for 60 seconds and uploads failure
-inputs and the CTest log on failure. A clean run is a bounded parser check,
+Branch and pull-request CI runs each target for 60 seconds, enforces a
+120-second outer limit per test, and uploads failure inputs and the CTest log
+on failure. A clean run is a bounded parser check,
 not validation of Dock integration, authentication or animation behavior.
 
 ## Live release checks

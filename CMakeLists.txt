@@ -128,7 +128,7 @@ if(YABAI_FUZZ)
         set(corpus ${CMAKE_BINARY_DIR}/fuzz/corpus/${target})
         file(MAKE_DIRECTORY ${corpus})
         add_test(NAME fuzz_${target}
-            COMMAND fuzz_${target} -max_total_time=${YABAI_FUZZ_SECONDS} -print_final_stats=1
+            COMMAND fuzz_${target} -max_total_time=${YABAI_FUZZ_SECONDS} -timeout=10 -print_final_stats=1
                 -artifact_prefix=${CMAKE_BINARY_DIR}/fuzz/
                 ${corpus} ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/${target})
     endforeach()
