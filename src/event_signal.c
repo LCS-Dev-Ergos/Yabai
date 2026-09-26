@@ -5,6 +5,8 @@ extern struct display_manager g_display_manager;
 extern struct space_manager g_space_manager;
 extern struct window_manager g_window_manager;
 
+#include "event_signal_process.c"
+
 static bool event_signal_filter(struct event_signal *es, struct signal *signal)
 {
     switch (es->type) {
@@ -61,12 +63,6 @@ void event_signal_flush(void)
 {
     if (!g_signal_storage.used) return;
 
-    pid_t pid = fork();
-    if (pid) {
-        g_signal_storage.used = 0;
-        return;
-    }
-
     int size  = sizeof(struct event_signal);
     int count = g_signal_storage.used / size;
 
@@ -80,20 +76,14 @@ void event_signal_flush(void)
             struct signal *signal = &g_signal_event[es->type][j];
             if (event_signal_filter(es, signal)) continue;
 
-            int pid = fork();
-            if (pid) continue;
-
-            if (es->arg_name[0]) setenv(es->arg_name[0], es->arg_value[0], 1);
-            if (es->arg_name[1]) setenv(es->arg_name[1], es->arg_value[1], 1);
-            if (es->arg_name[2]) setenv(es->arg_name[2], es->arg_value[2], 1);
-            if (es->arg_name[3]) setenv(es->arg_name[3], es->arg_value[3], 1);
-
-            char *exec[] = { "/usr/bin/env", "sh", "-c", signal->command, NULL};
-            exit(execvp(exec[0], exec));
+            int status = event_signal_spawn(es, signal->command);
+            if (status) {
+                warn("%s: could not launch %s action: %s\n", __FUNCTION__, signal_type_str[es->type], strerror(status));
+            }
         }
     }
 
-    exit(EXIT_SUCCESS);
+    g_signal_storage.used = 0;
 }
 
 void event_signal_push(enum signal_type type, void *context)

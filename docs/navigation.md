@@ -81,4 +81,6 @@ navigation; its live latency still needs verification after activation.
 WindowServer consumed about 82% of one core even at rest in that session.
 
 Payload `2.1.31-lcs.3` adds the [shared, time-based opacity engine](effects.md).
-Its live rendering and CPU cost also require verification after activation.
+The activated lcs.5 latency checks and remaining signal-dispatch bottleneck
+are recorded in [performance investigation](performance.md). Frame timing
+and visual acceptance remain separate from command completion.

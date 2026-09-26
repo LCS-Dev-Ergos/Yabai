@@ -13,9 +13,14 @@ typedef TEST_SIG(function);
 
 #include "area.c"
 #include "navigation_args.c"
+#include "signal_dispatch.c"
+#include "signal_environment.c"
 
 #define TEST_ENTRY(name) { #name, test_##name },
 #define TEST_LIST                                              \
+    TEST_ENTRY(signal_socket_lifetime)                         \
+    TEST_ENTRY(signal_environment)                             \
+    TEST_ENTRY(signal_standard_output)                         \
     TEST_ENTRY(navigation_numbers)                             \
     TEST_ENTRY(display_area_is_in_direction)                   \
     TEST_ENTRY(closest_display_in_direction)
