@@ -6,6 +6,12 @@ All requests and frame writes use the same mutex; an immediate opacity change
 cancels a pending fade before applying its value. Retargeting starts from the
 window's current alpha, and only the latest target for each window is retained.
 
+The lcs.11 [live investigation](effects-investigation.md) found that ordinary
+zero-duration focus-opacity updates can interrupt navigation fades. The shared
+worker's timing tests do not cover that integration conflict. The
+[Apple motion research](apple-motion-research.md) describes the proposed
+ownership, sequencing and display-pacing work before selecting new curves.
+
 Progress is calculated from `CLOCK_MONOTONIC`, using an ease-out cubic curve:
 `1 - (1 - t)^3`. The endpoint is assigned exactly once elapsed time reaches
 the requested duration. Late frames skip ahead rather than replaying steps.
