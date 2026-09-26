@@ -1,0 +1,72 @@
+# Keeps this fork's master a pure mirror of asmvik/yabai and proposes each new
+# upstream release to the work branch through a pull request.
+#
+# master only ever fast-forwards: the push fails instead of forcing when master
+# has diverged. Scheduled workflows run from the default branch, so this file
+# must live on the work branch, which must be the repository default.
+
+name: Sync upstream release
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: asmvik/yabai
+  MIRROR_BRANCH: master
+  WORK_BRANCH: dev
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.MIRROR_BRANCH }}
+          fetch-depth: 0
+
+      - name: Check for a new upstream release
+        id: release
+        run: |
+          tag=$(gh release view --repo "$UPSTREAM" --json tagName --jq .tagName)
+          git fetch --no-tags "https://github.com/$UPSTREAM.git" \
+            "+refs/heads/$MIRROR_BRANCH:refs/remotes/upstream/$MIRROR_BRANCH" \
+            "+refs/tags/*:refs/tags/*"
+          if git merge-base --is-ancestor "$tag" "origin/$MIRROR_BRANCH"; then
+            echo "Latest upstream release $tag is already on $MIRROR_BRANCH."
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New upstream release: $tag."
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Fast-forward the mirror branch
+        if: steps.release.outputs.new == 'true'
+        run: |
+          git push origin "refs/remotes/upstream/$MIRROR_BRANCH:refs/heads/$MIRROR_BRANCH"
+          git push origin --tags
+
+      - name: Propose the release to the work branch
+        if: steps.release.outputs.new == 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          open=$(gh pr list --base "$WORK_BRANCH" --head "$MIRROR_BRANCH" --state open --json number --jq length)
+          if [ "$open" -gt 0 ]; then
+            echo "A sync pull request is already open."
+            exit 0
+          fi
+          gh pr create --base "$WORK_BRANCH" --head "$MIRROR_BRANCH" \
+            --title "Sync upstream $TAG" \
+            --body "Upstream released [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG). Merge $MIRROR_BRANCH into $WORK_BRANCH and resolve any conflicts with local changes."
