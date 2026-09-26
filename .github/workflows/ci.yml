@@ -80,12 +80,14 @@ jobs:
           tarball="yabai-$TAG.tar.gz"
           COPYFILE_DISABLE=1 tar -czf "$tarball" archive
           sha256=$(shasum -a 256 "$tarball" | cut -d ' ' -f 1)
+          sri="sha256-$(openssl dgst -sha256 -binary "$tarball" | base64)"
           requirement=$(codesign -d -r- build/bin/yabai 2>&1 | sed -n 's/^designated => //p')
           tick='`'
           cat > notes.md <<EOF
           Signed with ${tick}${SIGNING_IDENTITY}${tick}.
 
           - sha256: ${tick}${sha256}${tick}
+          - Nix hash: ${tick}${sri}${tick}
           - designated requirement: ${tick}${requirement}${tick}
           EOF
           gh release create "$TAG" "$tarball" --verify-tag --title "$TAG" --notes-file notes.md
