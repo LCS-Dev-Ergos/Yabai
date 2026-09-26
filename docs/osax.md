@@ -38,17 +38,36 @@ bits, one per lookup that succeeded:
 | Bit | Lookup | Needed for |
 | --- | --- | --- |
 | `0x01` | `dock_spaces`: the Dock spaces controller, via an adrp+add pair | every space operation |
-| `0x02` | `dppm`: DPDesktopPictureManager | moving spaces (removed in macOS 27) |
+| `0x02` | `dppm`: DPDesktopPictureManager | moving spaces before macOS 27, which removed it |
 | `0x04` | `add_space` function | creating spaces |
 | `0x08` | `remove_space` function | destroying spaces |
-| `0x10` | `move_space` function | moving spaces |
+| `0x10` | `move_space` function; since macOS 27, the Dock's handler for moved spaces | moving spaces |
 | `0x20` | `set_front_window` function | nothing: the caller in `window_manager.c` is compiled out |
 | `0x40` | space switch animation instruction, patched to a zero duration | instant space switching |
 
-On macOS 27.2 the handshake reports `0x4D`: spaces can be focused, created and
-destroyed, and animations removed, but not moved. `--load-sa` requires the
-lookups available on that macOS version: on macOS 27 it accepts `0x4D` without
-requiring the unavailable moving-space and front-window lookups.
+On macOS 27.2 the handshake reports `0x5D`. `--load-sa` requires the lookups
+available on that macOS version: on macOS 27 it does not require `dppm` or
+`set_front_window`.
+
+## Moving spaces on macOS 27
+
+Mission Control runs in WindowManager.app since macOS 27. It moves a space in
+WindowServer, then reports the move to the Dock, whose handler updates the
+Dock's spaces and tells WallpaperAgent which space became first on each
+display. The payload does the same for a move request:
+
+1. `SLSMoveManagedSpaceToDisplayIndex` moves the space in WindowServer, to its
+   position after the destination space among the display's other spaces.
+2. The `move_space` lookup is that handler, a Swift method of the Dock spaces
+   controller. It takes the space id, the display UUID as a Swift `String`, and
+   the space to insert after as an optional id. The payload calls it with
+   `swiftcall`, passing the controller in `x20` through `swift_context`, and
+   makes the string with `String(cString:)` from the Swift runtime.
+3. When the handler returns false, the payload calls `refreshSpacesIfNeeded`
+   on the controller, which rebuilds the Dock's spaces from WindowServer, as the
+   Dock does when it cannot apply a report.
+
+The same request reorders spaces on one display, which the handler supports.
 
 ## Lookups
 

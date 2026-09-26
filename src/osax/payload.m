@@ -57,6 +57,8 @@ extern CGError SLSOrderWindow(int cid, uint32_t wid, int order, uint32_t rel_wid
 extern void SLSManagedDisplaySetCurrentSpace(int cid, CFStringRef display_ref, uint64_t sid);
 extern uint64_t SLSManagedDisplayGetCurrentSpace(int cid, CFStringRef display_ref);
 extern CFStringRef SLSCopyManagedDisplayForSpace(int cid, uint64_t sid);
+extern CFArrayRef SLSCopyManagedDisplaySpaces(int cid);
+extern CGError SLSMoveManagedSpaceToDisplayIndex(int cid, uint64_t sid, CFStringRef display_uuid, uint32_t index);
 extern void SLSMoveWindowsToManagedSpace(int cid, CFArrayRef window_list, uint64_t sid);
 extern void SLSShowSpaces(int cid, CFArrayRef space_list);
 extern void SLSHideSpaces(int cid, CFArrayRef space_list);
@@ -74,6 +76,19 @@ static uint64_t move_space_fp;
 static uint64_t set_front_window_fp;
 static uint64_t animation_time_addr;
 static bool macOSSequoia;
+static bool macOSGoldenGate;
+
+//
+// NOTE: Since macOS 27, move_space_fp is a Swift method of the Dock that takes the display
+// UUID as a Swift String. Strings are made with String(cString:) and released through the
+// Swift runtime, both resolved when the payload loads.
+//
+
+struct swift_string { uint64_t bits; void *object; };
+typedef struct swift_string (*swift_string_create_call)(const char *cstring) __attribute__((swiftcall));
+typedef void (*swift_bridge_object_release_call)(void *object);
+static swift_string_create_call swift_string_create;
+static swift_bridge_object_release_call swift_bridge_object_release;
 
 static pthread_t daemon_thread;
 static int daemon_sockfd;
@@ -183,6 +198,7 @@ static bool verify_os_version(NSOperatingSystemVersion os_version)
         return true; // Tahoe preview
     } else if (os_version.majorVersion == 27) {
         macOSSequoia = true;
+        macOSGoldenGate = true;
         return true; // Golden Gate 27.0
     }
 
@@ -218,7 +234,7 @@ static void init_instances()
     uint64_t dppm_addr = hex_find_seq(baseaddr + get_dppm_offset(os_version), get_dppm_pattern(os_version));
     if (dppm_addr == 0) {
         dp_desktop_picture_manager = nil;
-        NSLog(@"[yabai-sa] could not locate pointer to dppm! moving spaces will not work!");
+        if (!macOSGoldenGate) NSLog(@"[yabai-sa] could not locate pointer to dppm! moving spaces will not work!");
     } else {
 #ifdef __x86_64__
         uint32_t dppm_offset = *(int32_t *)dppm_addr;
@@ -288,6 +304,15 @@ static void init_instances()
 #elif __arm64__
         move_space_fp = (uint64_t) ptrauth_sign_unauthenticated((void *) move_space_addr, ptrauth_key_asia, 0);
 #endif
+    }
+
+    if (macOSGoldenGate && move_space_fp) {
+        swift_string_create = (swift_string_create_call) dlsym(RTLD_DEFAULT, "$sSS7cStringSSSPys4Int8VG_tcfC");
+        swift_bridge_object_release = (swift_bridge_object_release_call) dlsym(RTLD_DEFAULT, "swift_bridgeObjectRelease");
+        if (!swift_string_create || !swift_bridge_object_release) {
+            NSLog(@"[yabai-sa] failed to resolve the Swift runtime; moving spaces will not work!");
+            move_space_fp = 0;
+        }
     }
 
     uint64_t set_front_window_addr = hex_find_seq(baseaddr + get_set_front_window_offset(os_version), get_set_front_window_pattern(os_version));
@@ -387,9 +412,86 @@ static inline id display_space_for_space_with_id(uint64_t space_id)
     return nil;
 }
 
+//
+// NOTE: Since macOS 27, Mission Control runs in WindowManager.app. It moves a space in
+// WindowServer, then reports the move to the Dock, whose handler updates the Dock's spaces
+// and tells WallpaperAgent which space became first on each display. Moving a space does
+// the same: SLSMoveManagedSpaceToDisplayIndex, then that handler. When the handler rejects
+// the move, the Dock rebuilds its spaces from WindowServer, as it does for such a report.
+//
+
+typedef uint64_t (*space_moved_to_display_call)(uint64_t space_id, uint64_t display_uuid_bits, void *display_uuid_object, uint64_t after_space_id, uint8_t after_space_is_nil, void *dock_spaces __attribute__((swift_context))) __attribute__((swiftcall));
+
+static bool space_move_index(CFStringRef display_uuid, uint64_t space_id, uint64_t after_space_id, uint32_t *index)
+{
+    bool result = false;
+
+    CFArrayRef display_spaces_ref = SLSCopyManagedDisplaySpaces(SLSMainConnectionID());
+    if (!display_spaces_ref) return false;
+
+    for (CFIndex i = 0; i < CFArrayGetCount(display_spaces_ref); ++i) {
+        CFDictionaryRef display_ref = CFArrayGetValueAtIndex(display_spaces_ref, i);
+        CFStringRef identifier = CFDictionaryGetValue(display_ref, CFSTR("Display Identifier"));
+        if (!identifier || !CFEqual(identifier, display_uuid)) continue;
+
+        CFArrayRef spaces_ref = CFDictionaryGetValue(display_ref, CFSTR("Spaces"));
+        if (!spaces_ref) break;
+
+        //
+        // NOTE: The index is the position space_id takes after the move, among the other
+        // spaces of the display, as the Dock computes it for the moves it makes itself.
+        //
+
+        uint32_t position = 0;
+        for (CFIndex j = 0; j < CFArrayGetCount(spaces_ref); ++j) {
+            CFDictionaryRef space_ref = CFArrayGetValueAtIndex(spaces_ref, j);
+            CFNumberRef sid_ref = CFDictionaryGetValue(space_ref, CFSTR("id64"));
+
+            uint64_t sid = 0;
+            if (!sid_ref || !CFNumberGetValue(sid_ref, kCFNumberSInt64Type, &sid)) continue;
+            if (sid == space_id) continue;
+
+            ++position;
+
+            if (sid == after_space_id) {
+                *index = position;
+                result = true;
+                break;
+            }
+        }
+
+        break;
+    }
+
+    CFRelease(display_spaces_ref);
+    return result;
+}
+
+static void do_space_move_to_display_index(uint64_t source_space_id, uint64_t dest_space_id, CFStringRef dest_display_uuid)
+{
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        char uuid[64];
+        if (!CFStringGetCString(dest_display_uuid, uuid, sizeof(uuid), kCFStringEncodingUTF8)) return;
+
+        uint32_t index;
+        if (!space_move_index(dest_display_uuid, source_space_id, dest_space_id, &index)) return;
+
+        SLSMoveManagedSpaceToDisplayIndex(SLSMainConnectionID(), source_space_id, dest_display_uuid, index);
+
+        struct swift_string display_uuid = swift_string_create(uuid);
+        uint64_t applied = ((space_moved_to_display_call) move_space_fp)(source_space_id, display_uuid.bits, display_uuid.object, dest_space_id, 0, dock_spaces);
+        swift_bridge_object_release(display_uuid.object);
+
+        if (!(applied & 1)) {
+            ((void (*)(id, SEL)) objc_msgSend)(dock_spaces, @selector(refreshSpacesIfNeeded));
+        }
+    });
+}
+
 static void do_space_move(char *message)
 {
-    if (dock_spaces == nil || dp_desktop_picture_manager == nil || move_space_fp == 0) return;
+    if (dock_spaces == nil || move_space_fp == 0) return;
+    if (!macOSGoldenGate && dp_desktop_picture_manager == nil) return;
 
     uint64_t source_space_id, dest_space_id, source_prev_space_id;
     unpack(source_space_id);
@@ -426,11 +528,15 @@ static void do_space_move(char *message)
         set_ivar_value(source_display_space, "_currentSpace", [new_source_space retain]);
     }
 
-    asm__call_move_space(source_space, dest_space, dest_display_uuid, dock_spaces, move_space_fp);
+    if (macOSGoldenGate) {
+        do_space_move_to_display_index(source_space_id, dest_space_id, dest_display_uuid);
+    } else {
+        asm__call_move_space(source_space, dest_space, dest_display_uuid, dock_spaces, move_space_fp);
 
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        ((void (*)(id, SEL, id, unsigned, CFStringRef)) objc_msgSend)(dp_desktop_picture_manager, @selector(moveSpace:toDisplay:displayUUID:), source_space, dest_display_id, dest_display_uuid);
-    });
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            ((void (*)(id, SEL, id, unsigned, CFStringRef)) objc_msgSend)(dp_desktop_picture_manager, @selector(moveSpace:toDisplay:displayUUID:), source_space, dest_display_id, dest_display_uuid);
+        });
+    }
 
     if (focus_dest_space) {
         uint64_t new_source_space_id = SLSManagedDisplayGetCurrentSpace(SLSMainConnectionID(), source_display_uuid);

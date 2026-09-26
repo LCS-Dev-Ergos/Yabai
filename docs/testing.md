@@ -107,6 +107,6 @@ The sanitizer CI job also runs `fade_tests` separately under ThreadSanitizer.
 Installing a build or running `sudo yabai --load-sa` can restart Dock. Obtain
 the user's approval before changing the active installation or loading the
 payload. After the user switches to the signed release, check space creation,
-destruction and focus, plus window opacity, layer, shadow and sticky state.
-Verify the load result and `build/debug/tools/sa_client handshake`: macOS 27
-expects attribute bits `0x4D`; moving spaces remains unsupported.
+destruction, focus and moves (`space --move`, `--swap` and `--display`), plus
+window opacity, layer, shadow and sticky state. Verify the load result and
+`build/debug/tools/sa_client handshake`: macOS 27 expects attribute bits `0x5D`.

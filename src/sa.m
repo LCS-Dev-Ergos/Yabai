@@ -270,12 +270,12 @@ out:
 static uint32_t scripting_addition_expected_attrib(void)
 {
     //
-    // NOTE: macOS 27 removed DPDesktopPictureManager, so spaces cannot be moved,
-    // and the payload no longer looks up setFrontWindow, which yabai does not use.
+    // NOTE: macOS 27 removed DPDesktopPictureManager, whose work the move_space lookup
+    // now covers, and the payload no longer looks up setFrontWindow, which yabai does not use.
     //
 
     if ([[NSProcessInfo processInfo] operatingSystemVersion].majorVersion >= 27) {
-        return OSAX_ATTRIB_ALL & ~(OSAX_ATTRIB_DPPM | OSAX_ATTRIB_MOV_SPACE | OSAX_ATTRIB_SET_WINDOW);
+        return OSAX_ATTRIB_ALL & ~(OSAX_ATTRIB_DPPM | OSAX_ATTRIB_SET_WINDOW);
     }
 
     return OSAX_ATTRIB_ALL;

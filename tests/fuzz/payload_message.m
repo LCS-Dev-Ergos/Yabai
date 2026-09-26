@@ -44,6 +44,8 @@ CGError SLSOrderWindow(int cid, uint32_t wid, int order, uint32_t rel_wid) { ret
 void SLSManagedDisplaySetCurrentSpace(int cid, CFStringRef display_ref, uint64_t sid) {}
 uint64_t SLSManagedDisplayGetCurrentSpace(int cid, CFStringRef display_ref) { return 0; }
 CFStringRef SLSCopyManagedDisplayForSpace(int cid, uint64_t sid) { return NULL; }
+CFArrayRef SLSCopyManagedDisplaySpaces(int cid) { return NULL; }
+CGError SLSMoveManagedSpaceToDisplayIndex(int cid, uint64_t sid, CFStringRef display_uuid, uint32_t index) { return 0; }
 void SLSMoveWindowsToManagedSpace(int cid, CFArrayRef window_list, uint64_t sid) {}
 void SLSShowSpaces(int cid, CFArrayRef space_list) {}
 void SLSHideSpaces(int cid, CFArrayRef space_list) {}

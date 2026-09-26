@@ -96,7 +96,7 @@ uint64_t get_remove_space_offset(NSOperatingSystemVersion os_version) {
 
 uint64_t get_move_space_offset(NSOperatingSystemVersion os_version) {
     if (os_version.majorVersion == 27) {
-        return 0;
+        return 0x100000;
     } else if (os_version.majorVersion == 26) {
         return 0x1c0000;
     } else if (os_version.majorVersion == 15) {
@@ -235,7 +235,9 @@ const char *get_remove_space_pattern(NSOperatingSystemVersion os_version) {
 
 const char *get_move_space_pattern(NSOperatingSystemVersion os_version) {
     if (os_version.majorVersion == 27) {
-        return NULL;
+        // NOTE: the Swift handler the Dock runs when WindowManager.app reports a space moved to a
+        // display, called on the Dock's spaces controller; see do_space_move_to_display_index.
+        return "?? ?? ?? ?? E5 03 1E AA ?? ?? ?? 97 FE 03 05 AA FD 7B ?? A9 FD ?? ?? 91 F6 03 14 AA F7 03 04 AA F4 03 03 AA F8 03 02 AA F9 03 01 AA E1 03 16 AA";
     } else if (os_version.majorVersion == 26) {
         return "7F 23 03 D5 E3 03 1E AA ?? ?? ?? 97 FE 03 03 AA FD 7B ?? A9 FD ?? ?? 91 F6 03 14 AA";
     } else if (os_version.majorVersion == 15) {
