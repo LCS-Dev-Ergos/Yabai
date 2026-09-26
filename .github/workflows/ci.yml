@@ -129,7 +129,8 @@ jobs:
 
       - name: Build fuzz targets
         run: |
-          cmake --preset fuzz -G "Unix Makefiles" -DYABAI_FUZZ_SECONDS=60
+          cmake --preset fuzz -G "Unix Makefiles" -DYABAI_FUZZ_SECONDS=60 \
+            -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)"
           cmake --build --preset fuzz --parallel
 
       - name: Fuzz socket parsers

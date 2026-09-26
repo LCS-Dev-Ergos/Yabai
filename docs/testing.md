@@ -57,13 +57,16 @@ Select both C and Objective-C compilers on the first configure:
 brew install llvm
 CC="$(brew --prefix llvm)/bin/clang" \
 OBJC="$(brew --prefix llvm)/bin/clang" \
-  cmake --preset fuzz -DYABAI_FUZZ_SECONDS=60
+  cmake --preset fuzz -DYABAI_FUZZ_SECONDS=60 \
+    -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)"
 cmake --build --preset fuzz --parallel
 ctest --preset fuzz
 ```
 
-CMake caches the compiler: use a fresh build directory when switching
-toolchains. Both targets use libFuzzer, ASan and UBSan:
+The explicit SDK path also supplies framework headers for the universal
+payload and loader when using Homebrew clang. CMake caches the compiler: use
+a fresh build directory when switching toolchains. Both targets use
+libFuzzer, ASan and UBSan:
 
 - `fuzz_daemon_message`: socket framing, tokenization and value parsing;
   command handlers that manipulate the running window manager are excluded.
