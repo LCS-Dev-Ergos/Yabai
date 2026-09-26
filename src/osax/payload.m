@@ -413,7 +413,8 @@ static void do_space_move(char *message)
     unpack(dest_space_id);
     unpack(source_prev_space_id);
 
-    bool focus_dest_space;
+    // NOTE: Booleans are unpacked as bytes; any other value than 0 or 1 is not a valid bool.
+    uint8_t focus_dest_space;
     unpack(focus_dest_space);
 
     CFStringRef source_display_uuid = SLSCopyManagedDisplayForSpace(SLSMainConnectionID(), source_space_id);
@@ -594,6 +595,14 @@ static void do_window_scale(char *message)
         unpack(dw);
         unpack(dh);
 
+        //
+        // NOTE: The window is scaled to a quarter of the display width; reject
+        // values that cannot describe a display and windows without an area.
+        //
+
+        if (!isfinite(dx) || !isfinite(dy) || !(dw >= 4.0f && dw <= 65536.0f)) return;
+        if (!(frame.size.width > 0 && frame.size.height > 0)) return;
+
         int target_width  = dw / 4;
         int target_height = target_width / (frame.size.width/frame.size.height);
 
@@ -745,7 +754,7 @@ static void do_window_sticky(char *message)
     unpack(wid);
     if (!wid) return;
 
-    bool value;
+    uint8_t value;
     unpack(value);
 
     uint64_t tags = (1 << 11);
@@ -779,7 +788,7 @@ static void do_window_shadow(char *message)
     unpack(wid);
     if (!wid) return;
 
-    bool value;
+    uint8_t value;
     unpack(value);
 
     uint64_t tags = (1 << 3);
