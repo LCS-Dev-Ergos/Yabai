@@ -514,6 +514,7 @@ static void do_space_create(char *message)
                          ? [[objc_getClass("ManagedSpace") alloc] init]
                          : [[objc_getClass("Dock.ManagedSpace") alloc] init];
             asm__call_add_space(new_space, display_space, add_space_fp);
+            [new_space release];
         }
         CFRelease(display_uuid);
     });
