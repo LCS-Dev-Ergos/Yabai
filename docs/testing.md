@@ -20,8 +20,9 @@ editor's root `compile_commands.json` symlink.
   harmless local shell actions and check socket lifetime, isolated event
   variables and retained standard output/error. They do not run the daemon.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
-  implementation with simulated OS calls, including rapid repeats and failure
-  restoration; numeric arguments are also covered by the unity tests.
+  implementation with simulated OS calls, including rapid repeats, failure
+  restoration and the starting Desktop of relative navigation; numeric
+  arguments are also covered by the unity tests.
 - `navigation_queue_tests` checks how relative requests are recognized and
   merged while one waits: repeats, separate presses, directions and ordering.
 - `focus_tests` exercises production focus-event handling with simulated OS

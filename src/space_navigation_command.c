@@ -4,7 +4,7 @@ static uint64_t space_navigation_active_space(void)
 {
     // Read WindowServer's active display directly; querying the focused
     // application's AX window during every switch can stall navigation.
-    return display_space_id(display_manager_active_display_id());
+    return space_navigation_current_space(display_space_id(display_manager_active_display_id()));
 }
 
 // The space `steps` places after sid in mission-control order, wrapping.
@@ -40,6 +40,17 @@ static uint64_t space_navigation_step(uint64_t sid, int steps)
 
     int count = ts_buf_len(space_list);
     return space_list[space_navigation_step_index(index, count, steps) - 1];
+}
+
+// A command that can change focus ends the anchor: relative navigation then
+// starts from where that command left the user.
+static void space_navigation_note_message(char *message)
+{
+    struct token domain = get_token(&message);
+    if (token_equals(domain, DOMAIN_QUERY)) return;
+    if (token_equals(domain, DOMAIN_SPACE) && token_equals(get_token(&message), COMMAND_SPACE_NAVIGATE)) return;
+
+    space_navigation_forget();
 }
 
 // Accept thread. The client sends its whole request right after connecting;

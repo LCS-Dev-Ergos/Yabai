@@ -1,6 +1,45 @@
 // Fork navigation: one event-loop request, no shell queries or global config edits.
 static uint64_t space_navigation_last_time;
 
+// The space the last navigation switched to. For a moment after a switch,
+// WindowServer's active display can follow an application to a window it has
+// on another display; relative navigation starts from this space meanwhile.
+#define SPACE_NAVIGATION_ANCHOR_NS 1000000000ULL
+
+static struct
+{
+    uint64_t sid;
+    uint64_t time;
+} space_navigation_anchor;
+
+static void space_navigation_forget(void)
+{
+    space_navigation_anchor.sid = 0;
+}
+
+static double space_navigation_seconds_since_click(void)
+{
+    double left  = CGEventSourceSecondsSinceLastEventType(kCGEventSourceStateHIDSystemState, kCGEventLeftMouseDown);
+    double right = CGEventSourceSecondsSinceLastEventType(kCGEventSourceStateHIDSystemState, kCGEventRightMouseDown);
+    double other = CGEventSourceSecondsSinceLastEventType(kCGEventSourceStateHIDSystemState, kCGEventOtherMouseDown);
+
+    return fmin(left, fmin(right, other));
+}
+
+// Past the anchor's lifetime, or after a click, the active display reflects
+// where the user works again.
+static uint64_t space_navigation_current_space(uint64_t active_sid)
+{
+    uint64_t sid = space_navigation_anchor.sid;
+    if (!sid || sid == active_sid) return active_sid;
+
+    uint64_t age = read_os_timer() - space_navigation_anchor.time;
+    if (age >= SPACE_NAVIGATION_ANCHOR_NS || !space_is_visible(sid)) return active_sid;
+    if (space_navigation_seconds_since_click() * 1e9 < (double) age) return active_sid;
+
+    return sid;
+}
+
 // The space `steps` places after the space at `index` (1-based) of `count`,
 // wrapping around at both ends.
 static int space_navigation_step_index(int index, int count, int steps)
@@ -104,6 +143,9 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
                 window_manager_focus_window_without_raise(&focus->application->psn, focus->id);
             }
         }
+
+        space_navigation_anchor.sid = sid;
+        space_navigation_anchor.time = read_os_timer();
     }
 
     if (fade) {

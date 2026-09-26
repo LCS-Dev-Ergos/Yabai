@@ -87,6 +87,41 @@ int main(void)
     assert(!space_navigation_run(active_space, 2, true, .95f, .1f));
     assert(move_calls == 0 && focus_calls == 0);
 
+    reset();
+
+    // Relative navigation starts from the last switch while WindowServer's
+    // active display briefly points elsewhere.
+    assert(space_navigation_current_space(3) == 3);
+    assert(space_navigation_run(active_space, 2, false, .95f, 0));
+    visible_space = 2;
+    assert(space_navigation_current_space(3) == 2);
+    assert(space_navigation_current_space(2) == 2);
+
+    timestamp += 500000000;
+    seconds_since_click = 0.2;
+    assert(space_navigation_current_space(3) == 3); // A click after the switch.
+
+    seconds_since_click = 1000.0;
+    assert(space_navigation_current_space(3) == 2);
+
+    timestamp += 500000000;
+    assert(space_navigation_current_space(3) == 3); // The anchor expired.
+
+    timestamp -= 500000000;
+    visible_space = 0;
+    assert(space_navigation_current_space(3) == 3); // Its space was left.
+
+    visible_space = 2;
+    space_navigation_forget();
+    assert(space_navigation_current_space(3) == 3);
+
+    reset();
+
+    focus_success = false;
+    assert(!space_navigation_run(active_space, 2, false, .95f, 0));
+    visible_space = 2;
+    assert(space_navigation_current_space(3) == 3); // Failed switches set none.
+
     // Steps wrap in both directions and across several laps.
     assert(space_navigation_step_index(1, 11, 1) == 2);
     assert(space_navigation_step_index(11, 11, 1) == 1);

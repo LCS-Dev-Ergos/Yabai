@@ -45,6 +45,15 @@ back if the subsequent focus request fails.
 
 ## Relative navigation
 
+`next` and `prev` count from the Desktop the previous navigation switched to,
+for up to one second, while that Desktop is still visible. WindowServer's
+active display can briefly follow an application to a window it has on
+another display: a Chromium browser activated on one display makes its window
+on the other display key. Counting from that display wrapped `next` back to
+Desktop 1. A mouse click or any other daemon command except queries ends this,
+and so does the second: the active display then decides again, so a Desktop
+chosen by clicking, Command-Tab or `window --focus` is where counting starts.
+
 A navigation waits on WindowServer and the applications involved for tens of
 milliseconds, while a held key repeats every 30 ms. The daemon's accept thread
 lets a `focus next|prev` request join the one already waiting in the event
@@ -71,7 +80,8 @@ but works with payload `2.1.31-lcs.2`; it does not change the payload protocol.
 
 `navigation_tests` executes the production navigation implementation with
 simulated OS calls. It covers repeat bursts, opacity restoration on failure,
-custom opacity, window eligibility, display focus and window moves.
+custom opacity, window eligibility, display focus, window moves and the
+starting Desktop of relative navigation.
 `navigation_queue_tests` covers request recognition and merging, and the
 daemon fuzz target runs the request check. The upstream unity-test executable
 also checks numeric argument validation. None of these tests establishes

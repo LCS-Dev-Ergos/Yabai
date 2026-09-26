@@ -61,7 +61,20 @@ static uint64_t read_os_timer(void)
 
 static bool space_is_visible(uint64_t sid)
 {
-    return visible;
+    return visible || (visible_space && sid == visible_space);
+}
+
+enum
+{
+    kCGEventSourceStateHIDSystemState,
+    kCGEventLeftMouseDown,
+    kCGEventRightMouseDown,
+    kCGEventOtherMouseDown
+};
+
+static double CGEventSourceSecondsSinceLastEventType(int state, int type)
+{
+    return seconds_since_click;
 }
 
 static bool scripting_addition_set_opacity(uint32_t id, float alpha, float duration)

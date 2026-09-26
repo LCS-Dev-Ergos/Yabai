@@ -2988,6 +2988,7 @@ static void handle_domain_signal(FILE *rsp, struct token domain, char *message)
 
 void handle_message(FILE *rsp, char *message)
 {
+    space_navigation_note_message(message);
     struct token domain = get_token(&message);
     if (token_equals(domain, DOMAIN_CONFIG)) {
         handle_domain_config(rsp, domain, message);
