@@ -440,8 +440,6 @@ static void do_space_move(char *message)
         SLSHideSpaces(SLSMainConnectionID(), (__bridge CFArrayRef) ns_source_space);
         SLSManagedDisplaySetCurrentSpace(SLSMainConnectionID(), source_display_uuid, source_prev_space_id);
         set_ivar_value(source_display_space, "_currentSpace", [new_source_space retain]);
-        [ns_dest_space release];
-        [ns_source_space release];
     }
 
     asm__call_move_space(source_space, dest_space, dest_display_uuid, dock_spaces, move_space_fp);
@@ -459,7 +457,6 @@ static void do_space_move(char *message)
         SLSHideSpaces(SLSMainConnectionID(), (__bridge CFArrayRef) ns_dest_monitor_space);
         SLSManagedDisplaySetCurrentSpace(SLSMainConnectionID(), dest_display_uuid, source_space_id);
         set_ivar_value(dest_display_space, "_currentSpace", [source_space retain]);
-        [ns_dest_monitor_space release];
     }
 
     CFRelease(source_display_uuid);
@@ -568,8 +565,6 @@ static void do_space_focus(char *message)
                     SLSHideSpaces(SLSMainConnectionID(), (__bridge CFArrayRef) ns_source_space);
                     SLSManagedDisplaySetCurrentSpace(SLSMainConnectionID(), dest_display, dest_space_id);
                     set_ivar_value(display_space, "_currentSpace", [dest_space retain]);
-                    [ns_dest_space release];
-                    [ns_source_space release];
                 }
             }
         }
@@ -630,7 +625,6 @@ static void do_window_move(char *message)
 
     NSArray *window_list = @[ @(wid) ];
     SLSReassociateWindowsSpacesByGeometry(SLSMainConnectionID(), (__bridge CFArrayRef) window_list);
-    [window_list release];
 }
 
 static void do_window_opacity(char *message)
@@ -1036,9 +1030,16 @@ static void *handle_connection(void *unused)
         int sockfd = accept(daemon_sockfd, NULL, 0);
         if (sockfd == -1) continue;
 
+        //
+        // NOTE: Handlers create autoreleased objects (array literals, SkyLight
+        // results) on this thread, so each request drains its own pool.
+        //
+
         char message[SA_SOCKET_BUFF_LEN];
         if (read_message(sockfd, message)) {
-            handle_message(sockfd, message);
+            @autoreleasepool {
+                handle_message(sockfd, message);
+            }
         }
 
         shutdown(sockfd, SHUT_RDWR);
