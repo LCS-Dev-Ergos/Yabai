@@ -120,10 +120,9 @@ jobs:
 
       - name: Select LLVM with libFuzzer
         run: |
-          if ! brew list --versions llvm@20 >/dev/null 2>&1; then
-            brew install llvm@20
-          fi
-          clang="$(brew --prefix llvm@20)/bin/clang"
+          brew install llvm
+          clang="$(brew --prefix llvm)/bin/clang"
+          "$clang" --version
           echo "CC=$clang" >> "$GITHUB_ENV"
           echo "OBJC=$clang" >> "$GITHUB_ENV"
 
