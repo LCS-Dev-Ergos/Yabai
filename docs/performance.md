@@ -92,6 +92,47 @@ with well-spaced individual key presses, so it is not confined to key repeat.
 Keep focus/display changes in the investigation; this change does not claim
 to fix it.
 
+## Activated lcs.9: order and key repeat
+
+On 2026-09-26 two displays were attached: Desktops 1–10 on the main display
+and Desktop 11 on the second, where Edge also had a window. Walking `next`
+from Desktop 1 at roughly 0.9 s intervals went from Desktop 7, which held an
+Edge window, back to Desktop 1 in both runs. A 5 ms probe of WindowServer
+showed the active menu-bar display switching to the second display within
+250 ms of reaching Desktop 7, so `next` counted from Desktop 11 and wrapped.
+In a separate run, yabai reported Edge's window on the second display as
+focused 0.8 s after the switch. Focusing the Desktop 7 window with
+`window --focus`, which raises it through Accessibility, kept focus and the
+active display there.
+
+Isolated navigations completed in 63–278 ms. WindowServer used 5.3–5.5 CPU
+seconds over 12.3–12.5 s runs, the daemon 0.06–0.07 s. A five-second control
+without navigation measured 1.9 s, but the user was active and a video was
+playing, so it does not isolate the cost of switching.
+
+A 1 ms sample of 13 navigations kept the event loop busy for 2.2 s, about
+170 ms per navigation, mostly waiting on WindowServer and applications:
+
+| Work | Samples |
+| --- | ---: |
+| Navigation request, 549 of them posting focus events to the application | 898 |
+| Activation handler's AX focused-window lookup | 706 |
+| Space-change window checks | 169 |
+| Focus opacity requests and window space lookups | 229 |
+| Signal process creation | 70 |
+
+The key repeat interval was 30 ms, so a held key queued several requests per
+completed switch, and switching continued after the key was released. The
+Dock payload was busy for about 100 ms in total.
+
+The follow-up merges relative requests that arrive while one waits, counts
+from the Desktop the last navigation switched to, raises the destination
+window when its application has a window visible on another display, and
+lets the activation handler reuse the window navigation focused. See
+[navigation](navigation.md). The Dotfiles `sketchybar_focus` signal triggered
+a SketchyBar event that no item subscribes to. None of this has been measured
+live yet.
+
 ## Remaining work
 
 Profile again before changing the focus workaround's 40 ms delay: it exists
