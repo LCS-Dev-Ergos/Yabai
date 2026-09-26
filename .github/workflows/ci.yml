@@ -1,6 +1,6 @@
-# Builds every push and pull request to dev. Tags named v<version>-lcs.<n>
-# additionally produce a signed release tarball with the upstream layout
-# (archive/bin, archive/doc, archive/examples).
+# Builds and tests every push and pull request to dev, once more with ASan and
+# UBSan. Tags named v<version>-lcs.<n> additionally produce a signed release
+# tarball with the upstream layout (archive/bin, archive/doc, archive/examples).
 
 name: CI
 
@@ -64,7 +64,7 @@ jobs:
             codesign -dvv build/bin/yabai 2>&1 | grep -qx "Authority=$SIGNING_IDENTITY"
           fi
 
-      - name: Check the Dock patterns
+      - name: Test
         run: ctest --test-dir build --verbose
 
       - name: Package and publish the release
@@ -92,3 +92,17 @@ jobs:
       - name: Remove the signing keychain
         if: always() && env.RELEASE == 'true'
         run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+
+  sanitize:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build with ASan and UBSan
+        run: |
+          cmake --preset sanitize -G "Unix Makefiles"
+          cmake --build --preset sanitize --parallel
+
+      - name: Test
+        run: ctest --preset sanitize
