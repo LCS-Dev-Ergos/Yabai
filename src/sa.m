@@ -267,6 +267,20 @@ out:
     return result;
 }
 
+static uint32_t scripting_addition_expected_attrib(void)
+{
+    //
+    // NOTE: macOS 27 removed DPDesktopPictureManager, so spaces cannot be moved,
+    // and the payload no longer looks up setFrontWindow, which yabai does not use.
+    //
+
+    if ([[NSProcessInfo processInfo] operatingSystemVersion].majorVersion >= 27) {
+        return OSAX_ATTRIB_ALL & ~(OSAX_ATTRIB_DPPM | OSAX_ATTRIB_MOV_SPACE | OSAX_ATTRIB_SET_WINDOW);
+    }
+
+    return OSAX_ATTRIB_ALL;
+}
+
 static int scripting_addition_perform_validation(void)
 {
     uint32_t attrib = 0;
@@ -279,7 +293,8 @@ static int scripting_addition_perform_validation(void)
     }
 
     if (string_equals(version, OSAX_VERSION)) {
-        if ((attrib & OSAX_ATTRIB_ALL) == OSAX_ATTRIB_ALL) {
+        uint32_t expected = scripting_addition_expected_attrib();
+        if ((attrib & expected) == expected) {
             notify("scripting-addition", "payload v%s", version);
             return 0;
         }
