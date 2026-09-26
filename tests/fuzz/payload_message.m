@@ -5,8 +5,8 @@
 // payload.m is compiled in with its constructor disabled, and the SkyLight
 // calls it makes are stubbed below, so no request reaches WindowServer. The
 // space handlers return before parsing because no Dock instances are resolved.
-// Opacity fades are skipped: each one starts a thread that sleeps for the
-// requested duration.
+// Opacity fades are skipped here; their shared worker and timing are covered
+// by the dedicated fade tests.
 //
 
 #import <Foundation/Foundation.h>
@@ -52,13 +52,6 @@ CGError SLSTransactionCommit(CFTypeRef transaction, int synchronous) { return 0;
 CGError SLSTransactionOrderWindowGroup(CFTypeRef transaction, uint32_t wid, int order, uint32_t rel_wid) { return 0; }
 CGError SLSTransactionSetWindowSystemAlpha(CFTypeRef transaction, uint32_t wid, float alpha) { return 0; }
 CGError SLSSetWindowSubLevel(int cid, uint32_t wid, int level) { return 0; }
-
-int LLVMFuzzerInitialize(int *argc, char ***argv)
-{
-    pthread_mutex_init(&window_fade_lock, NULL);
-    table_init(&window_fade_table, 150, hash_wid, compare_wid);
-    return 0;
-}
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {

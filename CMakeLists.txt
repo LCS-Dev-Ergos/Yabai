@@ -105,6 +105,12 @@ target_compile_options(navigation_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS}
 target_link_options(navigation_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
 add_test(NAME navigation_tests COMMAND navigation_tests)
 
+add_executable(fade_tests tests/fade/timing.c)
+target_compile_options(fade_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
+target_link_options(fade_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
+add_test(NAME fade_tests COMMAND fade_tests)
+set_tests_properties(fade_tests PROPERTIES TIMEOUT 15)
+
 # libFuzzer targets for the two socket protocols, see docs/testing.md. They need
 # a clang that ships libFuzzer, which Apple's does not. Each also runs as a
 # short CTest test, writing new inputs to the build directory.

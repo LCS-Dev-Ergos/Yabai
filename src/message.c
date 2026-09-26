@@ -1766,8 +1766,10 @@ static void handle_domain_space(FILE *rsp, struct token domain, char *message)
 {
     TIME_FUNCTION;
 
+    char *cursor = message;
+    bool navigate = token_equals(get_token(&cursor), COMMAND_SPACE_NAVIGATE);
     struct token command;
-    uint64_t acting_sid = space_manager_active_space();
+    uint64_t acting_sid = navigate ? space_navigation_active_space() : space_manager_active_space();
     struct selector selector = parse_space_selector(NULL, &message, acting_sid, true);
 
     if (selector.did_parse) {

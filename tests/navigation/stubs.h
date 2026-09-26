@@ -91,7 +91,22 @@ static void display_manager_focus_display(uint32_t did, uint64_t sid)
 
 static void window_manager_focus_window_with_raise(int *psn, uint32_t id, void *ref)
 {
-    ++raise_calls;
-    raised_id = id;
+    assert(move_calls > 0); // Only a moved window needs raising at its destination.
+    ++window_focus_calls;
+    focused_id = id;
 }
 
+static void window_manager_focus_window_without_raise(int *psn, uint32_t id)
+{
+    ++window_focus_calls;
+    focused_id = id;
+}
+
+static void display_manager_set_active_display_id(uint32_t did)
+{
+    ++display_calls;
+}
+
+static void window_manager_center_mouse(void *wm, struct window *window)
+{
+}

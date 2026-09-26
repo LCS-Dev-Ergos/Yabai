@@ -6,10 +6,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Opacity fades use one sleeping shared worker, monotonic elapsed time and ease-out cubic interpolation; immediate changes cancel older frames, and payload version is now *2.1.31-lcs.3*
+- Fork navigation avoids AXRaise on its already frontmost target and repeated Accessibility queries for the active Desktop, following a live lcs.4 latency regression
 - Fork `space --navigate` combines focus/move, optional fade and window focus in one daemon request; rapid repeats skip new fades without dropping navigation, and global duration/custom opacity remain unchanged
 - Update scripting-addition for macOS 27 Apple Silicon arm64e (space focus, create, destroy and animation removal; moving spaces is not yet supported) [#2802](https://github.com/asmvik/yabai/issues/2802)
 - Scripting-addition validates message lengths and element counts received on its socket instead of reading past the message buffer inside Dock.app
-- Scripting-addition version is now *2.1.31-lcs.2*, so `--load-sa` replaces earlier payloads with the memory-management and argument-validation fixes in fork release `v7.1.25-lcs.3`
+- Fork release `v7.1.25-lcs.3` introduced payload *2.1.31-lcs.2* with memory-management and argument-validation fixes
 - `--load-sa` no longer reports that the payload does not support macOS 27 when every lookup available on that version succeeded
 - Changing the sub-layer of a window no longer reads uninitialized window relations, which could apply the layer to unrelated window ids
 - Scripting-addition no longer over-releases autoreleased arrays or leaks the space object it creates

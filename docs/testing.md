@@ -19,6 +19,8 @@ editor's root `compile_commands.json` symlink.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
   implementation with simulated OS calls, including rapid repeats and failure
   restoration; numeric arguments are also covered by the unity tests.
+- `fade_tests` checks the production [opacity engine](effects.md) with simulated
+  SkyLight calls, including timing, cancellation and concurrent requests.
 - `osax_patterns` checks the payload's lookups against the local Dock binary
   on Apple Silicon when `YABAI_BUILD_TOOLS=ON` (the default). It inspects the
   binary without loading a payload; see [Scripting addition](osax.md).
@@ -32,7 +34,10 @@ ctest --preset sanitize
 ```
 
 The sanitizer presets do not instrument the payload or loader injected into
-Dock. Passing these checks does not verify live space or window operations.
+Dock. The standalone fade test is instrumented; run its race check with
+`cmake --build --preset thread-sanitize --target fade_tests` and
+`ctest --preset thread-sanitize -R fade_tests` after configuring that preset.
+Passing these checks does not verify live space or window operations.
 
 ## Static analysis
 
@@ -92,6 +97,7 @@ Branch and pull-request CI runs each target for 60 seconds, enforces a
 120-second outer limit per test, and uploads failure inputs and the CTest log
 on failure. A clean run is a bounded parser check,
 not validation of Dock integration, authentication or animation behavior.
+The sanitizer CI job also runs `fade_tests` separately under ThreadSanitizer.
 
 ## Live release checks
 

@@ -34,15 +34,10 @@
 #include <ptrauth.h>
 #endif
 
-#define HASHTABLE_IMPLEMENTATION
-#include "../misc/hashtable.h"
-#undef HASHTABLE_IMPLEMENTATION
-
 #define page_align(addr) (vm_address_t)((uintptr_t)(addr) & (~(vm_page_size - 1)))
 #define try_unpack(v) (message + sizeof(v) <= message_end ? (memcpy(&v, message, sizeof(v)), message += sizeof(v), true) : false)
 #define unpack(v) if (!try_unpack(v)) return
 #define unpack_capacity(size) ((message_end - message) / (int)(size))
-#define lerp(a, t, b) (((1.0-t)*a) + (t*b))
 
 static char *message_end;
 
@@ -70,18 +65,6 @@ extern CGError SLSTransactionCommit(CFTypeRef transaction, int synchronous);
 extern CGError SLSTransactionOrderWindowGroup(CFTypeRef transaction, uint32_t wid, int order, uint32_t rel_wid);
 extern CGError SLSTransactionSetWindowSystemAlpha(CFTypeRef transaction, uint32_t wid, float alpha);
 extern CGError SLSSetWindowSubLevel(int cid, uint32_t wid, int level);
-
-struct window_fade_context
-{
-    pthread_t thread;
-    uint32_t wid;
-    volatile float alpha;
-    volatile float duration;
-    volatile bool skip;
-};
-
-pthread_mutex_t window_fade_lock;
-struct table window_fade_table;
 
 static id dock_spaces;
 static id dp_desktop_picture_manager;
@@ -637,103 +620,29 @@ static void do_window_move(char *message)
     SLSReassociateWindowsSpacesByGeometry(SLSMainConnectionID(), (__bridge CFArrayRef) window_list);
 }
 
+#include "window_fade.c"
+
 static void do_window_opacity(char *message)
 {
     uint32_t wid;
     unpack(wid);
-    if (!wid) return;
 
     float alpha;
     unpack(alpha);
 
-    pthread_mutex_lock(&window_fade_lock);
-    struct window_fade_context *context = table_find(&window_fade_table, &wid);
-
-    if (context) {
-        context->alpha = alpha;
-        context->duration = 0.0f;
-        __asm__ __volatile__ ("" ::: "memory");
-
-        context->skip = true;
-        pthread_mutex_unlock(&window_fade_lock);
-    } else {
-        SLSSetWindowAlpha(SLSMainConnectionID(), wid, alpha);
-        pthread_mutex_unlock(&window_fade_lock);
-    }
-}
-
-static void *window_fade_thread_proc(void *data)
-{
-entry:;
-    struct window_fade_context *context = (struct window_fade_context *) data;
-    context->skip  = false;
-
-    float start_alpha;
-    float end_alpha = context->alpha;
-    SLSGetWindowAlpha(SLSMainConnectionID(), context->wid, &start_alpha);
-
-    int frame_duration = 8;
-    int total_duration = (int)(context->duration * 1000.0f);
-    int frame_count = (int)(((float) total_duration / (float) frame_duration) + 1.0f);
-
-    for (int frame_index = 1; frame_index <= frame_count; ++frame_index) {
-        if (context->skip) goto entry;
-
-        float t = (float) frame_index / (float) frame_count;
-        if (t < 0.0f) t = 0.0f;
-        if (t > 1.0f) t = 1.0f;
-
-        float alpha = lerp(start_alpha, t, end_alpha);
-        SLSSetWindowAlpha(SLSMainConnectionID(), context->wid, alpha);
-
-        usleep(frame_duration*1000);
-    }
-
-    pthread_mutex_lock(&window_fade_lock);
-    if (!context->skip) {
-        table_remove(&window_fade_table, &context->wid);
-        pthread_mutex_unlock(&window_fade_lock);
-        free(context);
-        return NULL;
-    }
-    pthread_mutex_unlock(&window_fade_lock);
-
-    goto entry;
+    window_fade_set(wid, alpha, 0.0f);
 }
 
 static void do_window_opacity_fade(char *message)
 {
     uint32_t wid;
     unpack(wid);
-    if (!wid) return;
 
     float alpha, duration;
     unpack(alpha);
     unpack(duration);
 
-    pthread_mutex_lock(&window_fade_lock);
-    struct window_fade_context *context = table_find(&window_fade_table, &wid);
-
-    if (context) {
-        context->alpha = alpha;
-        context->duration = duration;
-        __asm__ __volatile__ ("" ::: "memory");
-
-        context->skip = true;
-        pthread_mutex_unlock(&window_fade_lock);
-    } else {
-        context = malloc(sizeof(struct window_fade_context));
-        context->wid = wid;
-        context->alpha = alpha;
-        context->duration = duration;
-        context->skip = false;
-        __asm__ __volatile__ ("" ::: "memory");
-
-        table_add(&window_fade_table, &wid, context);
-        pthread_mutex_unlock(&window_fade_lock);
-        pthread_create(&context->thread, NULL, &window_fade_thread_proc, context);
-        pthread_detach(context->thread);
-    }
+    window_fade_set(wid, alpha, duration);
 }
 
 static void do_window_layer(char *message)
@@ -1062,16 +971,6 @@ static void *handle_connection(void *unused)
     return NULL;
 }
 
-static TABLE_HASH_FUNC(hash_wid)
-{
-    return *(uint32_t *) key;
-}
-
-static TABLE_COMPARE_FUNC(compare_wid)
-{
-    return *(uint32_t *) key_a == *(uint32_t *) key_b;
-}
-
 static bool start_daemon(char *socket_path)
 {
     struct sockaddr_un socket_address;
@@ -1096,8 +995,6 @@ static bool start_daemon(char *socket_path)
     }
 
     init_instances();
-    pthread_mutex_init(&window_fade_lock, NULL);
-    table_init(&window_fade_table, 150, hash_wid, compare_wid);
     pthread_create(&daemon_thread, NULL, &handle_connection, NULL);
 
     return true;

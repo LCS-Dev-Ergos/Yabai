@@ -19,8 +19,11 @@ remain separate operations and are still unsupported on macOS 27.
 
 The daemon resolves the selector, optionally moves the window, finds the
 frontmost eligible window, sets opacity, switches space and focuses the
-window within one event-loop request. It does not spawn `jq` or child yabai
+window within one event-loop request. The active display is read from
+WindowServer, and the already frontmost window is focused without an AXRaise
+round trip. It does not spawn `jq` or child yabai
 clients, and never changes `window_opacity_duration` or per-window overrides.
+The `move` action still raises the moved window at its destination.
 Custom opacity is preserved, including windows already dimmer than the fade's
 starting value. Hidden, minimized and sticky windows are excluded.
 
@@ -68,5 +71,14 @@ not a Hyprland comparison or measurements of the new command.
 WindowServer also consumed about 47% of one CPU core at rest in that session;
 its total CPU during switching cannot all be attributed to the fade. Compare
 the new command live under the same workload before claiming a CPU or latency
-improvement. The payload's existing linear fade remains unchanged; native
-compositor transitions and time-based easing are separate work.
+improvement.
+
+Live testing of lcs.4 found 4.4–4.6 s median latency for a rapid 16-request
+burst in another session (old-script control: 1.1 s, with five failures).
+Stack sampling identified waits in AXRaise and repeated AX focused-window
+queries. The subsequent daemon correction removes those calls from ordinary
+navigation; its live latency still needs verification after activation.
+WindowServer consumed about 82% of one core even at rest in that session.
+
+Payload `2.1.31-lcs.3` adds the [shared, time-based opacity engine](effects.md).
+Its live rendering and CPU cost also require verification after activation.

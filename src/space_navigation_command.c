@@ -1,5 +1,12 @@
 #include "space_navigation.c"
 
+static uint64_t space_navigation_active_space(void)
+{
+    // Read WindowServer's active display directly; querying the focused
+    // application's AX window during every switch can stall navigation.
+    return display_space_id(display_manager_active_display_id());
+}
+
 static bool space_navigation_number(struct token token, float *number)
 {
     struct token_value value = token_to_value(token);
@@ -25,7 +32,7 @@ static void space_navigation_command(FILE *rsp, char **message)
         return;
     }
 
-    uint64_t current = space_manager_active_space();
+    uint64_t current = space_navigation_active_space();
     struct selector selector = parse_space_selector(NULL, message, current, false);
 
     if (!selector.sid && token_equals(selector.token, ARGUMENT_COMMON_SEL_NEXT)) {
@@ -41,14 +48,14 @@ static void space_navigation_command(FILE *rsp, char **message)
     struct token from = get_token(message);
     struct token time = get_token(message);
 
-    if (!selector.did_parse || !selector.sid
+    if (!current || !selector.did_parse || !selector.sid
         || !space_navigation_number(from, &alpha) || alpha == 0.0f
         || !space_navigation_number(time, &duration)) {
         daemon_fail(rsp, "navigate expects SPACE_SEL, opacity in (0,1] and duration in [0,1] seconds.\n");
         return;
     }
 
-    if (!space_navigation_run(selector.sid, move, alpha, duration)) {
+    if (!space_navigation_run(current, selector.sid, move, alpha, duration)) {
         daemon_fail(rsp, "navigation failed: check scripting addition, Mission Control, display animation and window eligibility.\n");
     }
 }

@@ -18,9 +18,8 @@ static float space_navigation_opacity(struct window *window, uint32_t focused_id
                                     : g_window_manager.normal_window_opacity;
 }
 
-static bool space_navigation_run(uint64_t sid, bool move, float alpha, float duration)
+static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, float alpha, float duration)
 {
-    uint64_t current = space_manager_active_space();
     if (current == sid) return true;
 
     uint32_t display = space_display_id(sid);
@@ -78,11 +77,22 @@ static bool space_navigation_run(uint64_t sid, bool move, float alpha, float dur
         space_navigation_last_time = now;
 
         if (space_display_id(current) != display) {
-            display_manager_focus_display(display, sid);
+            if (focus) {
+                display_manager_set_active_display_id(display);
+                window_manager_center_mouse(&g_window_manager, focus);
+            } else {
+                display_manager_focus_display(display, sid);
+            }
         }
 
         if (focus) {
-            window_manager_focus_window_with_raise(&focus->application->psn, focus->id, focus->ref);
+            if (move) {
+                window_manager_focus_window_with_raise(&focus->application->psn, focus->id, focus->ref);
+            } else {
+                // The selected window is already frontmost. AXRaise can block
+                // while its application responds to the space switch.
+                window_manager_focus_window_without_raise(&focus->application->psn, focus->id);
+            }
         }
     }
 

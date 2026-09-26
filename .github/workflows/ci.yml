@@ -111,6 +111,12 @@ jobs:
       - name: Test
         run: ctest --preset sanitize
 
+      - name: Check fade concurrency with ThreadSanitizer
+        run: |
+          cmake --preset thread-sanitize -G "Unix Makefiles" -DYABAI_LINK_COMPILE_COMMANDS=OFF
+          cmake --build --preset thread-sanitize --target fade_tests --parallel
+          ctest --preset thread-sanitize -R fade_tests
+
   fuzz:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: macos-26
