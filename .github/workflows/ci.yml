@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Check the Dock patterns
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --verbose
 
       - name: Package and publish the release
         if: env.RELEASE == 'true'
