@@ -50,6 +50,17 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "YABAI_SANITIZE": "thread"
       }
+    },
+    {
+      "name": "fuzz",
+      "displayName": "libFuzzer + ASan/UBSan",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "YABAI_FUZZ": "ON",
+        "YABAI_LINK_COMPILE_COMMANDS": "OFF",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "14.0"
+      }
     }
   ],
   "buildPresets": [
@@ -68,6 +79,10 @@
     {
       "name": "thread-sanitize",
       "configurePreset": "thread-sanitize"
+    },
+    {
+      "name": "fuzz",
+      "configurePreset": "fuzz"
     }
   ],
   "testPresets": [
@@ -97,6 +112,18 @@
       "configurePreset": "thread-sanitize",
       "output": {
         "outputOnFailure": true
+      }
+    },
+    {
+      "name": "fuzz",
+      "configurePreset": "fuzz",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "include": {
+          "name": "^fuzz_"
+        }
       }
     }
   ]

@@ -99,6 +99,41 @@ target_link_libraries(yabai_tests PRIVATE
     "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight")
 add_test(NAME yabai_tests COMMAND yabai_tests)
 
+# libFuzzer targets for the two socket protocols, see docs/testing.md. They need
+# a clang that ships libFuzzer, which Apple's does not. Each also runs as a
+# short CTest test, writing new inputs to the build directory.
+option(YABAI_FUZZ "Build the libFuzzer targets and run them as tests" OFF)
+set(YABAI_FUZZ_SECONDS 30 CACHE STRING "Seconds each fuzz target runs as a test")
+
+if(YABAI_FUZZ)
+    set(YABAI_FUZZ_FLAGS -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined)
+
+    add_executable(fuzz_daemon_message tests/fuzz/daemon_message.m)
+    target_compile_definitions(fuzz_daemon_message PRIVATE TESTS)
+    target_link_libraries(fuzz_daemon_message PRIVATE
+        "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight")
+
+    add_executable(fuzz_payload_message tests/fuzz/payload_message.m)
+    target_include_directories(fuzz_payload_message PRIVATE ${SRC}/osax)
+    target_link_libraries(fuzz_payload_message PRIVATE
+        "-framework Foundation" "-framework Carbon" "-framework CoreGraphics")
+
+    foreach(target daemon_message payload_message)
+        set_target_properties(fuzz_${target} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/fuzz
+            C_STANDARD 11 C_EXTENSIONS OFF)
+        target_compile_options(fuzz_${target} PRIVATE -std=c11 -fno-objc-arc -g -Wno-deprecated-declarations ${YABAI_FUZZ_FLAGS})
+        target_link_options(fuzz_${target} PRIVATE -F${PRIVATE_FRAMEWORKS} ${YABAI_FUZZ_FLAGS})
+
+        set(corpus ${CMAKE_BINARY_DIR}/fuzz/corpus/${target})
+        file(MAKE_DIRECTORY ${corpus})
+        add_test(NAME fuzz_${target}
+            COMMAND fuzz_${target} -max_total_time=${YABAI_FUZZ_SECONDS} -print_final_stats=1
+                -artifact_prefix=${CMAKE_BINARY_DIR}/fuzz/
+                ${corpus} ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/${target})
+    endforeach()
+endif()
+
 # Tools that keep the scripting addition working across macOS releases, see
 # docs/osax.md. They inspect the running system, so they build for the host.
 option(YABAI_BUILD_TOOLS "Build the scripting-addition tools and their test" ON)
