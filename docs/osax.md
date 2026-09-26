@@ -54,10 +54,13 @@ available on that macOS version: on macOS 27 it does not require `dppm` or
 Mission Control runs in WindowManager.app since macOS 27. It moves a space in
 WindowServer, then reports the move to the Dock, whose handler updates the
 Dock's spaces and tells WallpaperAgent which space became first on each
-display. The payload does the same for a move request:
+display. The payload does the same for a move request, on the Dock's main
+queue where the Dock applies those reports:
 
 1. `SLSMoveManagedSpaceToDisplayIndex` moves the space in WindowServer, to its
-   position after the destination space among the display's other spaces.
+   position after the destination space among the display's other spaces. The
+   request is dropped when the destination space is not on its display any
+   more, or when the source display would keep no user space.
 2. The `move_space` lookup is that handler, a Swift method of the Dock spaces
    controller. It takes the space id, the display UUID as a Swift `String`, and
    the space to insert after as an optional id. The payload calls it with
@@ -68,6 +71,9 @@ display. The payload does the same for a move request:
    Dock does when it cannot apply a report.
 
 The same request reorders spaces on one display, which the handler supports.
+Before a space visible on its display moves away, yabai passes a replacement
+space from that display, which the payload shows there; the payload drops the
+request when that space is not on the display.
 
 ## Lookups
 
