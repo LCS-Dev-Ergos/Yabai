@@ -1,7 +1,7 @@
 {
-  //===------------------ VS CODE SETTINGS FOR THE YABAI FORK -------------------===//
+  //===------------------ VS CODE SETTINGS FOR THE YABAI FORK ------------------===//
 
-  //===------------ Editor Configuration -------------===//
+  //===----- Editor Configuration ----------------===//
   // yabai uses 4-space indentation. Formatting on save stays off: reformatting
   // upstream files would turn every upstream sync into a merge conflict.
   "editor.tabSize": 4,
@@ -13,14 +13,14 @@
   "files.trimTrailingWhitespace": false,
   "files.insertFinalNewline": true,
 
-  //===------------- C/C++ Configuration -------------===//
+  //===----- C/C++ Configuration -----------------===//
   // clangd is the only language server; cpptools would duplicate diagnostics.
   "C_Cpp.intelliSenseEngine": "disabled",
   "C_Cpp.autocomplete": "disabled",
   "C_Cpp.errorSquiggles": "disabled",
   "C_Cpp.configurationWarnings": "disabled",
 
-  //===------------ Clangd Configuration -------------===//
+  //===----- Clangd Configuration ----------------===//
   // compile_commands.json in the workspace root links to the last configured
   // preset (see YABAI_LINK_COMPILE_COMMANDS in CMakeLists.txt). Files outside
   // the database fall back to Objective-C instead of the user-level C++ flags.
@@ -36,15 +36,15 @@
   ],
   "clangd.detectExtensionConflicts": true,
 
-  //===------------ CMake Tools Configuration --------===//
+  //===----- CMake Tools Configuration -----------===//
   "cmake.useCMakePresets": "always",
   "cmake.configureOnOpen": true,
   "cmake.buildBeforeRun": true,
 
-  //===----------- Terminal Configuration ------------===//
+  //===----- Terminal Configuration --------------===//
   "terminal.integrated.cwd": "${workspaceFolder}",
 
-  //===-------------- Files and Search ---------------===//
+  //===----- Files and Search --------------------===//
   "files.exclude": {
     "**/.DS_Store": true,
     "src/osax/*_bin.c": true
@@ -55,7 +55,7 @@
     "src/osax/*_bin.c": true
   },
 
-  //===-------------- File Associations --------------===//
+  //===----- File Associations -------------------===//
   "files.associations": {
     "*.m": "objective-c",
     "*.h": "c",
@@ -65,6 +65,6 @@
     "*.asciidoc": "asciidoc"
   },
 
-  //===------------- Debug Configuration -------------===//
+  //===----- Debug Configuration -----------------===//
   "debug.internalConsoleOptions": "openOnSessionStart"
 }
