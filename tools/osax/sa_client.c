@@ -7,9 +7,11 @@
 //        sa_client focus <sid>      focus a space
 //        sa_client create <sid>     create a space on the display of <sid>
 //        sa_client destroy <sid>    destroy a space
+//        sa_client move <sid> <dst> move a space after <dst>, on the display of <dst>
 //
-// focus, create and destroy change the space layout; space ids come from
-// `sa_client spaces` or `yabai -m query --spaces`.
+// focus, create, destroy and move change the space layout; space ids come from
+// `sa_client spaces` or `yabai -m query --spaces`. move does not switch spaces,
+// so move a space that is not the current one of its display.
 //
 
 #include <CoreFoundation/CoreFoundation.h>
@@ -135,15 +137,27 @@ int main(int argc, char **argv)
     if      (strcmp(command, "focus") == 0)   opcode = SA_OPCODE_SPACE_FOCUS;
     else if (strcmp(command, "create") == 0)  opcode = SA_OPCODE_SPACE_CREATE;
     else if (strcmp(command, "destroy") == 0) opcode = SA_OPCODE_SPACE_DESTROY;
+    else if (strcmp(command, "move") == 0)    opcode = SA_OPCODE_SPACE_MOVE;
 
-    if (!opcode || argc < 3) {
-        fprintf(stderr, "usage: %s handshake | spaces | focus <sid> | create <sid> | destroy <sid>\n", argv[0]);
+    if (!opcode || argc < (opcode == SA_OPCODE_SPACE_MOVE ? 4 : 3)) {
+        fprintf(stderr, "usage: %s handshake | spaces | focus <sid> | create <sid> | destroy <sid> | move <sid> <dst>\n", argv[0]);
         return 2;
     }
 
+    // Space move arguments: source, destination, source's previous space, focus.
+    char payload[3 * sizeof(uint64_t) + 1] = {0};
     uint64_t sid = strtoull(argv[2], NULL, 10);
+    memcpy(payload, &sid, sizeof(sid));
+
+    int16_t payload_length = sizeof(sid);
+    if (opcode == SA_OPCODE_SPACE_MOVE) {
+        uint64_t dst_sid = strtoull(argv[3], NULL, 10);
+        memcpy(payload + sizeof(sid), &dst_sid, sizeof(dst_sid));
+        payload_length = sizeof(payload);
+    }
+
     char reply[16];
-    sa_send(opcode, &sid, sizeof(sid), reply, sizeof(reply));
+    sa_send(opcode, payload, payload_length, reply, sizeof(reply));
 
     // NOTE: Dock applies space changes asynchronously after acknowledging.
     usleep(300000);

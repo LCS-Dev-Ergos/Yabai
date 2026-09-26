@@ -116,8 +116,8 @@ debug`). The tools land in `build/debug/tools/`.
    payload.
 6. **Test live.** Install the new build, run `sudo yabai --load-sa`, then
    `build/debug/tools/sa_client handshake` for the attribute bits. `sa_client
-   spaces` lists space ids; `sa_client focus|create|destroy <sid>` exercises the
-   space handlers without yabai.
+   spaces` lists space ids; `sa_client focus|create|destroy <sid>` and `sa_client
+   move <sid> <dst>` exercise the space handlers without yabai.
 7. **SkyLight.** `window.c` queries window sub-levels with a raw MIG message
    whose id changes between releases. `window_sub_level` finds the reply id
    `SLSGetWindowSubLevel` checks for and verifies the request id (reply id
