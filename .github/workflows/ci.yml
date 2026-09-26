@@ -64,6 +64,9 @@ jobs:
             codesign -dvv build/bin/yabai 2>&1 | grep -qx "Authority=$SIGNING_IDENTITY"
           fi
 
+      - name: Check the Dock patterns
+        run: ctest --test-dir build --output-on-failure
+
       - name: Package and publish the release
         if: env.RELEASE == 'true'
         env:
