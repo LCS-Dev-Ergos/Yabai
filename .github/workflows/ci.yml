@@ -1,5 +1,6 @@
 # Builds and tests every push and pull request to dev, once more with ASan and
-# UBSan, and runs the static analyzer. Tags named v<version>-lcs.<n>
+# UBSan, runs the static analyzer and fuzzes both socket parsers.
+# Tags named v<version>-lcs.<n>
 # additionally produce a signed release tarball with the upstream layout
 # (archive/bin, archive/doc, archive/examples).
 
@@ -109,6 +110,43 @@ jobs:
 
       - name: Test
         run: ctest --preset sanitize
+
+  fuzz:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select LLVM with libFuzzer
+        run: |
+          if ! brew list --versions llvm@20 >/dev/null 2>&1; then
+            brew install llvm@20
+          fi
+          clang="$(brew --prefix llvm@20)/bin/clang"
+          echo "CC=$clang" >> "$GITHUB_ENV"
+          echo "OBJC=$clang" >> "$GITHUB_ENV"
+
+      - name: Build fuzz targets
+        run: |
+          cmake --preset fuzz -G "Unix Makefiles" -DYABAI_FUZZ_SECONDS=60
+          cmake --build --preset fuzz --parallel
+
+      - name: Fuzz socket parsers
+        run: ctest --preset fuzz
+
+      - name: Upload failure inputs and test log
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: fuzz-failures
+          path: |
+            build/fuzz/fuzz/crash-*
+            build/fuzz/fuzz/leak-*
+            build/fuzz/fuzz/timeout-*
+            build/fuzz/fuzz/oom-*
+            build/fuzz/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
 
   analyze:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}

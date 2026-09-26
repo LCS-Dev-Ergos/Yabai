@@ -46,9 +46,9 @@ bits, one per lookup that succeeded:
 | `0x40` | space switch animation instruction, patched to a zero duration | instant space switching |
 
 On macOS 27.2 the handshake reports `0x4D`: spaces can be focused, created and
-destroyed, and animations removed, but not moved. `--load-sa` only reports
-success when every bit is set, so on macOS 27 it notifies that the payload does
-not support this version even though it works.
+destroyed, and animations removed, but not moved. `--load-sa` requires the
+lookups available on that macOS version: on macOS 27 it accepts `0x4D` without
+requiring the unavailable moving-space and front-window lookups.
 
 ## Lookups
 
