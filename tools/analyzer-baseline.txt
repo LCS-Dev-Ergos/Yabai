@@ -21,6 +21,5 @@
 2 src/window_manager.c: Access to field 'id' results in a dereference of a null pointer (loaded from variable 'window') [core.NullDereference]
 2 src/window_manager.c: Incorrect decrement of the reference count of an object that is not owned at this point by the caller [osx.cocoa.RetainCount]
 1 src/window_manager.c: Potential leak of memory pointed to by 'view' [unix.Malloc]
-1 src/window_manager.c: The left operand of '!=' is a garbage value [core.UndefinedBinaryOperatorResult]
 1 src/window_manager.c: The right operand of '-' is a garbage value [core.UndefinedBinaryOperatorResult]
 10 src/window.c: Incorrect decrement of the reference count of an object that is not owned at this point by the caller [osx.cocoa.RetainCount]
