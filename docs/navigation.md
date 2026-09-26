@@ -54,6 +54,12 @@ Desktop 1. A mouse click or any other daemon command except queries ends this,
 and so does the second: the active display then decides again, so a Desktop
 chosen by clicking, Command-Tab or `window --focus` is where counting starts.
 
+When the destination's application has another window visible on a different
+display, navigation raises the destination window through Accessibility as
+`window --focus` does, which such an application honors. The raise completes
+before the next request runs, so it cannot pull a Desktop back into view.
+Other applications keep the cheaper focus without a raise.
+
 A navigation waits on WindowServer and the applications involved for tens of
 milliseconds, while a held key repeats every 30 ms. The daemon's accept thread
 lets a `focus next|prev` request join the one already waiting in the event
@@ -80,8 +86,8 @@ but works with payload `2.1.31-lcs.2`; it does not change the payload protocol.
 
 `navigation_tests` executes the production navigation implementation with
 simulated OS calls. It covers repeat bursts, opacity restoration on failure,
-custom opacity, window eligibility, display focus, window moves and the
-starting Desktop of relative navigation.
+custom opacity, window eligibility, display focus, window moves, the starting
+Desktop of relative navigation and the raise decision.
 `navigation_queue_tests` covers request recognition and merging, and the
 daemon fuzz target runs the request check. The upstream unity-test executable
 also checks numeric argument validation. None of these tests establishes

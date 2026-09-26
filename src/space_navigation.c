@@ -67,6 +67,24 @@ static float space_navigation_opacity(struct window *window, uint32_t focused_id
                                     : g_window_manager.normal_window_opacity;
 }
 
+// An application activated with another window visible on a different
+// display, such as a Chromium browser, can make that window key instead.
+static bool space_navigation_needs_raise(struct window *window, uint32_t display)
+{
+    int count = 0;
+    struct window **list = window_manager_find_application_windows(&g_window_manager, window->application, &count);
+
+    for (int i = 0; i < count; ++i) {
+        struct window *other = list[i];
+        if (other == window || !space_navigation_window(other)) continue;
+
+        uint64_t sid = window_space(other->id);
+        if (sid && space_is_visible(sid) && space_display_id(sid) != display) return true;
+    }
+
+    return false;
+}
+
 static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, float alpha, float duration)
 {
     if (current == sid) return true;
@@ -135,7 +153,9 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
         }
 
         if (focus) {
-            if (move) {
+            if (move || space_navigation_needs_raise(focus, display)) {
+                // Raising completes before the next navigation can switch
+                // away, so the application cannot raise it on a hidden space.
                 window_manager_focus_window_with_raise(&focus->application->psn, focus->id, focus->ref);
             } else {
                 // The selected window is already frontmost. AXRaise can block

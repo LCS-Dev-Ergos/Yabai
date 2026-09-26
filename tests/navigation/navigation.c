@@ -89,6 +89,14 @@ int main(void)
 
     reset();
 
+    // Another window of the application is visible on the other display: raise.
+    other_window_space = 3;
+    visible_space = 3;
+    assert(space_navigation_run(active_space, 2, false, .95f, 0));
+    assert(raise_calls == 1 && focused_id == 1);
+
+    reset();
+
     // Relative navigation starts from the last switch while WindowServer's
     // active display briefly points elsewhere.
     assert(space_navigation_current_space(3) == 3);

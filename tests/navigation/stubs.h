@@ -77,6 +77,23 @@ static double CGEventSourceSecondsSinceLastEventType(int state, int type)
     return seconds_since_click;
 }
 
+static struct window **window_manager_find_application_windows(void *wm, struct application *application, int *count)
+{
+    static struct window *list[2];
+
+    list[0] = &windows[0];
+    list[1] = &windows[1];
+    *count = 2;
+
+    return list;
+}
+
+// The second window may sit on a space of the other display.
+static uint64_t window_space(uint32_t id)
+{
+    return id == 2 ? other_window_space : 1;
+}
+
 static bool scripting_addition_set_opacity(uint32_t id, float alpha, float duration)
 {
     assert(opacity_calls < 16);
@@ -104,8 +121,8 @@ static void display_manager_focus_display(uint32_t did, uint64_t sid)
 
 static void window_manager_focus_window_with_raise(int *psn, uint32_t id, void *ref)
 {
-    assert(move_calls > 0); // Only a moved window needs raising at its destination.
     ++window_focus_calls;
+    ++raise_calls;
     focused_id = id;
 }
 

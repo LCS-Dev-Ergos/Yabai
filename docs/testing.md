@@ -21,8 +21,9 @@ editor's root `compile_commands.json` symlink.
   variables and retained standard output/error. They do not run the daemon.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
   implementation with simulated OS calls, including rapid repeats, failure
-  restoration and the starting Desktop of relative navigation; numeric
-  arguments are also covered by the unity tests.
+  restoration, the starting Desktop of relative navigation and the raise for
+  applications with windows on two displays; numeric arguments are also
+  covered by the unity tests.
 - `navigation_queue_tests` checks how relative requests are recognized and
   merged while one waits: repeats, separate presses, directions and ordering.
 - `focus_tests` exercises production focus-event handling with simulated OS
