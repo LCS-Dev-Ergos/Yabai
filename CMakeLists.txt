@@ -70,20 +70,34 @@ target_link_libraries(yabai PRIVATE
     "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight")
 
 if(YABAI_SANITIZE STREQUAL "address")
-    target_compile_options(yabai PRIVATE -fsanitize=address,undefined)
-    target_link_options(yabai PRIVATE -fsanitize=address,undefined)
+    set(YABAI_SANITIZE_FLAGS -fsanitize=address,undefined)
 elseif(YABAI_SANITIZE STREQUAL "thread")
-    target_compile_options(yabai PRIVATE -fsanitize=thread,undefined)
-    target_link_options(yabai PRIVATE -fsanitize=thread,undefined)
+    set(YABAI_SANITIZE_FLAGS -fsanitize=thread,undefined)
 elseif(NOT YABAI_SANITIZE STREQUAL "")
     message(FATAL_ERROR "YABAI_SANITIZE must be empty, address or thread")
 endif()
+target_compile_options(yabai PRIVATE ${YABAI_SANITIZE_FLAGS})
+target_link_options(yabai PRIVATE ${YABAI_SANITIZE_FLAGS})
 
 if(YABAI_CODESIGN_IDENTITY)
     add_custom_command(TARGET yabai POST_BUILD
         COMMAND codesign -fs ${YABAI_CODESIGN_IDENTITY} $<TARGET_FILE:yabai>
         VERBATIM)
 endif()
+
+# Upstream unit tests. tests.m includes the whole unity build with -DTESTS and
+# stubs the embedded payload and loader.
+enable_testing()
+add_executable(yabai_tests tests/src/tests.m)
+set_target_properties(yabai_tests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+    C_STANDARD 11 C_EXTENSIONS OFF)
+target_compile_definitions(yabai_tests PRIVATE TESTS PROFILE=1)
+target_compile_options(yabai_tests PRIVATE -std=c11 -fno-objc-arc ${YABAI_SANITIZE_FLAGS})
+target_link_options(yabai_tests PRIVATE -F${PRIVATE_FRAMEWORKS} ${YABAI_SANITIZE_FLAGS})
+target_link_libraries(yabai_tests PRIVATE
+    "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight")
+add_test(NAME yabai_tests COMMAND yabai_tests)
 
 # Tools that keep the scripting addition working across macOS releases, see
 # docs/osax.md. They inspect the running system, so they build for the host.
@@ -110,7 +124,6 @@ if(YABAI_BUILD_TOOLS AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
     endforeach()
 
     # Resolves every payload lookup in the Dock of the machine running the test.
-    enable_testing()
     add_test(NAME osax_patterns COMMAND pattern_check)
 endif()
 
