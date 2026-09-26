@@ -94,6 +94,11 @@ static uint64_t window_space(uint32_t id)
     return id == 2 ? other_window_space : 1;
 }
 
+static void window_focus_note(uint32_t id)
+{
+    noted_id = id;
+}
+
 static bool scripting_addition_set_opacity(uint32_t id, float alpha, float duration)
 {
     assert(opacity_calls < 16);

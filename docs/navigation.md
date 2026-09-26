@@ -60,6 +60,11 @@ display, navigation raises the destination window through Accessibility as
 before the next request runs, so it cannot pull a Desktop back into view.
 Other applications keep the cheaper focus without a raise.
 
+Navigation records the window it focused, so the activation handler that
+follows uses it instead of asking the application, which is busy with the
+switch, for its focused window. A later focus notification from the
+application still replaces it.
+
 A navigation waits on WindowServer and the applications involved for tens of
 milliseconds, while a held key repeats every 30 ms. The daemon's accept thread
 lets a `focus next|prev` request join the one already waiting in the event

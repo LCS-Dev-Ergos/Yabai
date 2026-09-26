@@ -162,6 +162,10 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
                 // while its application responds to the space switch.
                 window_manager_focus_window_without_raise(&focus->application->psn, focus->id);
             }
+
+            // The activation that follows need not ask the application,
+            // which is busy with the switch, for its focused window.
+            window_focus_note(focus->id);
         }
 
         space_navigation_anchor.sid = sid;

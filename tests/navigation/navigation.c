@@ -89,6 +89,12 @@ int main(void)
 
     reset();
 
+    // The activation handler reuses the window navigation focused.
+    assert(space_navigation_run(active_space, 2, false, .95f, 0));
+    assert(noted_id == 1 && raise_calls == 0);
+
+    reset();
+
     // Another window of the application is visible on the other display: raise.
     other_window_space = 3;
     visible_space = 3;
