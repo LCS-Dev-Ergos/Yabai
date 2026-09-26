@@ -69,5 +69,35 @@
       "name": "thread-sanitize",
       "configurePreset": "thread-sanitize"
     }
+  ],
+  "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "thread-sanitize",
+      "configurePreset": "thread-sanitize",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
   ]
 }

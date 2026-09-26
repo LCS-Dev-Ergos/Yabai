@@ -85,6 +85,35 @@ if(YABAI_CODESIGN_IDENTITY)
         VERBATIM)
 endif()
 
+# Tools that keep the scripting addition working across macOS releases, see
+# docs/osax.md. They inspect the running system, so they build for the host.
+option(YABAI_BUILD_TOOLS "Build the scripting-addition tools and their test" ON)
+
+if(YABAI_BUILD_TOOLS AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
+    add_executable(pattern_check tools/osax/pattern_check.m)
+    target_include_directories(pattern_check PRIVATE ${SRC}/osax)
+    target_link_libraries(pattern_check PRIVATE "-framework Foundation")
+
+    add_executable(sa_client tools/osax/sa_client.c)
+    target_include_directories(sa_client PRIVATE ${SRC}/osax)
+    target_link_libraries(sa_client PRIVATE "-framework CoreFoundation" "-framework SkyLight")
+
+    add_executable(window_sub_level tools/skylight/window_sub_level.c)
+    target_link_libraries(window_sub_level PRIVATE "-framework CoreFoundation" "-framework CoreGraphics" "-framework SkyLight")
+
+    foreach(tool pattern_check sa_client window_sub_level)
+        set_target_properties(${tool} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools
+            OSX_ARCHITECTURES arm64)
+        target_compile_options(${tool} PRIVATE -Wall -Wextra -fno-objc-arc)
+        target_link_options(${tool} PRIVATE -F${PRIVATE_FRAMEWORKS})
+    endforeach()
+
+    # Resolves every payload lookup in the Dock of the machine running the test.
+    enable_testing()
+    add_test(NAME osax_patterns COMMAND pattern_check)
+endif()
+
 # Language server support. Each source included by a unity translation unit is
 # parsed with everything its unity file includes before it, which is exactly
 # the context the compiler sees. The target is never built.

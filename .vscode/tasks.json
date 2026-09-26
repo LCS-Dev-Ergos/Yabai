@@ -37,6 +37,15 @@
       "detail": "Remove the preset build directory and configure it again"
     },
 
+    {
+      "label": "CTest: Run",
+      "type": "shell",
+      "command": "cmake --build --preset ${input:preset} && ctest --preset ${input:preset}",
+      "group": "test",
+      "problemMatcher": [],
+      "detail": "Build and check the scripting-addition patterns against this Mac's Dock"
+    },
+
     //===------------------------------ UPSTREAM -------------------------------===//
     {
       "label": "Make: Build (upstream makefile)",
