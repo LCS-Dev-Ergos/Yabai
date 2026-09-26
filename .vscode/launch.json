@@ -1,0 +1,73 @@
+{
+  //===-------------------------------------------------------------------------===//
+  // Debug configurations for the yabai fork (CodeLLDB)
+  //
+  // Launching:
+  //   Stop the nix-darwin agent first (launchctl bootout gui/$UID/org.nixos.yabai)
+  //   so two instances do not fight over the window server. A locally built
+  //   binary needs its own Accessibility grant unless it is signed with the
+  //   yabai-lcs-dev certificate (-DYABAI_CODESIGN_IDENTITY=yabai-lcs-dev).
+  //   "program" follows the target and preset selected in CMake Tools.
+  //
+  // Attaching:
+  //   Attaching to the running yabai needs no restart. Attaching to Dock.app
+  //   is how the scripting-addition payload is debugged; the Dock, and with it
+  //   Mission Control and space switching, freezes while stopped.
+  //===-------------------------------------------------------------------------===//
+  "version": "0.2.0",
+
+  "configurations": [
+    //===------------------------------ LAUNCH ---------------------------------===//
+    {
+      "name": "Launch yabai (verbose)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${command:cmake.launchTargetPath}",
+      "args": ["--verbose"],
+      "cwd": "${workspaceFolder}",
+      "terminal": "integrated",
+      "stopOnEntry": false
+    },
+    {
+      "name": "Launch yabai + ASan/UBSan",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${command:cmake.launchTargetPath}",
+      "args": ["--verbose"],
+      "cwd": "${workspaceFolder}",
+      "terminal": "integrated",
+      "stopOnEntry": false,
+      "envFile": "${workspaceFolder}/.vscode/sanitizers.env"
+    },
+    {
+      "name": "Launch yabai + TSan/UBSan",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${command:cmake.launchTargetPath}",
+      "args": ["--verbose"],
+      "cwd": "${workspaceFolder}",
+      "terminal": "integrated",
+      "stopOnEntry": false,
+      "envFile": "${workspaceFolder}/.vscode/thread_sanitizer.env"
+    },
+
+    //===------------------------------ ATTACH ---------------------------------===//
+    {
+      "name": "Attach to running yabai",
+      "type": "lldb",
+      "request": "attach",
+      "program": "yabai",
+      "waitFor": false
+    },
+    {
+      "name": "Attach to Dock (scripting addition)",
+      "type": "lldb",
+      "request": "attach",
+      "program": "/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock",
+      "waitFor": false,
+      "initCommands": [
+        "settings set target.process.stop-on-sharedlibrary-events false"
+      ]
+    }
+  ]
+}

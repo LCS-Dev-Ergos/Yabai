@@ -1,0 +1,70 @@
+{
+  //===------------------ VS CODE SETTINGS FOR THE YABAI FORK -------------------===//
+
+  //===------------ Editor Configuration -------------===//
+  // yabai uses 4-space indentation. Formatting on save stays off: reformatting
+  // upstream files would turn every upstream sync into a merge conflict.
+  "editor.tabSize": 4,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "editor.rulers": [100],
+  "editor.formatOnSave": false,
+  "editor.trimAutoWhitespace": true,
+  "files.trimTrailingWhitespace": false,
+  "files.insertFinalNewline": true,
+
+  //===------------- C/C++ Configuration -------------===//
+  // clangd is the only language server; cpptools would duplicate diagnostics.
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "C_Cpp.autocomplete": "disabled",
+  "C_Cpp.errorSquiggles": "disabled",
+  "C_Cpp.configurationWarnings": "disabled",
+
+  //===------------ Clangd Configuration -------------===//
+  // compile_commands.json in the workspace root links to the last configured
+  // preset (see YABAI_LINK_COMPILE_COMMANDS in CMakeLists.txt). Files outside
+  // the database fall back to Objective-C instead of the user-level C++ flags.
+  "clangd.compilationDatabasePath": "${workspaceFolder}",
+  "clangd.fallbackFlags": ["-xobjective-c", "-std=c11", "-fno-objc-arc"],
+  "clangd.onConfigChanged": "restart",
+  "clangd.arguments": [
+    "--completion-style=detailed",
+    "--header-insertion=never",
+    "--background-index",
+    "--clang-tidy",
+    "-j=8"
+  ],
+  "clangd.detectExtensionConflicts": true,
+
+  //===------------ CMake Tools Configuration --------===//
+  "cmake.useCMakePresets": "always",
+  "cmake.configureOnOpen": true,
+  "cmake.buildBeforeRun": true,
+
+  //===----------- Terminal Configuration ------------===//
+  "terminal.integrated.cwd": "${workspaceFolder}",
+
+  //===-------------- Files and Search ---------------===//
+  "files.exclude": {
+    "**/.DS_Store": true,
+    "src/osax/*_bin.c": true
+  },
+  "search.exclude": {
+    "build": true,
+    "bin": true,
+    "src/osax/*_bin.c": true
+  },
+
+  //===-------------- File Associations --------------===//
+  "files.associations": {
+    "*.m": "objective-c",
+    "*.h": "c",
+    "*.c": "c",
+    "yabairc": "shellscript",
+    "skhdrc": "shellscript",
+    "*.asciidoc": "asciidoc"
+  },
+
+  //===------------- Debug Configuration -------------===//
+  "debug.internalConsoleOptions": "openOnSessionStart"
+}

@@ -20,6 +20,7 @@ set(YABAI_ARCHITECTURES "x86_64;arm64" CACHE STRING "Architectures of the yabai 
 set(YABAI_OSAX_ARCHITECTURES "x86_64;arm64e" CACHE STRING "Architectures of the scripting-addition payload and loader")
 set(YABAI_SANITIZE "" CACHE STRING "Sanitizers for the yabai binary: empty, address or thread")
 set(YABAI_CODESIGN_IDENTITY "" CACHE STRING "Code signing identity applied to the yabai binary after linking")
+option(YABAI_LINK_COMPILE_COMMANDS "Point compile_commands.json in the source tree at this build directory" ON)
 
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(OSAX_OUT ${CMAKE_BINARY_DIR}/src/osax)
@@ -110,6 +111,13 @@ function(yabai_unity_sources unity_file target)
         endif()
     endforeach()
 endfunction()
+
+# Editors that only look for compile_commands.json in the workspace root follow
+# the most recently configured build directory.
+if(YABAI_LINK_COMPILE_COMMANDS AND NOT CMAKE_BINARY_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    file(CREATE_LINK ${CMAKE_BINARY_DIR}/compile_commands.json
+        ${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json SYMBOLIC)
+endif()
 
 add_library(yabai_unity OBJECT EXCLUDE_FROM_ALL)
 target_include_directories(yabai_unity PRIVATE ${SRC} ${OSAX_OUT})

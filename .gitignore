@@ -5,3 +5,4 @@
 /src/osax/payload_bin.c
 /build/
 /build-*/
+/compile_commands.json
