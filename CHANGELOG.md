@@ -12,6 +12,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - `--load-sa` no longer reports that the payload does not support macOS 27 when every lookup available on that version succeeded
 - Changing the sub-layer of a window no longer reads uninitialized window relations, which could apply the layer to unrelated window ids
 - Scripting-addition no longer over-releases autoreleased arrays or leaks the space object it creates
+- Daemon rejects client messages that are empty or longer than 64 KiB and terminates the rest, instead of exiting on oversized lengths or reading past unterminated messages
+- Integer arguments that overflow an int and hexadecimal arguments longer than 8 digits are no longer parsed as numbers
+- Scripting-addition reads boolean arguments as bytes and ignores window scale requests with invalid dimensions
 - Fixed scripting-addition *add_space* pattern for macOS 26.6 Apple Silicon arm64 [#2799](https://github.com/asmvik/yabai/issues/2799)
 - Fixed minor memory leak on space destruction, and added a few missing null checks to SkyLight API calls [#2791](https://github.com/asmvik/yabai/issues/2791)
 
