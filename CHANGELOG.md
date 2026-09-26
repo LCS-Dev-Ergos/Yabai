@@ -6,10 +6,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Fork `space --navigate` counts `next`/`prev` from the Desktop it last switched to while the active display briefly follows an application to another display, merges relative requests that arrive while one waits, and raises the destination window when its application has a window visible on another display
 - Opacity fades use one sleeping shared worker, monotonic elapsed time and ease-out cubic interpolation; immediate changes cancel older frames, and payload version is now *2.1.31-lcs.3*
 - Fork navigation avoids AXRaise on its already frontmost target and repeated Accessibility queries for the active Desktop, following a live lcs.4 latency regression
 - Fork `space --navigate` combines focus/move, optional fade and window focus in one daemon request; rapid repeats skip new fades without dropping navigation, and global duration/custom opacity remain unchanged
-- Update scripting-addition for macOS 27 Apple Silicon arm64e (space focus, create, destroy and animation removal; moving spaces is not yet supported) [#2802](https://github.com/asmvik/yabai/issues/2802)
+- Update scripting-addition for macOS 27 Apple Silicon arm64e (space focus, create, destroy, move and animation removal) [#2802](https://github.com/asmvik/yabai/issues/2802)
 - Scripting-addition validates message lengths and element counts received on its socket instead of reading past the message buffer inside Dock.app
 - Fork release `v7.1.25-lcs.3` introduced payload *2.1.31-lcs.2* with memory-management and argument-validation fixes
 - `--load-sa` no longer reports that the payload does not support macOS 27 when every lookup available on that version succeeded

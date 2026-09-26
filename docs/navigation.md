@@ -14,8 +14,8 @@ opacity in `(0,1]`, and the fade duration in `[0,1]` seconds. A zero duration
 disables the fade. `next` and `prev` wrap to the first/last space, like the
 previous shell script. Other selectors follow the ordinary space selectors.
 `move` sends the focused window to the destination and follows it. It does
-not move or reorder the Desktop itself: `space --move` and `space --display`
-remain separate operations and are still unsupported on macOS 27.
+not move or reorder the Desktop itself; that is what `space --move` and
+`space --display` do.
 
 The daemon resolves the selector, optionally moves the window, finds the
 frontmost eligible window, sets opacity, switches space and focuses the
