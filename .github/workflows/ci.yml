@@ -111,11 +111,11 @@ jobs:
       - name: Test
         run: ctest --preset sanitize
 
-      - name: Check fade concurrency with ThreadSanitizer
+      - name: Check fade and navigation concurrency with ThreadSanitizer
         run: |
           cmake --preset thread-sanitize -G "Unix Makefiles" -DYABAI_LINK_COMPILE_COMMANDS=OFF
-          cmake --build --preset thread-sanitize --target fade_tests --parallel
-          ctest --preset thread-sanitize -R fade_tests
+          cmake --build --preset thread-sanitize --target fade_tests navigation_queue_tests --parallel
+          ctest --preset thread-sanitize -R 'fade_tests|navigation_queue_tests'
 
   fuzz:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}

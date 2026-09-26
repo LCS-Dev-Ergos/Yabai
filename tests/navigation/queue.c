@@ -7,7 +7,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+static bool fail_allocation;
+
+static void *queue_allocate(size_t size)
+{
+    return fail_allocation ? NULL : malloc(size);
+}
+
+#define malloc queue_allocate
 #include "../../src/space_navigation_queue.c"
+#undef malloc
+
+#include "queue_ordering.h"
+#include "queue_threads.h"
 
 // Frames a request as the yabai client sends it.
 static int request(char *bytes, const char **arguments, int count)
@@ -75,13 +87,13 @@ int main(void)
     assert(!space_navigation_queue_join(5, 1, now));
     assert(space_navigation_queue_join(6, 1, now + 30000000));
     assert(space_navigation_queue_join(7, 1, now + 60000000));
-    assert(g_space_navigation_queue.steps == 1);
+    assert(g_space_navigation_queue.first->steps == 1);
 
     // Separate presses add steps; the other direction takes one back.
     assert(space_navigation_queue_join(8, 1, now + 160000000));
     assert(space_navigation_queue_join(9, -1, now + 170000000));
     assert(space_navigation_queue_join(10, 1, now + 300000000));
-    assert(g_space_navigation_queue.steps == 2);
+    assert(g_space_navigation_queue.first->steps == 2);
 
     // Another request closes the group: later requests keep their order.
     assert(!space_navigation_queue_join(11, 0, now + 310000000));
@@ -96,12 +108,19 @@ int main(void)
     space_navigation_queue_claim(11);
     assert(!g_space_navigation_claim.active);
 
+    space_navigation_queue_claim(12);
+    assert(g_space_navigation_claim.active && g_space_navigation_claim.steps == 1);
+
     // Once claimed, the next request waits as a new group.
     assert(!space_navigation_queue_join(13, -1, now + 400000000));
     assert(space_navigation_queue_join(14, 1, now + 410000000));
 
     space_navigation_queue_claim(13);
     assert(g_space_navigation_claim.active && g_space_navigation_claim.steps == 0);
+
+    test_interleaved_groups();
+    test_allocation_failure();
+    test_concurrent_groups();
 
     puts("navigation queue: parsing, repeats, presses and ordering checks passed");
 

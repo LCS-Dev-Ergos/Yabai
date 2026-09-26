@@ -68,12 +68,17 @@ application still replaces it.
 A navigation waits on WindowServer and the applications involved for tens of
 milliseconds, while a held key repeats every 30 ms. The daemon's accept thread
 lets a `focus next|prev` request join the one already waiting in the event
-queue and answers it at once, so at most one request waits. A repeat, arriving
+queue and answers it at once, so each uninterrupted group has one waiting
+request. A repeat, arriving
 less than 50 ms after the previous request, keeps the pending step; a separate
 key press adds one, and the other direction takes one back. Holding a key
 moves one Desktop per completed switch and stops when it is released; three
 quick presses still move three Desktops. Any other request closes the group,
-so requests keep their order. Absolute selectors and `move` are not merged.
+so requests keep their order. Later repeats form a new group even while an
+earlier closed group still waits. This keeps queries from disabling merging
+for all subsequent repeats, without moving navigation across a query or
+another command. Absolute selectors and `move` are not merged. A merged
+client's successful return acknowledges queuing, not completed navigation.
 
 ## Integration
 

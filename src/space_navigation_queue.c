@@ -12,17 +12,23 @@
 
 #define SPACE_NAVIGATION_REPEAT_NS 50000000ULL
 
-static struct
+struct space_navigation_group
 {
-    pthread_mutex_t lock;
+    struct space_navigation_group *next;
     int owner;
     int steps;
     int direction;
-    bool open;
     uint64_t time;
+};
+
+static struct
+{
+    pthread_mutex_t lock;
+    struct space_navigation_group *first;
+    struct space_navigation_group *last;
+    bool open;
 } g_space_navigation_queue = {
-    .lock = PTHREAD_MUTEX_INITIALIZER,
-    .owner = -1
+    .lock = PTHREAD_MUTEX_INITIALIZER
 };
 
 // The steps the request being handled on the event loop carries.
@@ -90,23 +96,36 @@ static bool space_navigation_queue_join(int sockfd, int direction, uint64_t now)
 
     pthread_mutex_lock(&g_space_navigation_queue.lock);
 
+    struct space_navigation_group *last = g_space_navigation_queue.last;
+
     if (!direction) {
         g_space_navigation_queue.open = false;
-    } else if (g_space_navigation_queue.owner != -1 && g_space_navigation_queue.open) {
-        bool repeat = direction == g_space_navigation_queue.direction
-                   && now - g_space_navigation_queue.time < SPACE_NAVIGATION_REPEAT_NS;
+    } else if (last && g_space_navigation_queue.open) {
+        bool repeat = direction == last->direction
+                   && now - last->time < SPACE_NAVIGATION_REPEAT_NS;
 
-        if (!repeat) g_space_navigation_queue.steps += direction;
+        if (!repeat) last->steps += direction;
 
-        g_space_navigation_queue.direction = direction;
-        g_space_navigation_queue.time = now;
+        last->direction = direction;
+        last->time = now;
         joined = true;
-    } else if (g_space_navigation_queue.owner == -1) {
-        g_space_navigation_queue.owner = sockfd;
-        g_space_navigation_queue.steps = direction;
-        g_space_navigation_queue.direction = direction;
-        g_space_navigation_queue.open = true;
-        g_space_navigation_queue.time = now;
+    } else {
+        struct space_navigation_group *group = malloc(sizeof(*group));
+        g_space_navigation_queue.open = group != NULL;
+
+        if (group) {
+            *group = (struct space_navigation_group) {
+                .owner = sockfd,
+                .steps = direction,
+                .direction = direction,
+                .time = now
+            };
+
+            if (last) last->next = group;
+            else g_space_navigation_queue.first = group;
+
+            g_space_navigation_queue.last = group;
+        }
     }
 
     pthread_mutex_unlock(&g_space_navigation_queue.lock);
@@ -121,12 +140,19 @@ static void space_navigation_queue_claim(int sockfd)
 {
     pthread_mutex_lock(&g_space_navigation_queue.lock);
 
-    g_space_navigation_claim.active = g_space_navigation_queue.owner == sockfd;
-    g_space_navigation_claim.steps = g_space_navigation_queue.steps;
+    struct space_navigation_group *first = g_space_navigation_queue.first;
+    g_space_navigation_claim.active = first && first->owner == sockfd;
+    g_space_navigation_claim.steps = g_space_navigation_claim.active ? first->steps : 0;
 
     if (g_space_navigation_claim.active) {
-        g_space_navigation_queue.owner = -1;
-        g_space_navigation_queue.open = false;
+        g_space_navigation_queue.first = first->next;
+
+        if (g_space_navigation_queue.last == first) {
+            g_space_navigation_queue.last = NULL;
+            g_space_navigation_queue.open = false;
+        }
+
+        free(first);
     }
 
     pthread_mutex_unlock(&g_space_navigation_queue.lock);

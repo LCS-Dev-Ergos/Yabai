@@ -25,7 +25,8 @@ editor's root `compile_commands.json` symlink.
   applications with windows on two displays; numeric arguments are also
   covered by the unity tests.
 - `navigation_queue_tests` checks how relative requests are recognized and
-  merged while one waits: repeats, separate presses, directions and ordering.
+  merged while one waits: repeats, separate presses, directions, interleaved
+  queries, allocation failure and concurrent admission/consumption.
 - `focus_tests` exercises production focus-event handling with simulated OS
   calls: reuse of pending observations, stale activations, invalid/hidden or
   minimized windows, and the normal AX fallback, including no focused window.
@@ -108,7 +109,8 @@ Branch and pull-request CI runs each target for 60 seconds, enforces a
 120-second outer limit per test, and uploads failure inputs and the CTest log
 on failure. A clean run is a bounded parser check,
 not validation of Dock integration, authentication or animation behavior.
-The sanitizer CI job also runs `fade_tests` separately under ThreadSanitizer.
+The sanitizer CI job also runs `fade_tests` and `navigation_queue_tests`
+separately under ThreadSanitizer.
 
 ## Live release checks
 

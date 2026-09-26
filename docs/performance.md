@@ -133,6 +133,47 @@ lets the activation handler reuse the window navigation focused. See
 a SketchyBar event that no item subscribes to. None of this has been measured
 live yet.
 
+## Activated lcs.10: navigation verification and interleaved queries
+
+On 2026-09-27 the active daemon was lcs.10. A full `next` lap followed by a
+`prev` lap traversed all 11 Desktops in order: 22/22 checks passed, including
+7–8, with unchanged Desktop IDs and display assignments. After each command,
+the probe waited 850 ms before checking focus. Median client completion was
+119 ms, maximum 664 ms. This verifies the observed order at those checkpoints,
+not frame timing or every possible focus transition.
+
+Sixteen absolute navigations between Desktops 7/6 at 150 ms intervals measured
+572 ms and 194 ms median in two runs, with no failed requests. Daemon CPU was
+0.04/0.03 seconds; WindowServer CPU was 2.39/2.41 seconds over 3.05/2.84 seconds
+(78–85% of one core). The idle control used 0.66 WindowServer CPU seconds over
+2.66 seconds (25%). Absolute selectors deliberately are not merged. These
+runs do not establish a uniform latency reduction or elimination of the CPU
+peak reported by the user.
+
+Two 40-request runs through the installed wrapper at 30 ms intervals drained
+0.91/1.61 seconds after the last submission. A separate probe sent the same
+valid navigation frames directly to the daemon socket, avoiding process
+creation. Forty requests at 30 ms intervals drained in 238 ms. Interleaving
+four `query --spaces --space` requests increased this to 7.18 seconds. Both
+runs completed without command errors; maximum send lateness was 143/59 ms.
+An earlier, longer interleaved run exceeded the probe's 12-second deadline.
+Merged client replies acknowledge queuing, so their median is not a measure
+of switch latency.
+
+The production queue reproduced the ordering problem in a deterministic test:
+a query closed the one tracked group; subsequent navigation was no longer
+eligible to merge until that first group ran. The fix tracks ordered groups,
+allowing later repeats to merge behind the query while preserving its position.
+The regression failed before the change and passed afterward. Coverage also
+checks direction cancellation, descriptor reuse, allocation failure and 4,000
+concurrent admissions with a separate consumer. Debug and ASan/UBSan suites
+and the queue's ThreadSanitizer test passed. Live improvement awaits activation.
+
+The spaced-navigation sample still recorded 197 samples inside the check for
+another visible window of the destination application, largely in repeated
+WindowServer visibility lookups. That is a further candidate for reducing IPC;
+this queue correction does not alter the focus or visibility checks.
+
 ## Remaining work
 
 Profile again before changing the focus workaround's 40 ms delay: it exists
