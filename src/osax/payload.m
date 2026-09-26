@@ -38,8 +38,12 @@
 #undef HASHTABLE_IMPLEMENTATION
 
 #define page_align(addr) (vm_address_t)((uintptr_t)(addr) & (~(vm_page_size - 1)))
-#define unpack(v) memcpy(&v, message, sizeof(v)); message += sizeof(v)
+#define try_unpack(v) (message + sizeof(v) <= message_end ? (memcpy(&v, message, sizeof(v)), message += sizeof(v), true) : false)
+#define unpack(v) if (!try_unpack(v)) return
+#define unpack_capacity(size) ((message_end - message) / (int)(size))
 #define lerp(a, t, b) (((1.0-t)*a) + (t*b))
+
+static char *message_end;
 
 extern int SLSMainConnectionID(void);
 extern CGError SLSGetConnectionPSN(int cid, ProcessSerialNumber *psn);
@@ -813,16 +817,16 @@ static void do_window_swap_proxy_in(char *message)
 {
     int count = 0;
     unpack(count);
-    if (!count) return;
+    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t))) return;
 
     CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
     for (int i = 0; i < count; ++i) {
         uint32_t wid;
-        unpack(wid);
+        if (!try_unpack(wid)) break;
         if (!wid) continue;
 
         uint32_t proxy_wid;
-        unpack(proxy_wid);
+        if (!try_unpack(proxy_wid)) break;
 
         SLSTransactionOrderWindowGroup(transaction, proxy_wid, 1, wid);
         SLSTransactionSetWindowSystemAlpha(transaction, wid, 0);
@@ -835,16 +839,16 @@ static void do_window_swap_proxy_out(char *message)
 {
     int count = 0;
     unpack(count);
-    if (!count) return;
+    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t))) return;
 
     CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
     for (int i = 0; i < count; ++i) {
         uint32_t wid;
-        unpack(wid);
+        if (!try_unpack(wid)) break;
         if (!wid) continue;
 
         uint32_t proxy_wid;
-        unpack(proxy_wid);
+        if (!try_unpack(proxy_wid)) break;
 
         SLSTransactionSetWindowSystemAlpha(transaction, wid, 1.0f);
         SLSTransactionOrderWindowGroup(transaction, proxy_wid, 0, wid);
@@ -872,12 +876,12 @@ static void do_window_order_in(char *message)
 {
     int count = 0;
     unpack(count);
-    if (!count) return;
+    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t))) return;
 
     CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
     for (int i = 0; i < count; ++i) {
         uint32_t wid;
-        unpack(wid);
+        if (!try_unpack(wid)) break;
         if (!wid) continue;
 
         SLSTransactionOrderWindowGroup(transaction, wid, 1, 0);
@@ -910,6 +914,7 @@ static void do_window_list_move_to_space(char *message)
 
     int count = 0;
     unpack(count);
+    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t))) return;
 
     CFArrayRef window_list_ref = cfarray_of_cfnumbers((uint32_t*)message, sizeof(uint32_t), count, kCFNumberSInt32Type);
     SLSMoveWindowsToManagedSpace(SLSMainConnectionID(), window_list_ref, sid);
@@ -1034,7 +1039,10 @@ static inline bool read_message(int sockfd, char *message)
             bytes_read += cur_read;
         } while (bytes_read < bytes_to_read);
 
-        return bytes_read == bytes_to_read;
+        if (bytes_read != bytes_to_read) return false;
+
+        message_end = message + bytes_read;
+        return true;
     }
 
     return false;
