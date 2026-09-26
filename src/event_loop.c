@@ -9,6 +9,7 @@ extern int g_connection;
 extern void *g_workspace_context;
 extern int g_layer_below_window_level;
 volatile bool __pending_window_focus;
+volatile uint32_t __pending_window_focus_id;
 volatile bool __pending_gesture;
 volatile uint64_t __last_gesture_time;
 volatile uint64_t __last_cmd_tab_time;
@@ -69,6 +70,8 @@ static void window_did_receive_focus(struct window_manager *wm, struct mouse_sta
         break;
     }
 }
+
+#include "window_focus_events.c"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -392,34 +395,7 @@ static EVENT_HANDLER(APPLICATION_FRONT_SWITCHED)
         }
     }
 
-    uint32_t application_focused_window_id = application_focused_window(application);
-    if (!application_focused_window_id) {
-        struct window *focused_window = window_manager_find_window(&g_window_manager, g_window_manager.focused_window_id);
-        if (focused_window) {
-            window_manager_set_window_opacity(&g_window_manager, focused_window, g_window_manager.normal_window_opacity);
-        }
-
-        g_window_manager.last_window_id = g_window_manager.focused_window_id;
-        g_window_manager.focused_window_id = 0;
-        g_window_manager.focused_window_psn = application->psn;
-        g_mouse_state.ffm_window_id = 0;
-        return;
-    }
-
-    struct window *window = window_manager_find_window(&g_window_manager, application_focused_window_id);
-    if (!window) {
-        struct window *focused_window = window_manager_find_window(&g_window_manager, g_window_manager.focused_window_id);
-        if (focused_window) {
-            window_manager_set_window_opacity(&g_window_manager, focused_window, g_window_manager.normal_window_opacity);
-        }
-
-        window_manager_add_lost_focused_event(&g_window_manager, application_focused_window_id);
-        return;
-    }
-
-    window_did_receive_focus(&g_window_manager, &g_mouse_state, window);
-    event_signal_push(SIGNAL_WINDOW_FOCUSED, window);
-    __atomic_store_n(&__pending_window_focus, false, __ATOMIC_RELEASE);
+    window_manager_handle_front_focus(application);
 }
 #pragma clang diagnostic pop
 
@@ -637,6 +613,7 @@ static EVENT_HANDLER(WINDOW_FOCUSED)
 {
     __atomic_store_n(&__pending_window_focus, false, __ATOMIC_RELEASE);
     uint32_t window_id = (uint32_t)(intptr_t) context;
+    window_focus_consume(window_id);
 
     struct window *window = window_manager_find_window(&g_window_manager, window_id);
     if (!window) {
@@ -994,7 +971,9 @@ static EVENT_HANDLER(SLS_SPACE_DESTROYED)
 static EVENT_HANDLER(SPACE_CHANGED)
 {
     g_space_manager.last_space_id = g_space_manager.current_space_id;
-    g_space_manager.current_space_id = space_manager_active_space();
+    // The space notification describes WindowServer state. Asking the front
+    // application's AX window here can stall the event loop during a switch.
+    g_space_manager.current_space_id = display_space_id(display_manager_active_display_id());
 
     if (g_window_manager.menubar_opacity != 1.0f) {
         float alpha = space_is_fullscreen(g_space_manager.current_space_id) ? 1.0f : g_window_manager.menubar_opacity;

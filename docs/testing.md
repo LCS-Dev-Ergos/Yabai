@@ -22,6 +22,9 @@ editor's root `compile_commands.json` symlink.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
   implementation with simulated OS calls, including rapid repeats and failure
   restoration; numeric arguments are also covered by the unity tests.
+- `focus_tests` exercises production focus-event handling with simulated OS
+  calls: reuse of pending observations, stale activations, invalid/hidden or
+  minimized windows, and the normal AX fallback, including no focused window.
 - `fade_tests` checks the production [opacity engine](effects.md) with simulated
   SkyLight calls, including timing, cancellation and concurrent requests.
 - `osax_patterns` checks the payload's lookups against the local Dock binary
