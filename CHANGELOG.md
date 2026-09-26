@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Fork `space --navigate` combines focus/move, optional fade and window focus in one daemon request; rapid repeats skip new fades without dropping navigation, and global duration/custom opacity remain unchanged
 - Update scripting-addition for macOS 27 Apple Silicon arm64e (space focus, create, destroy and animation removal; moving spaces is not yet supported) [#2802](https://github.com/asmvik/yabai/issues/2802)
 - Scripting-addition validates message lengths and element counts received on its socket instead of reading past the message buffer inside Dock.app
 - Scripting-addition version is now *2.1.31-lcs.2*, so `--load-sa` replaces earlier payloads with the memory-management and argument-validation fixes in fork release `v7.1.25-lcs.3`

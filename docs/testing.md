@@ -16,6 +16,9 @@ editor's root `compile_commands.json` symlink.
 ## CTest and sanitizers
 
 - `yabai_tests` runs the upstream unit tests against the unity build.
+- `navigation_tests` checks the fork's [space navigation](navigation.md)
+  implementation with simulated OS calls, including rapid repeats and failure
+  restoration; numeric arguments are also covered by the unity tests.
 - `osax_patterns` checks the payload's lookups against the local Dock binary
   on Apple Silicon when `YABAI_BUILD_TOOLS=ON` (the default). It inspects the
   binary without loading a payload; see [Scripting addition](osax.md).

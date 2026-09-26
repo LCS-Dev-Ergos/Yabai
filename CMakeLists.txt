@@ -99,6 +99,12 @@ target_link_libraries(yabai_tests PRIVATE
     "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight")
 add_test(NAME yabai_tests COMMAND yabai_tests)
 
+# Exercise the actual navigation implementation with isolated OS dependencies.
+add_executable(navigation_tests tests/navigation/navigation.c)
+target_compile_options(navigation_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
+target_link_options(navigation_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
+add_test(NAME navigation_tests COMMAND navigation_tests)
+
 # libFuzzer targets for the two socket protocols, see docs/testing.md. They need
 # a clang that ships libFuzzer, which Apple's does not. Each also runs as a
 # short CTest test, writing new inputs to the build directory.

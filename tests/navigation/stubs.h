@@ -1,0 +1,97 @@
+static bool window_manager_is_window_eligible(struct window *w)
+{
+    return w->id != 0;
+}
+
+static bool window_check_flag(struct window *w, unsigned flag)
+{
+    return w->flags & flag;
+}
+
+static uint64_t space_manager_active_space(void)
+{
+    return active_space;
+}
+
+static uint32_t space_display_id(uint64_t sid)
+{
+    return sid == 3 ? 2 : 1;
+}
+
+static bool mission_control_is_active(void)
+{
+    return mission_control;
+}
+
+static bool display_manager_display_is_animating(uint32_t did)
+{
+    return animating;
+}
+
+static struct window *window_manager_focused_window(void *wm)
+{
+    return &windows[0];
+}
+
+static bool space_is_fullscreen(uint64_t sid)
+{
+    return fullscreen;
+}
+
+static void window_manager_send_window_to_space(void *sm, void *wm, struct window *w, uint64_t sid, bool rule)
+{
+    ++move_calls;
+}
+
+static uint32_t *space_window_list(uint64_t sid, int *count, bool minimized)
+{
+    *count = 2;
+    return ids;
+}
+
+static struct window *window_manager_find_window(void *wm, uint32_t id)
+{
+    return id > 0 && id <= 2 ? &windows[id-1] : NULL;
+}
+
+static uint64_t read_os_timer(void)
+{
+    return timestamp;
+}
+
+static bool space_is_visible(uint64_t sid)
+{
+    return visible;
+}
+
+static bool scripting_addition_set_opacity(uint32_t id, float alpha, float duration)
+{
+    assert(opacity_calls < 16);
+
+    effects[opacity_calls].id = id;
+    effects[opacity_calls].alpha = alpha;
+    effects[opacity_calls].duration = duration;
+    ++opacity_calls;
+
+    return opacity_calls != opacity_fail_at;
+}
+
+static bool scripting_addition_focus_space(uint64_t sid)
+{
+    ++focus_calls;
+    if (focus_success) active_space = sid;
+
+    return focus_success;
+}
+
+static void display_manager_focus_display(uint32_t did, uint64_t sid)
+{
+    ++display_calls;
+}
+
+static void window_manager_focus_window_with_raise(int *psn, uint32_t id, void *ref)
+{
+    ++raise_calls;
+    raised_id = id;
+}
+

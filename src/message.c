@@ -97,6 +97,7 @@ extern bool g_verbose;
 
 /* --------------------------------DOMAIN SPACE--------------------------------- */
 #define COMMAND_SPACE_FOCUS    "--focus"
+#define COMMAND_SPACE_NAVIGATE "--navigate"
 #define COMMAND_SPACE_SWITCH   "--switch"
 #define COMMAND_SPACE_CREATE   "--create"
 #define COMMAND_SPACE_DESTROY  "--destroy"
@@ -1759,6 +1760,8 @@ static void handle_domain_display(FILE *rsp, struct token domain, char *message)
     }
 }
 
+#include "space_navigation_command.c"
+
 static void handle_domain_space(FILE *rsp, struct token domain, char *message)
 {
     TIME_FUNCTION;
@@ -1780,7 +1783,9 @@ static void handle_domain_space(FILE *rsp, struct token domain, char *message)
     }
 
     for (; token_is_valid(command); command = get_token(&message)) {
-        if (token_equals(command, COMMAND_SPACE_FOCUS)) {
+        if (token_equals(command, COMMAND_SPACE_NAVIGATE)) {
+            space_navigation_command(rsp, &message);
+        } else if (token_equals(command, COMMAND_SPACE_FOCUS)) {
             struct selector selector = parse_space_selector(rsp, &message, acting_sid, false);
             if (selector.did_parse && selector.sid) {
                 enum space_op_error result = space_manager_focus_space(selector.sid);
