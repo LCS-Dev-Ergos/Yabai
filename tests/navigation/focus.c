@@ -5,6 +5,9 @@
 #include <string.h>
 
 #define kCPSUserGenerated 0x200
+#define kAXRaiseAction "AXRaise"
+
+typedef void *AXUIElementRef;
 
 typedef struct
 {
@@ -57,6 +60,15 @@ static int _SLPSSetFrontProcessWithOptions(ProcessSerialNumber *psn, uint32_t wi
 {
     assert(mode == kCPSUserGenerated);
     record('f', psn, window_id, 0);
+
+    return 0;
+}
+
+static int AXUIElementPerformAction(AXUIElementRef element, const char *action)
+{
+    assert(strcmp(action, kAXRaiseAction) == 0);
+    ProcessSerialNumber none = { 0, 0 };
+    record('a', &none, (uint32_t) (uintptr_t) element, 0);
 
     return 0;
 }
@@ -150,7 +162,14 @@ int main(void)
     space_navigation_focus_resume(scheduled_generation);
     assert(call_count == 4);
 
-    puts("navigation focus: deferred activation, cancellation and focus change checks passed");
+    // Raising activates the application on the window, then raises it, with
+    // no synthesized click and nothing deferred.
+    reset();
+    space_navigation_raise_window(&other, 60, (AXUIElementRef) (uintptr_t) 60);
+    assert(call_count == 2 && calls[0].kind == 'f' && calls[0].window_id == 60);
+    assert(calls[1].kind == 'a' && calls[1].window_id == 60 && scheduled_generation == -1);
+
+    puts("navigation focus: deferred activation, cancellation, focus change and raise checks passed");
 
     return 0;
 }

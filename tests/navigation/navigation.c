@@ -100,6 +100,7 @@ int main(void)
 
     assert(space_navigation_run(active_space, 2, true, .95f, 0));
     assert(move_calls == 1 && focused_id == 1 && opacity_calls == 0);
+    assert(click_raise_calls == 1); // A moved window keeps window --focus's raise.
 
     reset();
 
@@ -131,6 +132,7 @@ int main(void)
     visible_space = 3;
     assert(space_navigation_run(active_space, 2, false, .95f, 0));
     assert(raise_calls == 1 && focused_id == 1);
+    assert(click_raise_calls == 0); // No synthesized click for a late application.
     assert(switches_at_query == 0); // Asked before the switch, not after.
 
     reset();

@@ -57,9 +57,13 @@ and so does the second: the active display then decides again, so a Desktop
 chosen by clicking, Command-Tab or `window --focus` is where counting starts.
 
 When the destination's application has another window visible on a different
-display, navigation raises the destination window through Accessibility as
-`window --focus` does, which such an application honors. The raise completes
-before the next request runs, so it cannot pull a Desktop back into view.
+display, navigation activates the application on the destination window and
+raises it through Accessibility, which such an application honors. The raise
+completes before the next request runs, so it cannot pull a Desktop back into
+view. Unlike `window --focus`, it posts no synthesized click: Edge, busy with
+the switch, handled that click hundreds of milliseconds late, after rapid
+navigation had moved on, and the click activated Edge again and brought its
+Desktop back.
 Other applications keep the cheaper focus without a raise. A tiled window's
 Desktop is the Space of its view, so only floating and unmanaged windows need
 WindowServer: one query lists the application's window numbers on the Desktops

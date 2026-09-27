@@ -184,7 +184,18 @@ static void display_manager_focus_display(uint32_t did, uint64_t sid)
     ++display_calls;
 }
 
+// window --focus's raise, which also posts a synthesized click.
 static void window_manager_focus_window_with_raise(int *psn, uint32_t id, void *ref)
+{
+    ++click_raise_calls;
+
+    if (expect_fade_started) assert(opacity_calls == 4);
+    ++window_focus_calls;
+    ++raise_calls;
+    focused_id = id;
+}
+
+static void space_navigation_raise_window(int *psn, uint32_t id, void *ref)
 {
     if (expect_fade_started) assert(opacity_calls == 4);
     ++window_focus_calls;

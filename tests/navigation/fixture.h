@@ -50,6 +50,7 @@ static uint64_t active_space, timestamp, visible_space, other_window_space;
 static bool visible, fullscreen, mission_control, animating, focus_success, single_display, single_window;
 static bool other_window_tiled;
 static int focus_calls, opacity_calls, window_focus_calls, raise_calls, move_calls, display_calls;
+static int click_raise_calls;
 static int opacity_fail_at;
 static bool expect_fade_started;
 static bool reduce_motion;
@@ -98,6 +99,7 @@ static void reset(void)
     focus_success = true;
 
     focus_calls = opacity_calls = window_focus_calls = raise_calls = move_calls = display_calls = 0;
+    click_raise_calls = 0;
     focused_id = noted_id = 0;
     opacity_fail_at = 0;
     expect_fade_started = false;

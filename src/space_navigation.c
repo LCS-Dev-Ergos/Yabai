@@ -190,10 +190,12 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
         }
 
         if (focus) {
-            if (raise) {
+            if (move) {
+                window_manager_focus_window_with_raise(&focus->application->psn, focus->id, focus->ref);
+            } else if (raise) {
                 // Raising completes before the next navigation can switch
                 // away, so the application cannot raise it on a hidden space.
-                window_manager_focus_window_with_raise(&focus->application->psn, focus->id, focus->ref);
+                space_navigation_raise_window(&focus->application->psn, focus->id, focus->ref);
             } else {
                 // The selected window is already frontmost. AXRaise can block
                 // while its application responds to the space switch.

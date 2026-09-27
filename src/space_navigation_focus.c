@@ -59,6 +59,18 @@ static void space_navigation_focus_window(ProcessSerialNumber *psn, uint32_t win
     space_navigation_focus_schedule(g_space_navigation_focus.generation, SPACE_NAVIGATION_FOCUS_DELAY_NS);
 }
 
+// Navigation's raise, for an application with a window visible on another
+// display: it activates the application on the window and raises the window
+// through Accessibility, which makes it key. Unlike window --focus it posts no
+// synthesized click. A busy application such as Edge handled that click
+// hundreds of milliseconds late, after the user had moved on; the click then
+// activated it again and pulled its Desktop back into view.
+static void space_navigation_raise_window(ProcessSerialNumber *psn, uint32_t window_id, AXUIElementRef ref)
+{
+    _SLPSSetFrontProcessWithOptions(psn, window_id, kCPSUserGenerated);
+    AXUIElementPerformAction(ref, kAXRaiseAction);
+}
+
 // Event loop, once the delay has passed. A click on another application in
 // the meantime wins over the navigation. Another window of this application
 // becoming focused does not: it is usually an earlier navigation's activation
