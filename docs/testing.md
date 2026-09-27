@@ -31,6 +31,10 @@ editor's root `compile_commands.json` symlink.
 - `navigation_focus_tests` checks the deferred focus between two windows of one
   application: the event sequence and its 10 ms spacing, and cancellation by a
   newer navigation, another command or a focus change; and both raise paths.
+- `navigation_schedule_tests` runs the pacing queue on a simulated clock: the
+  rhythm, the wait for an activation and its confirmation, key repeats,
+  reversals, Desktop numbers, the ten-step limit, clicks, other commands,
+  failed steps and early wakes.
 - `navigation_queue_tests` checks how relative requests are recognized and
   merged while one waits: repeats, separate presses, directions, interleaved
   queries, allocation failure and concurrent admission/consumption.
@@ -75,11 +79,12 @@ measure rendered frames or validate execution inside Dock.
 
 ## Signposts
 
-The payload emits signposts in subsystem `com.lcs.yabai`, category `effects`,
-for crossfades and every fade frame written. Record them with Instruments'
-os_signpost instrument, for example by adding it to the Animation Hitches
-template, to see them against WindowServer's frames. They cost nothing while
-nothing records them.
+The daemon and the payload emit signposts in subsystem `com.lcs.yabai`:
+category `navigation` for requests, steps, activations and the focus that
+confirms them, category `effects` for crossfades and every fade frame written.
+Record them with Instruments' os_signpost instrument, for example by adding it
+to the Animation Hitches template, to see them against WindowServer's frames.
+They cost nothing while nothing records them.
 
 ## Static analysis
 

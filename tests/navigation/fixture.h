@@ -54,6 +54,7 @@ static int click_raise_calls;
 static int crossfade_calls;
 static bool crossfade_success;
 static float last_crossfade_duration;
+static uint32_t activated_id;
 static int opacity_fail_at;
 static bool expect_fade_started;
 static bool reduce_motion;
@@ -84,7 +85,8 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
         .sid = sid,
         .move = move,
         .alpha = alpha,
-        .duration = duration
+        .duration = duration,
+        .activate = true
     };
 
     return space_navigation_run_step(current, &step);
@@ -119,6 +121,7 @@ static void reset(void)
     crossfade_calls = 0;
     crossfade_success = true;
     last_crossfade_duration = 0.0f;
+    activated_id = 0;
     focused_id = noted_id = 0;
     opacity_fail_at = 0;
     expect_fade_started = false;

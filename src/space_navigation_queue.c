@@ -8,7 +8,9 @@
 //
 // A key repeat, which arrives less than SPACE_NAVIGATION_REPEAT_NS after the
 // previous request, only keeps the pending step. A separate key press adds a
-// step, so pressing a key three times still moves three spaces.
+// step, so pressing a key three times still moves three spaces. A group that
+// a repeat starts is marked, so that the navigation schedule, which queues
+// the steps of groups already handled, keeps at most one of them pending too.
 
 #define SPACE_NAVIGATION_REPEAT_NS 50000000ULL
 
@@ -19,6 +21,7 @@ struct space_navigation_group
     int steps;
     int direction;
     uint64_t time;
+    bool repeat;
 };
 
 static struct
@@ -27,6 +30,10 @@ static struct
     struct space_navigation_group *first;
     struct space_navigation_group *last;
     bool open;
+
+    // The last relative request, grouped or not.
+    int direction;
+    uint64_t time;
 } g_space_navigation_queue = {
     .lock = PTHREAD_MUTEX_INITIALIZER
 };
@@ -36,6 +43,7 @@ static struct
 {
     bool active;
     int steps;
+    bool repeat;
 } g_space_navigation_claim;
 
 static bool space_navigation_request_token(const char **cursor, const char *end, const char **token)
@@ -99,13 +107,17 @@ static bool space_navigation_queue_join(int sockfd, int direction, uint64_t now)
     pthread_mutex_lock(&g_space_navigation_queue.lock);
 
     struct space_navigation_group *last = g_space_navigation_queue.last;
+    bool repeat = direction && direction == g_space_navigation_queue.direction
+               && now - g_space_navigation_queue.time < SPACE_NAVIGATION_REPEAT_NS;
+
+    if (direction) {
+        g_space_navigation_queue.direction = direction;
+        g_space_navigation_queue.time = now;
+    }
 
     if (!direction) {
         g_space_navigation_queue.open = false;
     } else if (last && g_space_navigation_queue.open) {
-        bool repeat = direction == last->direction
-                   && now - last->time < SPACE_NAVIGATION_REPEAT_NS;
-
         if (!repeat) last->steps += direction;
 
         last->direction = direction;
@@ -120,7 +132,8 @@ static bool space_navigation_queue_join(int sockfd, int direction, uint64_t now)
                 .owner = sockfd,
                 .steps = direction,
                 .direction = direction,
-                .time = now
+                .time = now,
+                .repeat = repeat
             };
 
             if (last) last->next = group;
@@ -145,6 +158,7 @@ static void space_navigation_queue_claim(int sockfd)
     struct space_navigation_group *first = g_space_navigation_queue.first;
     g_space_navigation_claim.active = first && first->owner == sockfd;
     g_space_navigation_claim.steps = g_space_navigation_claim.active ? first->steps : 0;
+    g_space_navigation_claim.repeat = g_space_navigation_claim.active && first->repeat;
 
     if (g_space_navigation_claim.active) {
         g_space_navigation_queue.first = first->next;

@@ -167,6 +167,11 @@ static bool scripting_addition_focus_space_crossfade(uint32_t display, uint64_t 
     return crossfade_success;
 }
 
+static void space_navigation_schedule_activated(uint32_t window_id)
+{
+    activated_id = window_id;
+}
+
 static float space_navigation_frame_interval(uint32_t display)
 {
     return 1.0f / 60.0f;

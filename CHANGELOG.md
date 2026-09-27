@@ -7,7 +7,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 ### Changed
 - Fork navigation can crossfade the whole display between Desktops, as Dock does for its own Space transitions, instead of fading the destination's windows in over the wallpaper; payload version is now *2.1.31-lcs.9*
-- Payload fades and crossfades emit signposts in subsystem `com.lcs.yabai` for Instruments
+- Fork navigation runs as steps of one Desktop from a bounded queue, at most one every 100 ms and after an activation not before the application reports focus or 150 ms pass; only the last queued step activates an application, and `space_navigation_pacing off` restores immediate navigation
+- Fork navigation and effects emit signposts in subsystem `com.lcs.yabai` for Instruments
 - Scripting-addition requests stop waiting for Dock after one second, and the payload never raises SIGPIPE when replying to a daemon that stopped waiting
 - Fork navigation keeps the synthesized click of `window --focus` when it raises a window of the application that is already active: activation alone left Edge's keyboard focus on its window of the Desktop the user had left
 - Payload fades no longer stand still for 50 ms when Dock's main thread delays display callbacks after a Space switch; the worker writes a frame itself half a frame late, and payload version is now *2.1.31-lcs.8*

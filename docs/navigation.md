@@ -47,6 +47,35 @@ restores any dimmed windows immediately instead of falling back to a gesture.
 As with separate move/focus commands, a successful window move is not rolled
 back if the subsequent focus request fails.
 
+## Pacing
+
+Requests can arrive faster than a switch completes: a held key repeats every
+30 ms, and a busy Edge or VS Code handles an activation hundreds of
+milliseconds after it was sent. An activation handled after the user had moved
+on brought its Desktop back into view. Navigation therefore runs as steps of one
+Desktop from a bounded queue, in the order requested:
+
+- A step runs at once when the previous one is at least 100 ms old. After a
+  step that activated an application, the next one also waits until that
+  application reports the window focused, or 150 ms have passed.
+- `next` and `prev` count from the Desktop the previous step switched to. Each
+  Desktop number is one step; the same number twice in a row queues once.
+- Only the last queued step activates an application. The steps before it
+  switch Desktop and show their effect: a crossfade then lasts as long as the
+  interval between steps, up to the requested duration, so each one ends as
+  the next begins.
+- At most ten steps wait; a request that does not fit is refused.
+- A click after a request, or any other command except queries, empties the
+  queue. A failed step drops the rest.
+
+The client gets its answer when its request is queued; failures of later steps
+go to the debug log. `yabai -m config space_navigation_pacing off` runs each
+request at once instead, as before, with merged relative requests moving
+several Desktops in one switch.
+
+Signposts in subsystem `com.lcs.yabai`, category `navigation`, mark each
+request, step, activation and the focus that confirms it.
+
 ## Relative navigation
 
 `next` and `prev` count from the Desktop the previous navigation switched to,
@@ -97,10 +126,12 @@ milliseconds, while a held key repeats every 30 ms. The daemon's accept thread
 lets a `focus next|prev` request join the one already waiting in the event
 queue and answers it at once, so each uninterrupted group has one waiting
 request. A repeat, arriving
-less than 50 ms after the previous request, keeps the pending step; a separate
-key press adds one, and the other direction takes one back. Holding a key
-moves one Desktop per completed switch and stops when it is released; three
-quick presses still move three Desktops. Any other request closes the group,
+less than 50 ms after the previous relative request, keeps the pending step; a
+separate key press adds one, and the other direction takes one back. A group
+that a repeat starts is marked, and the pacing queue keeps at most one such
+step pending, so a held key moves one Desktop per step and stops within one
+step of its release, while three quick presses still move three Desktops.
+Any other request closes the group,
 so requests keep their order. Later repeats form a new group even while an
 earlier closed group still waits. This keeps queries from disabling merging
 for all subsequent repeats, without moving navigation across a query or

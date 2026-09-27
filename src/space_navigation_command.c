@@ -3,11 +3,19 @@
 #include "space_navigation_other_displays.c"
 #include "space_navigation_focus.c"
 #include "space_navigation.c"
+#include "space_navigation_schedule.c"
 
 static void space_navigation_focus_schedule(int generation, uint64_t delay_ns)
 {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay_ns), dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
         event_loop_post(&g_event_loop, SPACE_NAVIGATION_FOCUS, NULL, generation);
+    });
+}
+
+static void space_navigation_schedule_after(uint64_t delay_ns)
+{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay_ns), dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+        event_loop_post(&g_event_loop, SPACE_NAVIGATION_DISPATCH, NULL, 0);
     });
 }
 
@@ -30,7 +38,7 @@ static uint64_t space_navigation_step(uint64_t sid, int steps)
 
 // A command that can change focus ends the anchor: relative navigation then
 // starts from where that command left the user. It also wins over a deferred
-// navigation focus.
+// navigation focus and over the navigation still queued.
 static void space_navigation_note_message(char *message)
 {
     struct token domain = get_token(&message);
@@ -39,6 +47,7 @@ static void space_navigation_note_message(char *message)
 
     space_navigation_forget();
     space_navigation_focus_cancel();
+    space_navigation_schedule_cancel();
 }
 
 // Accept thread. The client sends its whole request right after connecting;
@@ -60,6 +69,38 @@ static bool space_navigation_accept(int sockfd)
     socket_close(sockfd);
 
     return true;
+}
+
+// Runs one step of a queued request: `direction` Desktops from where
+// navigation stands, or the request's own Desktop when 0. A request handled
+// at once reuses its snapshot of the Desktops; a later one takes its own.
+static bool space_navigation_execute(struct space_navigation_request *request, int direction,
+                                     bool activate, float duration)
+{
+    bool loaded = g_space_navigation_spaces.loaded;
+
+    if (!loaded) {
+        CFArrayRef displays = SLSCopyManagedDisplaySpaces(g_connection);
+        space_navigation_spaces_load(displays);
+        if (displays) CFRelease(displays);
+    }
+
+    uint64_t current = space_navigation_active_space();
+    uint64_t sid = direction ? space_navigation_step(current, direction) : request->sid;
+
+    struct space_navigation_step step = {
+        .sid = sid,
+        .move = request->move,
+        .crossfade = request->crossfade,
+        .alpha = request->alpha,
+        .duration = duration,
+        .activate = activate
+    };
+
+    bool success = current && sid && space_navigation_run_step(current, &step);
+
+    if (!loaded) g_space_navigation_spaces.loaded = false;
+    return success;
 }
 
 static bool space_navigation_number(struct token token, float *number)
@@ -112,6 +153,24 @@ static struct selector space_navigation_selector(char **message, uint64_t curren
     return selector;
 }
 
+// The Desktops a relative request moves: the steps of the requests that
+// joined it, or one for a plain next or prev. 0 for any other selector.
+static int space_navigation_relative_steps(char *message, bool move, bool *repeat)
+{
+    *repeat = false;
+
+    if (!move && g_space_navigation_claim.active) {
+        *repeat = g_space_navigation_claim.repeat && abs(g_space_navigation_claim.steps) == 1;
+        return g_space_navigation_claim.steps;
+    }
+
+    struct token token = get_token(&message);
+    if (token_equals(token, ARGUMENT_COMMON_SEL_NEXT)) return 1;
+    if (token_equals(token, ARGUMENT_COMMON_SEL_PREV)) return -1;
+
+    return 0;
+}
+
 static void space_navigation_request(FILE *rsp, char **message)
 {
     struct token action = get_token(message);
@@ -121,6 +180,10 @@ static void space_navigation_request(FILE *rsp, char **message)
         daemon_fail(rsp, "navigate expects focus or move.\n");
         return;
     }
+
+    bool repeat;
+    bool joined = !move && g_space_navigation_claim.active;
+    int steps = space_navigation_relative_steps(*message, move, &repeat);
 
     uint64_t current = space_navigation_active_space();
     struct selector selector = space_navigation_selector(message, current, move);
@@ -138,17 +201,41 @@ static void space_navigation_request(FILE *rsp, char **message)
         return;
     }
 
-    struct space_navigation_step step = {
-        .sid = selector.sid,
+    if (!space_navigation_schedule_pacing()) {
+        struct space_navigation_step step = {
+            .sid = selector.sid,
+            .move = move,
+            .crossfade = crossfade,
+            .alpha = alpha,
+            .duration = duration,
+            .activate = true
+        };
+
+        if (!space_navigation_run_step(current, &step)) {
+            daemon_fail(rsp, "navigation failed: check scripting addition, Mission Control, display animation and window eligibility.\n");
+        }
+
+        return;
+    }
+
+    // Joined requests whose steps cancelled out leave nothing to do.
+    if (joined && !steps) return;
+
+    struct space_navigation_request request = {
         .move = move,
+        .steps = steps,
+        .sid = steps ? 0 : selector.sid,
         .crossfade = crossfade,
         .alpha = alpha,
         .duration = duration
     };
 
-    if (!space_navigation_run_step(current, &step)) {
-        daemon_fail(rsp, "navigation failed: check scripting addition, Mission Control, display animation and window eligibility.\n");
+    if (!space_navigation_schedule_add(&request, repeat)) {
+        daemon_fail(rsp, "navigation queue is full.\n");
+        return;
     }
+
+    space_navigation_schedule_pump();
 }
 
 static void space_navigation_command(FILE *rsp, char **message)

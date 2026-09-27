@@ -610,11 +610,15 @@ static EVENT_HANDLER(WINDOW_DESTROYED)
     }
 }
 
+// Fork: queued navigation waits for the window its last step activated.
+static void space_navigation_schedule_focused(uint32_t window_id);
+
 static EVENT_HANDLER(WINDOW_FOCUSED)
 {
     __atomic_store_n(&__pending_window_focus, false, __ATOMIC_RELEASE);
     uint32_t window_id = (uint32_t)(intptr_t) context;
     window_focus_consume(window_id);
+    space_navigation_schedule_focused(window_id);
 
     struct window *window = window_manager_find_window(&g_window_manager, window_id);
     if (!window) {
@@ -1652,6 +1656,14 @@ static void space_navigation_focus_resume(int generation);
 static EVENT_HANDLER(SPACE_NAVIGATION_FOCUS)
 {
     space_navigation_focus_resume(param1);
+}
+
+// Fork: the next step of queued navigation, see space_navigation_schedule.c.
+static void space_navigation_schedule_timer(void);
+
+static EVENT_HANDLER(SPACE_NAVIGATION_DISPATCH)
+{
+    space_navigation_schedule_timer();
 }
 #pragma clang diagnostic pop
 

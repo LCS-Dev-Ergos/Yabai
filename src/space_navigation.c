@@ -121,7 +121,9 @@ static bool space_navigation_needs_raise(struct window *window, uint32_t display
 #include "space_navigation_effects.c"
 
 // One Desktop switch of a navigation. Its effect is either the fade of the
-// destination's windows from `alpha`, or a crossfade of the whole display.
+// destination's windows from `alpha`, or a crossfade of the whole display. A
+// step that does not activate only switches and shows its effect: another
+// step queued after it will.
 struct space_navigation_step
 {
     uint64_t sid;
@@ -129,7 +131,10 @@ struct space_navigation_step
     bool crossfade;
     float alpha;
     float duration;
+    bool activate;
 };
+
+static void space_navigation_schedule_activated(uint32_t window_id);
 
 static bool space_navigation_run_step(uint64_t current, struct space_navigation_step *step)
 {
@@ -170,7 +175,7 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
 
     // Decided before the switch: afterwards WindowServer is busy showing the
     // new Desktop, and each query waits for about a frame.
-    bool raise = focus && (move || space_navigation_needs_raise(focus, display));
+    bool raise = focus && step->activate && (move || space_navigation_needs_raise(focus, display));
 
     uint64_t now = read_os_timer();
 
@@ -214,7 +219,9 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
 
     if (success) {
         space_navigation_last_time = now;
+    }
 
+    if (success && step->activate) {
         if (space_navigation_space_display(current) != display) {
             if (focus) {
                 display_manager_set_active_display_id(display);
@@ -240,8 +247,11 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
             // The activation that follows need not ask the application,
             // which is busy with the switch, for its focused window.
             window_focus_note(focus->id);
+            space_navigation_schedule_activated(focus->id);
         }
+    }
 
+    if (success) {
         space_navigation_anchor.sid = sid;
         space_navigation_anchor.time = read_os_timer();
     }

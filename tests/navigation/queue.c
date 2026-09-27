@@ -21,6 +21,39 @@ static void *queue_allocate(size_t size)
 #include "queue_ordering.h"
 #include "queue_threads.h"
 
+// A repeat that starts a group, after the previous one was claimed, is marked
+// for the navigation schedule; a press is not.
+static void test_repeat_groups(void)
+{
+    uint64_t now = 200000000000ULL;
+
+    assert(!space_navigation_queue_join(40, 1, now));
+    space_navigation_queue_claim(40);
+    assert(g_space_navigation_claim.active && !g_space_navigation_claim.repeat);
+
+    assert(!space_navigation_queue_join(41, 1, now + 30000000));
+    space_navigation_queue_claim(41);
+    assert(g_space_navigation_claim.active && g_space_navigation_claim.repeat);
+    assert(g_space_navigation_claim.steps == 1);
+
+    // Another direction, or a pause, is a separate press.
+    assert(!space_navigation_queue_join(42, -1, now + 40000000));
+    space_navigation_queue_claim(42);
+    assert(g_space_navigation_claim.active && !g_space_navigation_claim.repeat);
+
+    assert(!space_navigation_queue_join(43, -1, now + 200000000));
+    space_navigation_queue_claim(43);
+    assert(g_space_navigation_claim.active && !g_space_navigation_claim.repeat);
+
+    // A query between repeats of a held key does not make the next one a press.
+    assert(!space_navigation_queue_join(44, 0, now + 210000000));
+    space_navigation_queue_claim(44);
+    assert(!space_navigation_queue_join(45, -1, now + 230000000));
+    space_navigation_queue_claim(45);
+    assert(g_space_navigation_claim.active && g_space_navigation_claim.repeat);
+    assert(!g_space_navigation_queue.first && !g_space_navigation_queue.last);
+}
+
 // Frames a request as the yabai client sends it.
 static int request(char *bytes, const char **arguments, int count)
 {
@@ -123,6 +156,7 @@ int main(void)
     test_interleaved_groups();
     test_allocation_failure();
     test_concurrent_groups();
+    test_repeat_groups();
 
     puts("navigation queue: parsing, repeats, presses and ordering checks passed");
 

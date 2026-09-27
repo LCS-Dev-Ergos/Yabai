@@ -1,3 +1,4 @@
+1 src/display_manager.c: Incorrect decrement of the reference count of an object that is not owned at this point by the caller [osx.cocoa.RetainCount]
 1 src/display_manager.c: Potential leak of an object of type 'CFStringRef' [osx.cocoa.RetainCount]
 1 src/display.c: Incorrect decrement of the reference count of an object that is not owned at this point by the caller [osx.cocoa.RetainCount]
 2 src/event_loop.c: Access to field 'id' results in a dereference of a null pointer (loaded from field 'window') [core.NullDereference]
