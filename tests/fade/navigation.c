@@ -51,11 +51,16 @@ static void test_navigation_cadence(void)
     window_fade_tick(10.035);
     assert(alpha_calls == calls + 2);
 
-    // A callback half a frame late is not waited for.
+    // A callback half a frame late is not waited for; while callbacks stay
+    // late, the worker writes one frame per interval.
     window_fade_tick(10.050);
     assert(alpha_calls == calls + 2);
     window_fade_tick(10.056);
     assert(alpha_calls == calls + 3);
+    window_fade_tick(10.071);
+    assert(alpha_calls == calls + 3);
+    window_fade_tick(10.073);
+    assert(alpha_calls == calls + 4);
 
     // No further callback (sleep/stall): the deadline still restores alpha.
     window_fade_tick(10.101);

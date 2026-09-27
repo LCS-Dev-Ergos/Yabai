@@ -237,13 +237,20 @@ static void test_crossfade_pacing(void)
 
     space_crossfade_tick(started + 0.001 + CROSSFADE_FRAME);
     assert(commits == commits_before + 1);
-    space_crossfade_tick(started + 0.001 + 1.5 * CROSSFADE_FRAME + CROSSFADE_EPSILON);
+    double fallback = started + 0.001 + 1.5 * CROSSFADE_FRAME + CROSSFADE_EPSILON;
+    space_crossfade_tick(fallback);
     assert(commits == commits_before + 2);
 
     // Another display's callback does not advance it.
     space_crossfade_take_frames(window_fade_display_bit(2));
     space_crossfade_tick(started + 0.001 + 1.6 * CROSSFADE_FRAME);
     assert(commits == commits_before + 2);
+
+    // While callbacks stay late, a frame follows every interval.
+    space_crossfade_tick(fallback + CROSSFADE_FRAME - CROSSFADE_EPSILON);
+    assert(commits == commits_before + 2);
+    space_crossfade_tick(fallback + CROSSFADE_FRAME + CROSSFADE_EPSILON);
+    assert(commits == commits_before + 3);
 
     space_crossfade_finish_all();
     crossfade_expect_settled(2);

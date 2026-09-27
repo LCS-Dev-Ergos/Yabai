@@ -54,9 +54,11 @@ static void space_crossfade_tick(double now)
         if (!fade->frame_ready && now < fade->next_frame && now < end) continue;
 
         // Like a window fade, a display-paced frame waits half a frame for
-        // a late callback before the worker writes it.
+        // a late callback before the worker writes it, then one interval
+        // while the callbacks stay late.
+        bool callback = fade->frame_ready;
         fade->frame_ready = false;
-        fade->next_frame = now + fade->interval * (fade->display_paced ? 1.5 : 1.0);
+        fade->next_frame = now + fade->interval * (fade->display_paced && callback ? 1.5 : 1.0);
         fade->current = space_crossfade_alpha(fade, now);
 
         CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
