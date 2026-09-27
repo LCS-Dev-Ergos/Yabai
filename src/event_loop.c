@@ -1644,6 +1644,15 @@ static EVENT_HANDLER(DAEMON_MESSAGE)
 
     socket_close(param1);
 }
+
+// Fork: the second half of a navigation's focus change between two windows of
+// one application, see space_navigation_focus.c.
+static void space_navigation_focus_resume(int generation);
+
+static EVENT_HANDLER(SPACE_NAVIGATION_FOCUS)
+{
+    space_navigation_focus_resume(param1);
+}
 #pragma clang diagnostic pop
 
 static void *event_loop_run(void *context)

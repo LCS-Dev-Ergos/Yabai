@@ -108,6 +108,9 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
 {
     if (current == sid) return true;
 
+    // A deferred focus from the previous navigation must not follow this one.
+    space_navigation_focus_cancel();
+
     uint32_t display = space_navigation_space_display(sid);
     if (mission_control_is_active() || display_manager_display_is_animating(display)) return false;
 
@@ -174,7 +177,7 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
             } else {
                 // The selected window is already frontmost. AXRaise can block
                 // while its application responds to the space switch.
-                window_manager_focus_window_without_raise(&focus->application->psn, focus->id);
+                space_navigation_focus_window(&focus->application->psn, focus->id);
             }
 
             // The activation that follows need not ask the application,

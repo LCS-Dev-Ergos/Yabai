@@ -1,7 +1,15 @@
 #include "space_navigation_display.m"
 #include "space_navigation_spaces.c"
 #include "space_navigation_other_displays.c"
+#include "space_navigation_focus.c"
 #include "space_navigation.c"
+
+static void space_navigation_focus_schedule(int generation, uint64_t delay_ns)
+{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay_ns), dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+        event_loop_post(&g_event_loop, SPACE_NAVIGATION_FOCUS, NULL, generation);
+    });
+}
 
 static uint64_t space_navigation_active_space(void)
 {
@@ -21,7 +29,8 @@ static uint64_t space_navigation_step(uint64_t sid, int steps)
 }
 
 // A command that can change focus ends the anchor: relative navigation then
-// starts from where that command left the user.
+// starts from where that command left the user. It also wins over a deferred
+// navigation focus.
 static void space_navigation_note_message(char *message)
 {
     struct token domain = get_token(&message);
@@ -29,6 +38,7 @@ static void space_navigation_note_message(char *message)
     if (token_equals(domain, DOMAIN_SPACE) && token_equals(get_token(&message), COMMAND_SPACE_NAVIGATE)) return;
 
     space_navigation_forget();
+    space_navigation_focus_cancel();
 }
 
 // Accept thread. The client sends its whole request right after connecting;

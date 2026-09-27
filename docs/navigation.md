@@ -65,6 +65,13 @@ the application's window numbers on the Desktops visible on other displays
 with one query, instead of asking for the Space of each of its windows, and
 skips the query when the application has no other window that could take focus.
 
+Between two windows of the application that is already active, upstream
+leaves 40 ms between deactivating the old window and activating the new one,
+because some applications miss a focus change whose events arrive together
+([#2694](https://github.com/asmvik/yabai/pull/2694)). Navigation keeps that
+spacing but no longer sleeps in the event loop: the activation runs as a later
+event, dropped if another navigation, command or focus change comes first.
+
 Navigation records the window it focused, so the activation handler that
 follows uses it instead of asking the application, which is busy with the
 switch, for its focused window. A later focus notification from the

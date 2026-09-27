@@ -28,6 +28,9 @@ editor's root `compile_commands.json` symlink.
   order across displays, visibility, fullscreen type, the Desktops visible on
   other displays, the fallback to WindowServer for unknown or unreadable data and
   the window numbers the cross-display raise check reads.
+- `navigation_focus_tests` checks the deferred focus between two windows of one
+  application: the event sequence and its 40 ms spacing, and cancellation by a
+  newer navigation, another command or a focus change.
 - `navigation_queue_tests` checks how relative requests are recognized and
   merged while one waits: repeats, separate presses, directions, interleaved
   queries, allocation failure and concurrent admission/consumption.

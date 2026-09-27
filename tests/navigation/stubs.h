@@ -179,11 +179,16 @@ static void window_manager_focus_window_with_raise(int *psn, uint32_t id, void *
     focused_id = id;
 }
 
-static void window_manager_focus_window_without_raise(int *psn, uint32_t id)
+static void space_navigation_focus_window(int *psn, uint32_t id)
 {
     if (expect_fade_started) assert(opacity_calls == 4);
     ++window_focus_calls;
     focused_id = id;
+}
+
+static void space_navigation_focus_cancel(void)
+{
+    ++focus_cancels;
 }
 
 static void display_manager_set_active_display_id(uint32_t did)

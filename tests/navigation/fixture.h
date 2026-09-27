@@ -48,7 +48,7 @@ static int opacity_fail_at;
 static bool expect_fade_started;
 static bool reduce_motion;
 static int batch_calls;
-static int window_list_queries;
+static int window_list_queries, focus_cancels;
 static uint32_t focused_id, noted_id;
 static double seconds_since_click;
 static uint32_t ids[] = { 1, 2 };
@@ -95,5 +95,5 @@ static void reset(void)
     expect_fade_started = false;
     reduce_motion = false;
     batch_calls = 0;
-    window_list_queries = 0;
+    window_list_queries = focus_cancels = 0;
 }

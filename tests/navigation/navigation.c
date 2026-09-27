@@ -109,6 +109,17 @@ int main(void)
 
     reset();
 
+    // Every navigation drops a deferred focus of the previous one, even when
+    // its destination has no window to focus; staying put drops nothing.
+    single_window = true;
+    windows[0].flags = windows[1].flags = WINDOW_MINIMIZE;
+    assert(space_navigation_run(active_space, 2, false, .95f, 0));
+    assert(focus_cancels == 1 && window_focus_calls == 0);
+    assert(space_navigation_run(active_space, active_space, false, .95f, 0));
+    assert(focus_cancels == 1);
+
+    reset();
+
     // The activation handler reuses the window navigation focused.
     assert(space_navigation_run(active_space, 2, false, .95f, 0));
     assert(noted_id == 1 && raise_calls == 0);
