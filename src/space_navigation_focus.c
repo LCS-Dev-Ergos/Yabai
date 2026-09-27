@@ -6,10 +6,14 @@
 // whose two events arrive together (upstream #2694), then activates the new
 // window. The sleep held the event loop, and with it the reply and every
 // queued request, on each switch between two windows of one application.
-// Navigation posts the deactivation, then finishes 40 ms later as an event,
+// Navigation posts the deactivation, then finishes 10 ms later as an event,
 // unless a newer navigation, another command or a focus change came first.
+//
+// The destination window shows inactive until the activation lands, which
+// reads as a title-bar flash. Upstream used 10 ms from 2019 until #2694, so
+// navigation keeps that shorter spacing.
 
-#define SPACE_NAVIGATION_FOCUS_DELAY_NS 40000000ULL
+#define SPACE_NAVIGATION_FOCUS_DELAY_NS 10000000ULL
 
 static struct
 {

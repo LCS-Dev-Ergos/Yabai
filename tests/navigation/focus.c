@@ -98,12 +98,12 @@ int main(void)
     assert(call_count == 1 && calls[0].kind == 'w' && calls[0].window_id == 60);
     assert(scheduled_generation == -1);
 
-    // The same application: deactivate now, activate 40 ms later.
+    // The same application: deactivate now, activate 10 ms later.
     reset();
     space_navigation_focus_window(&same, 51);
     assert(call_count == 1 && calls[0].kind == 'e' && calls[0].event == 0x02);
     assert(calls[0].psn == 5 && calls[0].window_id == 50);
-    assert(scheduled_generation >= 0 && scheduled_delay == 40000000ULL);
+    assert(scheduled_generation >= 0 && scheduled_delay == 10000000ULL);
 
     space_navigation_focus_resume(scheduled_generation);
     assert(call_count == 4);
