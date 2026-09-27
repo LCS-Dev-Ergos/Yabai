@@ -9,8 +9,10 @@
 //
 // A navigation during a crossfade stacks its destination on top, so the blend
 // on screen continues without a jump; going back to the Desktop underneath
-// fades the top one out instead. All of this runs under window_fade_lock, and
-// the fade worker writes the frames.
+// fades the top one out instead. A destination whose windows cover the
+// display fades in without its wallpaper (see space_crossfade_wallpaper.c).
+// All of this runs under window_fade_lock, and the fade worker writes the
+// frames.
 
 #define SPACE_CROSSFADE_DISPLAYS 8
 #define SPACE_CROSSFADE_LAYERS   3
@@ -21,7 +23,9 @@ struct space_crossfade
     CFStringRef uuid;
 
     // The Desktops shown on the display, bottom first; the top one animates.
+    // The wallpaper window each one hides, if any.
     uint64_t spaces[SPACE_CROSSFADE_LAYERS];
+    uint32_t wallpapers[SPACE_CROSSFADE_LAYERS];
     int count;
 
     float from;
@@ -36,6 +40,8 @@ struct space_crossfade
 };
 
 static struct space_crossfade space_crossfades[SPACE_CROSSFADE_DISPLAYS];
+
+#include "space_crossfade_wallpaper.c"
 
 static struct space_crossfade *space_crossfade_find(uint32_t display)
 {
@@ -68,6 +74,7 @@ static void space_crossfade_commit(CFTypeRef transaction)
 
 static void space_crossfade_forget(struct space_crossfade *fade)
 {
+    space_crossfade_show_wallpapers(fade);
     CFRelease(fade->uuid);
     fade->count = 0;
     window_fade_display_stop(fade->display);
@@ -127,13 +134,13 @@ static bool space_crossfade_holds(uint64_t sid)
     return false;
 }
 
-// Puts every Desktop that is not at rest back at alpha 1 and level 0, when the
-// payload loads. SkyLight keeps a Desktop's alpha and level until Dock sets
-// them again, and Dock's own switches and Mission Control leave them as they
-// are: a crossfade that did not settle, cut short by a Dock crash for
-// instance, would leave its Desktops transparent for good. Only user Desktops
-// (type 0) crossfade, and those of a running crossfade are left to it.
-// Returns how many it restored.
+// Puts every Desktop that is not at rest back at alpha 1 and level 0, with its
+// wallpaper window opaque, when the payload loads. SkyLight keeps a Desktop's
+// alpha and level until Dock sets them again, and Dock's own switches and
+// Mission Control leave them as they are: a crossfade that did not settle,
+// cut short by a Dock crash for instance, would leave its Desktops
+// transparent for good. Only user Desktops (type 0) crossfade, and those of a
+// running crossfade are left to it. Returns how many it restored.
 static int space_crossfade_restore(void)
 {
     int cid = SLSMainConnectionID();
@@ -161,14 +168,28 @@ static int space_crossfade_restore(void)
             if (!type_ref || !CFNumberGetValue(type_ref, kCFNumberIntType, &type) || type != 0) continue;
 
             if (space_crossfade_holds(sid)) continue;
-            if (SLSSpaceGetAlpha(cid, sid) == 1.0f && SLSSpaceGetAbsoluteLevel(cid, sid) == 0) continue;
 
-            if (!transaction) transaction = SLSTransactionCreate(cid);
-            if (!transaction) break;
+            bool restore = false;
+            double covered;
+            float alpha = 1.0f;
+            uint32_t wallpaper = space_crossfade_scan(sid, CGRectNull, &covered);
 
-            SLSTransactionSetSpaceAlpha(transaction, sid, 1.0f);
-            SLSTransactionSetSpaceAbsoluteLevel(transaction, sid, 0);
-            ++restored;
+            if (wallpaper && SLSGetWindowAlpha(cid, wallpaper, &alpha) == kCGErrorSuccess && alpha < 1.0f) {
+                SLSSetWindowAlpha(cid, wallpaper, 1.0f);
+                restore = true;
+            }
+
+            if (SLSSpaceGetAlpha(cid, sid) != 1.0f || SLSSpaceGetAbsoluteLevel(cid, sid) != 0) {
+                if (!transaction) transaction = SLSTransactionCreate(cid);
+
+                if (transaction) {
+                    SLSTransactionSetSpaceAlpha(transaction, sid, 1.0f);
+                    SLSTransactionSetSpaceAbsoluteLevel(transaction, sid, 0);
+                    restore = true;
+                }
+            }
+
+            restored += restore;
         }
     }
 

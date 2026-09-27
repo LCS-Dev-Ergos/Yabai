@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Payload crossfades hide the destination Desktop's wallpaper window while it fades in, when its windows cover most of the display: WindowServer applies a Desktop's alpha to each window, so the wallpaper showed through them as it did through the window fade. The restore at load also makes wallpaper windows opaque again, and payload version is now *2.1.31-lcs.11*
 - Payload fades and crossfades write one frame per display interval while display callbacks stay late, instead of waiting half a frame before each
 - Payload crossfades no longer read `SLSTransactionCommit`'s value as a status: it is never 0 on macOS 27.2, so every crossfade of *2.1.31-lcs.9* switched without an effect and left its destination Desktop transparent. Fade frames are written one window at a time, and payload version is now *2.1.31-lcs.10*
 - Payload restores, when it loads, user Desktops that an unfinished crossfade left transparent or raised

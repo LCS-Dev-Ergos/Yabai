@@ -25,6 +25,7 @@ static struct space_crossfade *space_crossfade_claim(uint32_t display, CFStringR
         fade->display = display;
         fade->uuid = CFRetain(uuid);
         fade->spaces[0] = source;
+        fade->wallpapers[0] = 0;
         fade->count = 1;
         return fade;
     }
@@ -50,11 +51,14 @@ static bool space_crossfade_turn(struct space_crossfade *fade, uint64_t dest, fl
 
 // Shows `dest` at alpha 0 above the Desktops already shown and makes it
 // current. They are shown again in the same transaction, in case the change of
-// current Desktop hid them.
-static bool space_crossfade_push(struct space_crossfade *fade, uint64_t dest)
+// current Desktop hid them. Its wallpaper window, if given, turns transparent
+// first, while `dest` is still hidden.
+static bool space_crossfade_push(struct space_crossfade *fade, uint64_t dest, uint32_t wallpaper)
 {
     CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
     if (!transaction) return false;
+
+    if (wallpaper) SLSSetWindowAlpha(SLSMainConnectionID(), wallpaper, 0.0f);
 
     SLSTransactionSetSpaceAlpha(transaction, dest, 0.0f);
     SLSTransactionSetSpaceAbsoluteLevel(transaction, dest, fade->count);
@@ -67,6 +71,7 @@ static bool space_crossfade_push(struct space_crossfade *fade, uint64_t dest)
 
     space_crossfade_commit(transaction);
 
+    fade->wallpapers[fade->count] = wallpaper;
     fade->spaces[fade->count++] = dest;
     return true;
 }
@@ -80,6 +85,9 @@ static bool space_crossfade_start(uint32_t display, CFStringRef uuid, uint64_t s
     if (!display || !uuid || !source || !dest || source == dest) return false;
     if (!(duration > 0.0f && duration <= 1.0f)) return false;
     if (!(interval >= 1.0f / 240.0f && interval <= 1.0f)) return false;
+
+    // WindowServer queries stay outside the lock the worker needs.
+    uint32_t wallpaper = space_crossfade_wallpaper(display, dest);
 
     pthread_mutex_lock(&window_fade_lock);
 
@@ -103,7 +111,7 @@ static bool space_crossfade_start(uint32_t display, CFStringRef uuid, uint64_t s
         if (fade && !stack) space_crossfade_finish(fade);
         if (!stack) fade = space_crossfade_claim(display, uuid, source);
 
-        success = fade && space_crossfade_push(fade, dest);
+        success = fade && space_crossfade_push(fade, dest, wallpaper);
 
         if (success) {
             os_signpost_event_emit(window_fade_log(), OS_SIGNPOST_ID_EXCLUSIVE, "crossfade start",

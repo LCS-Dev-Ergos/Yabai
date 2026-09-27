@@ -62,6 +62,8 @@ CGError SLSTransactionSetSpaceAbsoluteLevel(CFTypeRef transaction, uint64_t sid,
 CGError SLSTransactionShowSpace(CFTypeRef transaction, uint64_t sid) { return 0; }
 CGError SLSTransactionHideSpace(CFTypeRef transaction, uint64_t sid) { return 0; }
 CGError SLSTransactionSetManagedDisplayCurrentSpace(CFTypeRef transaction, CFStringRef display, uint64_t sid) { return 0; }
+CFArrayRef SLSCopyWindowsWithOptionsAndTags(int cid, uint32_t owner, CFArrayRef spaces, uint32_t options, uint64_t *set_tags, uint64_t *clear_tags) { return NULL; }
+CGError SLSGetWindowLevel(int cid, uint32_t wid, int *level) { *level = 0; return 0; }
 float SLSSpaceGetAlpha(int cid, uint64_t sid) { return 1.0f; }
 int SLSSpaceGetAbsoluteLevel(int cid, uint64_t sid) { return 0; }
 CGError SLSSetWindowSubLevel(int cid, uint32_t wid, int level) { return 0; }

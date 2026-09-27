@@ -124,8 +124,20 @@ The window fade dims the destination's windows, so the wallpaper shows through
 them: at alpha 0.7 on this host, VS Code's dark background turned brown-orange
 over the wallpaper's bright cloud before it darkened again, which reads as a
 flash. Every Desktop has its own wallpaper window (11 `Wallpaper` windows of
-WindowManager for 11 Desktops), so a Desktop is an opaque layer, and blending
-two of them never shows the wallpaper.
+WindowManager for 11 Desktops), at a level below the desktop window level.
+
+WindowServer applies a Desktop's alpha to each of its windows, not to the
+Desktop as a whole: with the destination at alpha 0.5, its windows are
+half transparent over its own wallpaper, which shows through them with a
+weight of up to a quarter. On lcs.20 a crossfade from ChatGPT to Edge raised
+the red channel of the centre of the screen up to 11 levels above both
+Desktops, against 15 for the window fade. Payload `2.1.31-lcs.11` turns the
+destination's wallpaper window transparent for the crossfade when the
+destination's ordinary windows cover at least 80% of the display; with the
+wallpaper hidden by hand, the same crossfade stayed within both Desktops on
+every channel. A Desktop with less covered, or empty, keeps its wallpaper and
+fades in whole, since hiding it would show the Desktop below around its
+windows until the end.
 
 Dock animates its own Space transitions this way. Its binary imports
 `SLSTransactionSetSpaceAlpha`, `SLSTransactionSetSpaceAbsoluteLevel`,
@@ -157,7 +169,9 @@ refusal: the daemon switched without an effect, and the destination stayed at
 alpha 0 and level 1, black whenever it was shown. Dock's own switches and
 Mission Control leave a Desktop's alpha and level as they are, so since
 `2.1.31-lcs.10` the payload, when it loads, puts every user Desktop that is not
-at alpha 1 and level 0 back there and logs how many it restored.
+at alpha 1 and level 0 back there and logs how many it restored; on lcs.20 it
+restored the four Desktops lcs.19 had left transparent. Since `2.1.31-lcs.11`
+it also makes their wallpaper windows opaque again.
 
 Crossfades share the window fades' lock, worker and display links, including the
 half-frame fallback. Reduce Motion keeps them, since its own Desktop transition
@@ -169,11 +183,12 @@ crossfade's start, turns and end and every frame written, crossfade or window
 fade; [testing](testing.md) describes how to record them.
 
 `fade_tests` checks the transaction order, monotonic alpha, levels, the end
-state, turns, stacking, missing transactions, the restore at load, the worker's
-deadline and display pacing against a model of WindowServer's Desktops, whose
-commit, like SkyLight's, never returns 0. None of this
-establishes how WindowServer composites two Desktops shown at once, or the
-frames it presents: that is the live check.
+state, turns, stacking, missing transactions, the restore at load, the hidden
+wallpaper, the worker's deadline and display pacing against a model of
+WindowServer's Desktops, whose commit, like SkyLight's, never returns 0. None
+of this establishes how WindowServer composites two Desktops shown at once, or
+the frames it presents: that is the live check, described in
+[performance](performance.md).
 
 ## Native compositor investigation
 

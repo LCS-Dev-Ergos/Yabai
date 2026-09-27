@@ -134,7 +134,7 @@ add_test(NAME focus_tests COMMAND focus_tests)
 add_executable(fade_tests tests/fade/timing.c)
 target_compile_options(fade_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
 target_link_options(fade_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
-target_link_libraries(fade_tests PRIVATE "-framework CoreFoundation")
+target_link_libraries(fade_tests PRIVATE "-framework CoreFoundation" "-framework CoreGraphics")
 add_test(NAME fade_tests COMMAND fade_tests)
 set_tests_properties(fade_tests PROPERTIES TIMEOUT 15)
 

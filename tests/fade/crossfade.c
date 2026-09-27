@@ -299,6 +299,76 @@ static void test_crossfade_restore(void)
     space_state[2].alpha = 1.0f;
 }
 
+// Desktop `sid` gets wallpaper window 40 + sid, opaque, and optionally an
+// ordinary window with the given frame on the 1000 x 500 display.
+static void crossfade_add_desktop(uint64_t sid, CGRect frame)
+{
+    uint32_t wallpaper = 40 + (uint32_t) sid;
+    model_windows[model_window_count++] = (typeof(model_windows[0])) { sid, wallpaper, -2147483624, CGRectMake(0, 0, 1000, 500) };
+    alphas[wallpaper] = 1.0f;
+
+    if (!CGRectIsEmpty(frame)) {
+        model_windows[model_window_count++] = (typeof(model_windows[0])) { sid, 20 + (uint32_t) sid, 0, frame };
+    }
+}
+
+static void test_crossfade_wallpaper(void)
+{
+    // A destination whose windows cover the display fades in without its
+    // wallpaper, which is opaque again once the crossfade settles; the
+    // source keeps its own.
+    crossfade_reset();
+    CGRect tiled = CGRectMake(10, 40, 980, 450);
+    crossfade_add_desktop(1, tiled);
+    crossfade_add_desktop(2, tiled);
+    crossfade_add_desktop(3, CGRectMake(100, 100, 200, 200));
+    crossfade_add_desktop(4, CGRectNull);
+    crossfade_add_desktop(5, tiled);
+
+    assert(crossfade_start(1, 2));
+    struct space_crossfade *fade = space_crossfade_find(1);
+    assert(alphas[42] == 0.0f && alphas[41] == 1.0f && fade->wallpapers[1] == 42);
+
+    space_crossfade_tick(fade->started + fade->duration);
+    crossfade_expect_settled(2);
+    assert(alphas[42] == 1.0f && alphas[41] == 1.0f);
+
+    // A small window or none: the wallpaper stays, so the Desktop fades in
+    // whole instead of showing the one below around its windows.
+    crossfade_reset();
+    assert(crossfade_start(1, 3));
+    assert(alphas[43] == 1.0f && space_crossfade_find(1)->wallpapers[1] == 0);
+    space_crossfade_finish_all();
+
+    crossfade_reset();
+    assert(crossfade_start(1, 4));
+    assert(alphas[44] == 1.0f);
+    space_crossfade_finish_all();
+    crossfade_expect_settled(4);
+
+    // Stacked destinations hide theirs; ending early shows them again.
+    crossfade_reset();
+    assert(crossfade_start(1, 2));
+    assert(crossfade_start(2, 5));
+    assert(alphas[42] == 0.0f && alphas[45] == 0.0f);
+    space_crossfade_finish_all();
+    crossfade_expect_settled(5);
+    assert(alphas[42] == 1.0f && alphas[45] == 1.0f);
+
+    // The restore at load makes a wallpaper left transparent opaque again.
+    crossfade_reset();
+    managed_space_count = 2;
+    managed_spaces[0].sid = 1;
+    managed_spaces[0].type = 0;
+    managed_spaces[1].sid = 2;
+    managed_spaces[1].type = 0;
+    alphas[42] = 0.0f;
+    assert(space_crossfade_restore() == 1 && alphas[42] == 1.0f && alphas[41] == 1.0f);
+
+    managed_space_count = 0;
+    model_window_count = 0;
+}
+
 static void test_crossfade(void)
 {
     int calls = thread_calls;
@@ -310,6 +380,7 @@ static void test_crossfade(void)
     test_crossfade_failures();
     test_crossfade_pacing();
     test_crossfade_restore();
+    test_crossfade_wallpaper();
 
     // Later tests start the real worker, and count its creation alone.
     fake_worker = false;

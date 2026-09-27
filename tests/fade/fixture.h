@@ -1,4 +1,5 @@
 #include <CoreFoundation/CoreFoundation.h>
+#include <CoreGraphics/CoreGraphics.h>
 #include <assert.h>
 #include <errno.h>
 #include <math.h>
@@ -215,6 +216,76 @@ static CFArrayRef SLSCopyManagedDisplaySpaces(int cid)
     return displays;
 }
 
+// Windows on the model's Desktops, for SLSCopyWindowsWithOptionsAndTags,
+// SLSGetWindowLevel and SLSGetWindowBounds, on a 1000 x 500 display.
+static struct
+{
+    uint64_t sid;
+    uint32_t wid;
+    int level;
+    CGRect frame;
+} model_windows[16];
+
+static int model_window_count;
+
+static int model_window(uint32_t wid)
+{
+    for (int i = 0; i < model_window_count; ++i) {
+        if (model_windows[i].wid == wid) return i;
+    }
+
+    return -1;
+}
+
+static CFArrayRef SLSCopyWindowsWithOptionsAndTags(int cid, uint32_t owner, CFArrayRef spaces, uint32_t options,
+                                                   uint64_t *set_tags, uint64_t *clear_tags)
+{
+    assert(spaces && CFArrayGetCount(spaces) == 1);
+
+    uint64_t sid = 0;
+    CFNumberGetValue(CFArrayGetValueAtIndex(spaces, 0), kCFNumberSInt64Type, &sid);
+
+    CFMutableArrayRef windows = CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
+
+    for (int i = 0; i < model_window_count; ++i) {
+        if (model_windows[i].sid != sid) continue;
+
+        CFNumberRef wid = CFNumberCreate(NULL, kCFNumberSInt32Type, &model_windows[i].wid);
+        CFArrayAppendValue(windows, wid);
+        CFRelease(wid);
+    }
+
+    return windows;
+}
+
+static int SLSGetWindowLevel(int cid, uint32_t wid, int *level)
+{
+    int i = model_window(wid);
+    if (i < 0) return kCGErrorIllegalArgument;
+
+    *level = model_windows[i].level;
+    return kCGErrorSuccess;
+}
+
+static int SLSGetWindowBounds(int cid, uint32_t wid, CGRect *frame)
+{
+    int i = model_window(wid);
+    if (i < 0) return kCGErrorIllegalArgument;
+
+    *frame = model_windows[i].frame;
+    return kCGErrorSuccess;
+}
+
+static CGRect model_display_bounds(uint32_t display)
+{
+    return CGRectMake(0, 0, 1000, 500);
+}
+
+static int model_window_level_for_key(CGWindowLevelKey key)
+{
+    return key == kCGDesktopWindowLevelKey ? -2147483623 : 0;
+}
+
 static int create_worker(pthread_t *thread, const pthread_attr_t *attributes,
                          void *(*entry)(void *), void *context)
 {
@@ -230,6 +301,8 @@ static void *allocate_fade(size_t count, size_t size)
 
 #define pthread_create create_worker
 #define calloc allocate_fade
+#define CGDisplayBounds model_display_bounds
+#define CGWindowLevelForKey model_window_level_for_key
 #include "../../src/osax/window_fade.c"
 #ifdef FADE_DISPLAY_LINK
 #include "../../src/osax/window_fade_display.m"
@@ -238,6 +311,8 @@ static void *allocate_fade(size_t count, size_t size)
 #include "../../src/osax/space_crossfade.c"
 #undef pthread_create
 #undef calloc
+#undef CGDisplayBounds
+#undef CGWindowLevelForKey
 
 static struct window_fade_context *add_fade(uint32_t wid)
 {
