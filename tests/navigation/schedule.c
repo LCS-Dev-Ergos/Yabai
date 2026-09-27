@@ -37,6 +37,7 @@ static struct
 static int executed_count;
 static bool execute_success;
 static uint32_t activate_window;
+static uint64_t execute_delay;
 
 // The window each activating step activates, if any, as navigation reports it.
 static bool space_navigation_execute(struct space_navigation_request *request, int direction,
@@ -44,6 +45,9 @@ static bool space_navigation_execute(struct space_navigation_request *request, i
 {
     assert(executed_count < 64);
     executed[executed_count++] = (typeof(executed[0])) { direction, request->sid, activate, duration, now };
+    now += execute_delay;
+
+    if (execute_success) space_navigation_schedule_switched(request->crossfade ? duration : 0.0f);
 
     if (activate && activate_window) space_navigation_schedule_activated(activate_window);
     return execute_success;
@@ -99,6 +103,7 @@ static void reset(void)
     executed_count = 0;
     execute_success = true;
     activate_window = 0;
+    execute_delay = 0;
     click_seconds = 1000.0;
 }
 
@@ -133,9 +138,9 @@ static void test_isolated_and_burst(void)
     assert(executed_count == 1 && executed[0].direction == 1 && executed[0].activate);
     assert(executed[0].time == start && executed[0].duration == 0.25f);
 
-    // Three more presses 30 ms apart: each is one step, in order. The first
-    // waits for the activation deadline; the steps in between do not
-    // activate, and their crossfades last one interval.
+    // Every crossfade keeps its requested duration. Further presses wait
+    // for it instead of stacking partly transparent Desktops or shortening
+    // the following effects according to request arrival times.
     advance(30 * MS);
     press(1, false, true);
     advance(30 * MS);
@@ -146,12 +151,12 @@ static void test_isolated_and_burst(void)
 
     advance(1000 * MS);
     assert(executed_count == 4);
-    assert(executed[1].time == start + 150 * MS && !executed[1].activate);
-    assert(executed[2].time == start + 250 * MS && !executed[2].activate);
-    assert(executed[3].time == start + 350 * MS && executed[3].activate);
+    assert(executed[1].time == start + 250 * MS && !executed[1].activate);
+    assert(executed[2].time == start + 500 * MS && !executed[2].activate);
+    assert(executed[3].time == start + 750 * MS && executed[3].activate);
 
     for (int i = 1; i < 4; ++i) {
-        assert(executed[i].direction == 1 && fabsf(executed[i].duration - 0.1f) < 0.0001f);
+        assert(executed[i].direction == 1 && executed[i].duration == 0.25f);
     }
 
     // The window fade keeps its own duration.
@@ -162,7 +167,7 @@ static void test_isolated_and_burst(void)
     advance(1000 * MS);
     assert(executed_count == 2 && executed[1].direction == -1 && executed[1].duration == 0.25f);
 
-    // Taps slower than the rhythm crossfade for as long as the interval.
+    // A pause between taps does not change their effect duration.
     reset();
     press(1, false, true);
     advance(150 * MS);
@@ -171,7 +176,7 @@ static void test_isolated_and_burst(void)
     press(1, false, true);
     assert(executed_count == 3);
     assert(executed[0].duration == 0.25f);
-    assert(fabsf(executed[1].duration - 0.15f) < 0.0001f);
+    assert(executed[1].duration == 0.25f);
     assert(executed[2].duration == 0.25f);
 }
 
@@ -181,9 +186,9 @@ static void test_activation(void)
     reset();
     uint64_t start = now;
     activate_window = 7;
-    press(1, false, true);
+    press(1, false, false);
     advance(20 * MS);
-    press(1, false, true);
+    press(1, false, false);
     assert(executed_count == 1);
 
     advance(40 * MS);
@@ -198,17 +203,54 @@ static void test_activation(void)
     // A step that activated nothing does not wait.
     reset();
     start = now;
-    press(1, false, true);
+    press(1, false, false);
     advance(20 * MS);
-    press(1, false, true);
+    press(1, false, false);
     advance(80 * MS);
     assert(executed_count == 2 && executed[1].time == start + 100 * MS);
+}
+
+static void test_slow_step(void)
+{
+    // A switch or AX raise can occupy the event loop for longer than the
+    // rhythm. A newly admitted request must not bypass the scheduled pause
+    // and run immediately when that slow step returns.
+    reset();
+    uint64_t start = now;
+    execute_delay = 300 * MS;
+    press(1, false, false);
+    assert(now == start + 300 * MS && executed_count == 1);
+
+    execute_delay = 0;
+    press(1, false, false);
+    assert(executed_count == 1);
+    advance(99 * MS);
+    assert(executed_count == 1);
+    advance(MS);
+    assert(executed_count == 2 && executed[1].time == start + 400 * MS);
+}
+
+static void test_focus_confirmation_defers_navigation(void)
+{
+    // WINDOW_FOCUSED still has to process the old window after notifying
+    // the scheduler. Starting the next navigation inside that notification
+    // would let the rest of the old event overwrite the new focus state.
+    reset();
+    activate_window = 7;
+    press(1, false, false);
+    press(1, false, false);
+    now += 120 * MS;
+
+    space_navigation_schedule_focused(7);
+    assert(executed_count == 1);
+    advance(0);
+    assert(executed_count == 2);
 }
 
 static void test_repeats_and_reversal(void)
 {
     // A held key keeps one step pending: a step every rhythm while held, at
-    // 0, 100, 200 and 300 ms, and one more after the release at 300 ms.
+    // 0 and 250 ms, and one more after the release at 300 ms.
     reset();
     press(1, false, true);
     for (int i = 0; i < 10; ++i) {
@@ -216,9 +258,9 @@ static void test_repeats_and_reversal(void)
         press(1, true, true);
     }
 
-    assert(executed_count == 4);
+    assert(executed_count == 2);
     advance(1000 * MS);
-    assert(executed_count == 5);
+    assert(executed_count == 3);
 
     // The other direction takes back a step that has not run.
     reset();
@@ -234,7 +276,7 @@ static void test_repeats_and_reversal(void)
     // A repeat after the queue has run adds a step.
     reset();
     press(1, false, true);
-    advance(200 * MS);
+    advance(300 * MS);
     press(1, true, true);
     assert(executed_count == 2);
 }
@@ -340,6 +382,8 @@ int main(void)
 {
     test_isolated_and_burst();
     test_activation();
+    test_slow_step();
+    test_focus_confirmation_defers_navigation();
     test_repeats_and_reversal();
     test_absolute();
     test_limits();

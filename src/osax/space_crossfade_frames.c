@@ -61,18 +61,13 @@ static void space_crossfade_tick(double now)
         fade->next_frame = now + fade->interval * (fade->display_paced && callback ? 1.5 : 1.0);
         fade->current = space_crossfade_alpha(fade, now);
 
-        CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
-
-        if (!transaction) {
-            if (now >= end) space_crossfade_forget(fade);
-            continue;
-        }
-
         if (now >= end) {
-            space_crossfade_settle(fade, transaction);
-            space_crossfade_commit(transaction);
+            space_crossfade_finish(fade);
             continue;
         }
+
+        CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
+        if (!transaction) continue;
 
         SLSTransactionSetSpaceAlpha(transaction, fade->spaces[fade->count - 1], fade->current);
         os_signpost_event_emit(window_fade_log(), OS_SIGNPOST_ID_EXCLUSIVE, "crossfade frame",

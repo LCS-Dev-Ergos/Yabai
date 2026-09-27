@@ -96,6 +96,40 @@ else it records, so they can be read shortly afterwards:
 
 In zsh, a bare `log` is a builtin, hence the full path.
 
+## Presented bar frames
+
+The opt-in probe records the display's presented frames with existing Screen
+Recording permission. Build it locally:
+
+```sh
+xcrun clang -fobjc-arc -O2 tools/effects/frame_capture.m \
+  -framework Foundation -framework ScreenCaptureKit -framework CoreMedia \
+  -framework CoreVideo -framework CoreGraphics -framework ImageIO \
+  -o build/effects-frame-capture
+```
+
+Announce the test before running it. Choose two existing ordinary Desktops on
+the same display; this example uses the empty 9 and 10 on the test host:
+
+```sh
+python3 tools/effects/check_bar.py 9 10 \
+  --capture build/effects-frame-capture \
+  --output build/bar-regression --effects crossfade none
+```
+
+The tool waits for five seconds without keys or clicks, aborts on new input,
+and restores and verifies the starting Desktop and focused window. Exit 0
+means all bar checks passed, 1 means a luminance excursion exceeded 3/255,
+and 2 means the run or restoration failed. It saves frame measurements and
+JSON results locally. `--images` also saves PNGs for inspection and adds
+capture work; do not use that mode to benchmark frame timing.
+
+The top 40 logical points are specific to this bar layout. Its endpoint-based
+luminance check catches the [lcs.21 disappearance](effects-lcs22-validation.md),
+but cannot establish Finder icon visibility, focus correctness throughout a
+burst, smooth motion or CPU/GPU performance. Notifications and changing bar
+content can affect the score; inspect images when the result is ambiguous.
+
 ## Static analysis
 
 ```sh

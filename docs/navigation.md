@@ -55,15 +55,20 @@ milliseconds after it was sent. An activation handled after the user had moved
 on brought its Desktop back into view. Navigation therefore runs as steps of one
 Desktop from a bounded queue, in the order requested:
 
-- A step runs at once when the previous one is at least 100 ms old. After a
-  step that activated an application, the next one also waits until that
-  application reports the window focused, or 150 ms have passed.
+- A step runs when at least 100 ms have passed since the previous step
+  completed, including synchronous focus work. A crossfade also reserves its
+  full requested duration from Dock's acknowledgement. With `crossfade 0.25`,
+  this permits at most about four steps per second; slow system calls can
+  reduce that rate. This time guard does not establish frame presentation.
+- After a step that activated an application, the next one also waits until
+  that application reports the window focused, or 150 ms have passed. A focus
+  confirmation schedules the next step after its event handler finishes.
 - `next` and `prev` count from the Desktop the previous step switched to. Each
   Desktop number is one step; the same number twice in a row queues once.
 - Only the last queued step activates an application. The steps before it
-  switch Desktop and show their effect: a crossfade then lasts as long as the
-  interval between steps, up to the requested duration, so each one ends as
-  the next begins.
+  switch Desktop and show their effect. Each crossfade keeps the requested
+  duration, including the first and last step of a burst, instead of changing
+  its duration according to when the next press arrives.
 - At most ten steps wait; a request that does not fit is refused.
 - A click after a request, or any other command except queries, empties the
   queue. A failed step drops the rest.
@@ -75,6 +80,9 @@ several Desktops in one switch.
 
 Signposts in subsystem `com.lcs.yabai`, category `navigation`, mark each
 request, step, activation and the focus that confirms it.
+
+The revised pacing is part of the [lcs.22 candidate](effects-lcs22-validation.md);
+its live visual acceptance remains pending.
 
 ## Relative navigation
 

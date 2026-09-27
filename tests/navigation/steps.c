@@ -18,6 +18,7 @@ static void test_steps(void)
     reset();
     assert(run_step(2, true, true));
     assert(crossfade_calls == 1 && last_crossfade_duration == .2f);
+    assert(switched_duration == .2f);
     assert(focus_calls == 0 && batch_calls == 0 && opacity_calls == 0);
     assert(window_focus_calls == 1 && focused_id == 1 && activated_id == 1 && noted_id == 1);
 
@@ -26,6 +27,7 @@ static void test_steps(void)
     crossfade_success = false;
     assert(run_step(2, true, true));
     assert(crossfade_calls == 1 && focus_calls == 1 && active_space == 2 && window_focus_calls == 1);
+    assert(switched_duration == 0.0f);
 
     // Neither Dock path works: the navigation fails and activates nothing.
     reset();

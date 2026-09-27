@@ -10,9 +10,10 @@
 // the user had moved on brought its Desktop back into view.
 //
 // Only the last queued step activates an application; the steps before it
-// switch and show their effect. A crossfade lasts as long as the interval
-// between steps, up to the requested duration, so each one ends as the next
-// begins. A click after a request, or any other command, empties the queue.
+// switch and show their effect. The next step waits for the crossfade's
+// requested duration, measured from Dock's acknowledgement, so rapid input
+// cannot continuously restart an unfinished blend. A click after a request,
+// or any other command, empties the queue.
 
 #include <os/signpost.h>
 
@@ -38,7 +39,8 @@ static struct
     struct space_navigation_request queue[SPACE_NAVIGATION_QUEUE_STEPS];
     int count;
 
-    uint64_t last_step;
+    uint64_t last_step;     // Completion of the last step, including synchronous focus work.
+    uint64_t effect_until;  // Conservative end time after Dock acknowledged a crossfade.
     uint32_t activated;     // The window the last step activated, until it reports focus.
     uint64_t activated_at;
     uint64_t confirmed_at;  // When the last activation reported focus.
@@ -160,6 +162,7 @@ static void space_navigation_schedule_pump(void)
     }
 
     uint64_t due = g_space_navigation_schedule.last_step + SPACE_NAVIGATION_RHYTHM_NS;
+    if (g_space_navigation_schedule.effect_until > due) due = g_space_navigation_schedule.effect_until;
 
     if (g_space_navigation_schedule.activated) {
         uint64_t deadline = g_space_navigation_schedule.activated_at + SPACE_NAVIGATION_ACTIVATION_NS;
@@ -187,15 +190,9 @@ static void space_navigation_schedule_pump(void)
         memmove(head, head + 1, g_space_navigation_schedule.count * sizeof(*head));
     }
 
-    // A crossfade lasts until the next step can start, up to the request.
+    // Each step keeps the requested duration, including the first and last
+    // step of a burst. Timing of later key presses must not change the curve.
     float duration = request.duration;
-
-    if (request.crossfade) {
-        uint64_t interval = g_space_navigation_schedule.count ? SPACE_NAVIGATION_RHYTHM_NS
-                                                              : now - g_space_navigation_schedule.last_step;
-        if (interval < SPACE_NAVIGATION_RHYTHM_NS) interval = SPACE_NAVIGATION_RHYTHM_NS;
-        if (interval / 1e9 < duration) duration = (float) (interval / 1e9);
-    }
 
     g_space_navigation_schedule.activated = 0;
     g_space_navigation_schedule.last_step = now;
@@ -206,6 +203,10 @@ static void space_navigation_schedule_pump(void)
                                direction, request.sid, activate, duration, late);
 
     bool success = space_navigation_execute(&request, direction, activate, duration);
+    // A slow WindowServer query or AX raise can consume the whole rhythm.
+    // Admission of the next request must obey the same pause as our timer,
+    // rather than immediately executing another step to catch up.
+    g_space_navigation_schedule.last_step = read_os_timer();
     os_signpost_interval_end(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "step", "success %d", success);
 
     if (!success) {
@@ -231,6 +232,14 @@ static void space_navigation_schedule_activated(uint32_t window_id)
     g_space_navigation_schedule.activated_at = read_os_timer();
 }
 
+// Dock has accepted the effect. This is a time guard, not proof that the
+// compositor has presented its last frame. A refused effect clears the guard
+// when navigation falls back to an ordinary switch.
+static void space_navigation_schedule_switched(float duration)
+{
+    g_space_navigation_schedule.effect_until = read_os_timer() + (uint64_t) (duration * 1e9);
+}
+
 // The application took focus on the window the last step activated.
 static void space_navigation_schedule_focused(uint32_t window_id)
 {
@@ -239,7 +248,10 @@ static void space_navigation_schedule_focused(uint32_t window_id)
     os_signpost_event_emit(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "focused", "window %u", window_id);
     g_space_navigation_schedule.activated = 0;
     g_space_navigation_schedule.confirmed_at = read_os_timer();
-    space_navigation_schedule_pump();
+
+    // Finish WINDOW_FOCUSED before changing Desktop again. Its remaining
+    // work belongs to the old window and must precede the next activation.
+    if (g_space_navigation_schedule.count) space_navigation_schedule_wake(0);
 }
 
 static void space_navigation_schedule_cancel(void)

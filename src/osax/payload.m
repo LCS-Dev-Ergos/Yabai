@@ -16,6 +16,7 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <libproc.h>
 #include <netdb.h>
 #include <dlfcn.h>
 
@@ -48,6 +49,7 @@ extern CGError SLSSetWindowAlpha(int cid, uint32_t wid, float alpha);
 extern OSStatus SLSMoveWindowWithGroup(int cid, uint32_t wid, CGPoint *point);
 extern CGError SLSReassociateWindowsSpacesByGeometry(int cid, CFArrayRef window_list);
 extern CGError SLSGetWindowOwner(int cid, uint32_t wid, int *window_cid);
+extern CGError SLSConnectionGetPID(int cid, pid_t *pid);
 extern CGError SLSSetWindowTags(int cid, uint32_t wid, uint64_t *tags, size_t tag_size);
 extern CGError SLSClearWindowTags(int cid, uint32_t wid, uint64_t *tags, size_t tag_size);
 extern CGError SLSGetWindowBounds(int cid, uint32_t wid, CGRect *frame);

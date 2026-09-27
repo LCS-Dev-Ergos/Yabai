@@ -1,11 +1,11 @@
 // Fork: cross-fades one Desktop into another, as Dock animates its own Space
 // transitions.
 //
-// Every Desktop has its own wallpaper window, so each one is an opaque layer.
-// One transaction shows the destination above the Desktop it replaces, at
-// alpha 0, and makes it current; each frame then raises its alpha, and once it
-// is opaque the Desktops below are hidden. Blending two opaque layers never
-// lets the wallpaper through, as fading the destination's windows in did.
+// One transaction shows the destination at its ordinary level and alpha 0,
+// lowers the Desktops it replaces and makes it current. Each frame raises its
+// alpha; once it is opaque, the other Desktops are hidden and levels restored.
+// SkyLight applies Space alpha per window, so a covered destination hides its
+// wallpaper to keep it from bleeding through the destination's own windows.
 //
 // A navigation during a crossfade stacks its destination on top, so the blend
 // on screen continues without a jump; going back to the Desktop underneath
@@ -21,6 +21,9 @@ struct space_crossfade
 {
     uint32_t display;
     CFStringRef uuid;
+    // Reserved before any Desktop is made transparent. Finishing must not
+    // depend on a fresh allocation after frames have already changed it.
+    CFTypeRef settlement;
 
     // The Desktops shown on the display, bottom first; the top one animates.
     // The wallpaper window each one hides, if any.
@@ -75,6 +78,8 @@ static void space_crossfade_commit(CFTypeRef transaction)
 static void space_crossfade_forget(struct space_crossfade *fade)
 {
     space_crossfade_show_wallpapers(fade);
+    if (fade->settlement) CFRelease(fade->settlement);
+    fade->settlement = NULL;
     CFRelease(fade->uuid);
     fade->count = 0;
     window_fade_display_stop(fade->display);
@@ -99,12 +104,8 @@ static void space_crossfade_settle(struct space_crossfade *fade, CFTypeRef trans
 
 static void space_crossfade_finish(struct space_crossfade *fade)
 {
-    CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
-
-    if (!transaction) {
-        space_crossfade_forget(fade);
-        return;
-    }
+    CFTypeRef transaction = fade->settlement;
+    fade->settlement = NULL;
 
     space_crossfade_settle(fade, transaction);
     space_crossfade_commit(transaction);

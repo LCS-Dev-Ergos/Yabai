@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <libproc.h>
 #include "../../src/osax/common.h"
 
 #ifndef FADE_DISPLAY_LINK
@@ -75,12 +76,11 @@ struct space_record
     float value;
 };
 
-static struct space_record space_queued[64];
-static int space_queued_count;
 static struct space_record space_log[256];
 static int space_log_count;
 static int transactions_created;
 static bool fail_transaction;
+static int fail_transaction_at;
 
 static struct
 {
@@ -93,15 +93,21 @@ static uint64_t current_space;
 
 static CFTypeRef SLSTransactionCreate(int cid)
 {
-    assert(space_queued_count == 0);
     ++transactions_created;
-    return fail_transaction ? NULL : CFRetain(kCFNull);
+    if (fail_transaction || transactions_created == fail_transaction_at) return NULL;
+
+    // Each live transaction has its own command buffer, including the
+    // empty settlement reserved across intermediate frame transactions.
+    return CFDataCreateMutable(NULL, 0);
 }
 
 static int space_queue(CFTypeRef transaction, enum space_op op, uint64_t sid, float value)
 {
-    assert(transaction && sid && sid < 16 && space_queued_count < 64);
-    space_queued[space_queued_count++] = (struct space_record) { op, sid, value };
+    assert(transaction && sid && sid < 16);
+    CFMutableDataRef commands = (CFMutableDataRef) transaction;
+    assert(CFDataGetLength(commands) < 64 * sizeof(struct space_record));
+    struct space_record record = { op, sid, value };
+    CFDataAppendBytes(commands, (const UInt8 *) &record, sizeof(record));
     return 0;
 }
 
@@ -153,11 +159,14 @@ static int SLSTransactionCommit(CFTypeRef transaction, int synchronous)
     ++commits;
     if (alpha_delay) usleep(alpha_delay);
 
-    for (int i = 0; i < space_queued_count; ++i) {
-        space_apply(&space_queued[i]);
+    CFDataRef commands = (CFDataRef) transaction;
+    CFIndex count = CFDataGetLength(commands) / sizeof(struct space_record);
+    for (CFIndex i = 0; i < count; ++i) {
+        struct space_record record;
+        memcpy(&record, CFDataGetBytePtr(commands) + i * sizeof(record), sizeof(record));
+        space_apply(&record);
     }
 
-    space_queued_count = 0;
     return 0x48;
 }
 
@@ -227,6 +236,29 @@ static struct
 } model_windows[16];
 
 static int model_window_count;
+static bool wallpaper_owner_valid = true;
+
+static int SLSGetWindowOwner(int cid, uint32_t wid, int *owner)
+{
+    *owner = 7;
+    return kCGErrorSuccess;
+}
+
+static int SLSConnectionGetPID(int owner, pid_t *pid)
+{
+    *pid = 7;
+    return kCGErrorSuccess;
+}
+
+static int model_proc_pidpath(int pid, void *buffer, uint32_t size)
+{
+    const char *path = wallpaper_owner_valid
+                    ? "/System/Library/CoreServices/WindowManager.app/Contents/MacOS/WindowManager"
+                    : "/Applications/Other.app/Contents/MacOS/Other";
+    assert(strlen(path) + 1 < size);
+    strcpy(buffer, path);
+    return (int) strlen(path);
+}
 
 static int model_window(uint32_t wid)
 {
@@ -303,6 +335,7 @@ static void *allocate_fade(size_t count, size_t size)
 #define calloc allocate_fade
 #define CGDisplayBounds model_display_bounds
 #define CGWindowLevelForKey model_window_level_for_key
+#define proc_pidpath model_proc_pidpath
 #include "../../src/osax/window_fade.c"
 #ifdef FADE_DISPLAY_LINK
 #include "../../src/osax/window_fade_display.m"
@@ -313,6 +346,7 @@ static void *allocate_fade(size_t count, size_t size)
 #undef calloc
 #undef CGDisplayBounds
 #undef CGWindowLevelForKey
+#undef proc_pidpath
 
 static struct window_fade_context *add_fade(uint32_t wid)
 {

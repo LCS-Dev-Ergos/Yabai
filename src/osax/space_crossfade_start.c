@@ -22,8 +22,12 @@ static struct space_crossfade *space_crossfade_claim(uint32_t display, CFStringR
         struct space_crossfade *fade = &space_crossfades[i];
         if (fade->count) continue;
 
+        CFTypeRef settlement = SLSTransactionCreate(SLSMainConnectionID());
+        if (!settlement) return NULL;
+
         fade->display = display;
         fade->uuid = CFRetain(uuid);
+        fade->settlement = settlement;
         fade->spaces[0] = source;
         fade->wallpapers[0] = 0;
         fade->count = 1;
@@ -49,10 +53,11 @@ static bool space_crossfade_turn(struct space_crossfade *fade, uint64_t dest, fl
     return true;
 }
 
-// Shows `dest` at alpha 0 above the Desktops already shown and makes it
-// current. They are shown again in the same transaction, in case the change of
-// current Desktop hid them. Its wallpaper window, if given, turns transparent
-// first, while `dest` is still hidden.
+// Shows `dest` at alpha 0 and the ordinary Desktop level, above the older
+// layers. Lower the older layers instead of raising the destination above
+// global windows (such as SketchyBar) that belong to no managed Desktop.
+// They are shown again in the same transaction, in case changing the current
+// Desktop hid them. Its wallpaper, if given, is hidden while `dest` is hidden.
 static bool space_crossfade_push(struct space_crossfade *fade, uint64_t dest, uint32_t wallpaper)
 {
     CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
@@ -61,11 +66,12 @@ static bool space_crossfade_push(struct space_crossfade *fade, uint64_t dest, ui
     if (wallpaper) SLSSetWindowAlpha(SLSMainConnectionID(), wallpaper, 0.0f);
 
     SLSTransactionSetSpaceAlpha(transaction, dest, 0.0f);
-    SLSTransactionSetSpaceAbsoluteLevel(transaction, dest, fade->count);
+    SLSTransactionSetSpaceAbsoluteLevel(transaction, dest, 0);
     SLSTransactionShowSpace(transaction, dest);
     SLSTransactionSetManagedDisplayCurrentSpace(transaction, fade->uuid, dest);
 
     for (int i = 0; i < fade->count; ++i) {
+        SLSTransactionSetSpaceAbsoluteLevel(transaction, fade->spaces[i], i - fade->count);
         SLSTransactionShowSpace(transaction, fade->spaces[i]);
     }
 
@@ -120,6 +126,8 @@ static bool space_crossfade_start(uint32_t display, CFStringRef uuid, uint64_t s
             space_crossfade_animate(fade, 0.0f, 1.0f, duration, interval);
             window_fade_display_start(display);
         } else if (fade && fade->count == 1) {
+            CFRelease(fade->settlement);
+            fade->settlement = NULL;
             CFRelease(fade->uuid);
             fade->count = 0;
         }

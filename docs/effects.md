@@ -145,9 +145,14 @@ Dock animates its own Space transitions this way. Its binary imports
 computes a Desktop's alpha from the progress of an animation and ends by
 restoring level 0 and alpha 1, the values every Desktop has at rest.
 
-One transaction sets the destination's alpha to 0, puts it a level above the
-Desktops shown, shows it and makes it current; the Desktops below are shown
-again in the same transaction, in case the change of current Desktop hid them.
+One transaction sets the destination's alpha to 0, shows it and makes it
+current; the Desktops below are shown again in the same transaction, in case
+the change of current Desktop hid them. The `2.1.31-lcs.12` candidate keeps the
+destination at level 0 and lowers older layers to -1/-2. Earlier versions
+raised it above level 0, allowing an empty destination's wallpaper to obscure
+global windows such as SketchyBar. The new ordering still needs live validation
+for the bar and Finder's shared Desktop windows; see the
+[candidate report](effects-lcs22-validation.md).
 Each frame then commits one transaction with the destination's alpha
 (smoothstep), and the last one hides the other Desktops and restores alpha 1 and
 level 0. The daemon's request returns once the destination is current, and
@@ -161,7 +166,18 @@ stack, first ends the crossfade where it was heading. Every other Desktop
 operation (focus without an effect, create, destroy, move) first ends all
 crossfades. When SkyLight cannot create a transaction at the start, the screen
 stays as it was and the daemon switches without an effect; a frame without one
-is skipped.
+is skipped. Since `2.1.31-lcs.12`, a separate empty transaction is reserved
+before starting. Completion and cancellation use it, so allocation failure
+after the first frame no longer discards the state without restoring Desktops.
+
+The same revision measures the union of window rectangles instead of adding
+overlapping areas. The bounded scan uses at most 128 rectangles; excess windows
+can underestimate coverage, keeping the wallpaper visible. A window at desktop
+level is eligible for wallpaper alpha changes only if its owner executable is
+the system WindowManager. An unreadable or different owner is left untouched.
+The 80% threshold remains a heuristic: transparent content and the uncovered
+margin still need visual checks, and wallpaper writes are separate from Space
+transactions.
 
 No commit is checked, since `SLSTransactionCommit` returns no status. Payload
 `2.1.31-lcs.9` read its value as one and took every first transaction for a

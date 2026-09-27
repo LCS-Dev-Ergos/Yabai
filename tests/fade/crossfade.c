@@ -45,15 +45,17 @@ static void test_crossfade_lifecycle(void)
     int starts = display_starts;
     int stops = display_stops;
 
-    // One transaction shows the destination transparent above the source,
-    // makes it current and keeps the source shown.
+    // Keep the destination at the ordinary Desktop level. Raising an
+    // entire Desktop above that level can cover global windows such as a
+    // menu bar, regardless of their own window level.
     assert(crossfade_start(1, 2));
-    assert(space_log_count == mark + 5 && display_starts == starts + 1);
+    assert(space_log_count == mark + 6 && display_starts == starts + 1);
     crossfade_expect(mark + 0, SPACE_ALPHA, 2, 0.0f);
-    crossfade_expect(mark + 1, SPACE_LEVEL, 2, 1.0f);
+    crossfade_expect(mark + 1, SPACE_LEVEL, 2, 0.0f);
     crossfade_expect(mark + 2, SPACE_SHOW, 2, 0.0f);
     crossfade_expect(mark + 3, SPACE_CURRENT, 2, 0.0f);
-    crossfade_expect(mark + 4, SPACE_SHOW, 1, 0.0f);
+    crossfade_expect(mark + 4, SPACE_LEVEL, 1, -1.0f);
+    crossfade_expect(mark + 5, SPACE_SHOW, 1, 0.0f);
     assert(space_state[1].shown && space_state[2].shown && current_space == 2);
 
     struct space_crossfade *fade = space_crossfade_find(1);
@@ -144,10 +146,11 @@ static void test_crossfade_stacking(void)
     assert(crossfade_start(2, 3));
     assert(fade->count == 3 && current_space == 3);
     crossfade_expect(mark + 0, SPACE_ALPHA, 3, 0.0f);
-    crossfade_expect(mark + 1, SPACE_LEVEL, 3, 2.0f);
+    crossfade_expect(mark + 1, SPACE_LEVEL, 3, 0.0f);
     crossfade_expect(mark + 2, SPACE_SHOW, 3, 0.0f);
     crossfade_expect(mark + 3, SPACE_CURRENT, 3, 0.0f);
     assert(space_state[1].shown && space_state[2].shown && space_state[3].shown);
+    assert(space_state[1].level == -2 && space_state[2].level == -1);
 
     space_crossfade_tick(fade->started + 0.1 + CROSSFADE_EPSILON);
     assert(space_state[2].alpha == middle && space_state[3].alpha > 0.0f);
@@ -164,8 +167,8 @@ static void test_crossfade_stacking(void)
     fade = space_crossfade_find(1);
     assert(fade && fade->count == 2 && fade->spaces[0] == 3 && fade->spaces[1] == 4);
     assert(!space_state[1].shown && !space_state[2].shown && space_state[3].shown);
-    assert(space_state[2].alpha == 1.0f && space_state[3].alpha == 1.0f && space_state[3].level == 0);
-    assert(space_state[4].shown && space_state[4].alpha == 0.0f && space_state[4].level == 1);
+    assert(space_state[2].alpha == 1.0f && space_state[3].alpha == 1.0f && space_state[3].level == -1);
+    assert(space_state[4].shown && space_state[4].alpha == 0.0f && space_state[4].level == 0);
 
     // So does a Desktop already in the stack that is not the one below.
     assert(crossfade_start(4, 5));
@@ -196,7 +199,15 @@ static void test_crossfade_failures(void)
     fail_transaction = false;
     crossfade_expect_settled(1);
 
-    // Without a transaction, frames are skipped; the end still forgets it.
+    // The settlement reservation succeeded, but the first frame did not.
+    // Release that reservation without changing or retaining any Desktop.
+    fail_transaction_at = transactions_created + 2;
+    assert(!crossfade_start(1, 2));
+    fail_transaction_at = 0;
+    crossfade_expect_settled(1);
+
+    // Frame allocation can fail for the rest of an effect. Its endpoint
+    // must still restore every Desktop before discarding the state.
     crossfade_reset();
     assert(crossfade_start(1, 2));
     struct space_crossfade *fade = space_crossfade_find(1);
@@ -206,7 +217,15 @@ static void test_crossfade_failures(void)
     assert(space_crossfade_find(1));
     space_crossfade_tick(started + fade->duration);
     fail_transaction = false;
-    assert(!space_crossfade_find(1));
+    crossfade_expect_settled(2);
+
+    // Cancellation by a different Desktop command has the same guarantee.
+    crossfade_reset();
+    assert(crossfade_start(1, 2));
+    fail_transaction = true;
+    space_crossfade_finish_all();
+    fail_transaction = false;
+    crossfade_expect_settled(2);
 
     // No worker: no crossfade, and the caller switches without one.
     crossfade_reset();
@@ -367,6 +386,33 @@ static void test_crossfade_wallpaper(void)
 
     managed_space_count = 0;
     model_window_count = 0;
+
+    // Two identical half-screen windows cover half the display, not all of
+    // it. A tiled pair, on the other hand, really covers the whole display.
+    crossfade_add_desktop(1, CGRectMake(0, 0, 500, 500));
+    model_windows[model_window_count++] = (typeof(model_windows[0])) {
+        1, 22, 0, CGRectMake(0, 0, 500, 500)
+    };
+    double covered = 0.0;
+    assert(space_crossfade_scan(1, CGRectMake(0, 0, 1000, 500), &covered) == 41);
+    assert(covered == 250000.0 && space_crossfade_wallpaper(1, 1) == 0);
+
+    model_windows[2].frame = CGRectMake(500, 0, 500, 500);
+    assert(space_crossfade_wallpaper(1, 1) == 41);
+
+    // A different process at a wallpaper-like level must remain untouched,
+    // including during recovery at payload load.
+    wallpaper_owner_valid = false;
+    assert(space_crossfade_wallpaper(1, 1) == 0);
+    managed_space_count = 1;
+    managed_spaces[0].sid = 1;
+    managed_spaces[0].type = 0;
+    alphas[41] = 0.5f;
+    assert(space_crossfade_restore() == 0 && alphas[41] == 0.5f);
+    wallpaper_owner_valid = true;
+    alphas[41] = 1.0f;
+    model_window_count = 0;
+    managed_space_count = 0;
 }
 
 static void test_crossfade(void)

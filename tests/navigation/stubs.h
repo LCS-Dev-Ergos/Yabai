@@ -172,6 +172,13 @@ static void space_navigation_schedule_activated(uint32_t window_id)
     activated_id = window_id;
 }
 
+static float switched_duration;
+
+static void space_navigation_schedule_switched(float duration)
+{
+    switched_duration = duration;
+}
+
 static float space_navigation_frame_interval(uint32_t display)
 {
     return 1.0f / 60.0f;

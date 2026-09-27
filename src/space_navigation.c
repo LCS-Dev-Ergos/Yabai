@@ -135,6 +135,7 @@ struct space_navigation_step
 };
 
 static void space_navigation_schedule_activated(uint32_t window_id);
+static void space_navigation_schedule_switched(float duration);
 
 static bool space_navigation_run_step(uint64_t current, struct space_navigation_step *step)
 {
@@ -195,13 +196,14 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
     struct space_navigation_effect effect = { .count = 0 };
     bool effects_ok = step->crossfade || space_navigation_prepare_effect(&effect, display, ids, count, focus_id, alpha, fade);
     bool success;
+    bool crossfade_started = false;
 
     if (crossfade) {
         // A crossfade that Dock refuses leaves the Desktop as it was: switch
         // without an effect.
         float interval = space_navigation_frame_interval(display);
-        success = scripting_addition_focus_space_crossfade(display, sid, duration, interval)
-               || scripting_addition_focus_space(sid);
+        crossfade_started = scripting_addition_focus_space_crossfade(display, sid, duration, interval);
+        success = crossfade_started || scripting_addition_focus_space(sid);
     } else if (step->crossfade) {
         success = scripting_addition_focus_space(sid);
     } else {
@@ -219,6 +221,7 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
 
     if (success) {
         space_navigation_last_time = now;
+        space_navigation_schedule_switched(crossfade_started ? duration : 0.0f);
     }
 
     if (success && step->activate) {
