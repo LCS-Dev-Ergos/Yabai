@@ -76,7 +76,7 @@ static bool window_fade_batch(uint32_t display, uint8_t phase, float alpha, floa
     }
 
     if (animate && count && worker) window_fade_display_start(display);
-    pthread_cond_signal(&window_fade_cond);
+    window_fade_wake_worker();
     pthread_mutex_unlock(&window_fade_lock);
     return success;
 }

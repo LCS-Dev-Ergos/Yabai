@@ -103,6 +103,7 @@ int main(void)
     test_navigation_ownership();
     test_navigation_cadence();
     test_concurrent_requests();
+    test_display_frame_without_lock();
     test_navigation_batch();
 
     puts("fade: elapsed time, easing, cancellation, errors, frame batching and concurrency passed");

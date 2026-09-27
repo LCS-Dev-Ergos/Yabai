@@ -1,4 +1,6 @@
+#include <dispatch/dispatch.h>
 #include <math.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <time.h>
 
@@ -21,9 +23,16 @@ struct window_fade_context
 };
 
 static pthread_mutex_t window_fade_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t window_fade_cond = PTHREAD_COND_INITIALIZER;
 static struct window_fade_context *window_fades;
 static bool window_fade_worker_started;
+
+// Requests and display callbacks wake the worker through a counting
+// semaphore, so a wakeup sent while the worker is busy is never lost.
+static dispatch_semaphore_t window_fade_wake;
+
+// Displays whose callback delivered a frame since the worker last looked,
+// one bit per display number modulo 64. A shared bit costs an extra write.
+static _Atomic uint64_t window_fade_frames;
 
 // Cleared for good once SkyLight refuses a transaction.
 static bool window_fade_transactions = true;
@@ -35,6 +44,38 @@ static double window_fade_now(void)
     struct timespec time;
     clock_gettime(CLOCK_MONOTONIC, &time);
     return time.tv_sec + time.tv_nsec / 1e9;
+}
+
+static void window_fade_wake_worker(void)
+{
+    if (window_fade_wake) dispatch_semaphore_signal(window_fade_wake);
+}
+
+static uint64_t window_fade_display_bit(uint32_t display)
+{
+    return 1ULL << (display % 64);
+}
+
+// Display callbacks run on Dock's main thread. They only record the frame and
+// wake the worker: waiting for the lock would drop frames or block Dock.
+static void window_fade_display_frame(uint32_t display)
+{
+    atomic_fetch_or(&window_fade_frames, window_fade_display_bit(display));
+    window_fade_wake_worker();
+}
+
+// Called by the worker with the lock held.
+static void window_fade_take_frames(void)
+{
+    uint64_t frames = atomic_exchange(&window_fade_frames, 0);
+    if (!frames) return;
+
+    for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
+        if (!fade->display || !(frames & window_fade_display_bit(fade->display))) continue;
+
+        fade->display_paced = true;
+        fade->frame_ready = true;
+    }
 }
 
 static float window_fade_alpha(struct window_fade_context *fade, double now)
@@ -181,6 +222,6 @@ static void window_fade_set(uint32_t wid, float alpha, float duration)
     fade->interval = 1.0 / 120.0;
     fade->next_frame = fade->started;
 
-    pthread_cond_signal(&window_fade_cond);
+    window_fade_wake_worker();
     pthread_mutex_unlock(&window_fade_lock);
 }

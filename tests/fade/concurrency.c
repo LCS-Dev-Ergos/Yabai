@@ -65,3 +65,34 @@ static void test_concurrent_requests(void)
     assert(alpha_calls == calls_at_rest);
     pthread_mutex_unlock(&window_fade_lock);
 }
+
+static void test_display_frame_without_lock(void)
+{
+    // A frame recorded while the lock is held still wakes the worker, long
+    // before the watchdog of a display-paced fade would.
+    struct sa_window_opacity windows[] = { {40, 1.0f} };
+    alphas[40] = 1.0f;
+    assert(window_fade_batch(7, SA_OPACITY_START, .5f, 3.0f, 1.0f / 60, windows, 1));
+
+    pthread_mutex_lock(&window_fade_lock);
+    assert(window_fades && window_fades->wid == 40);
+    window_fades->display_paced = true;
+    window_fades->next_frame = window_fade_now() + 2.0;
+    int calls = alpha_calls;
+    window_fade_display_frame(7);
+    double sent = window_fade_now();
+    pthread_mutex_unlock(&window_fade_lock);
+
+    for (;;) {
+        pthread_mutex_lock(&window_fade_lock);
+        bool written = alpha_calls > calls;
+        pthread_mutex_unlock(&window_fade_lock);
+
+        if (written) break;
+        assert(window_fade_now() - sent < 1.0);
+        usleep(1000);
+    }
+
+    window_fade_set(40, 1.0f, 0.0f);
+    wait_idle();
+}

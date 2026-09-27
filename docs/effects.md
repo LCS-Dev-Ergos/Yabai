@@ -49,9 +49,11 @@ final preference still needs comparison on the active release. There is no
 claim that this is Apple's own curve or its chosen Desktop duration.
 
 On macOS 14+, one `NSScreen` display link per active target display wakes the
-shared worker. Callbacks use a nonblocking lock attempt, set a latest-frame flag
-and signal; they never call SkyLight or wait for application focus. Multiple
-callbacks cannot queue stale frames. Interpolation uses `CLOCK_MONOTONIC` at
+shared worker. Callbacks take no lock: they set their display's bit in an atomic
+frame mask and signal a counting semaphore, so a frame that arrives while the
+worker or a request holds the lock is kept rather than left to the watchdog.
+Only disposing of an idle link tries the lock. Callbacks never call SkyLight or
+wait for application focus, and multiple callbacks cannot queue stale frames. Interpolation uses `CLOCK_MONOTONIC` at
 worker execution, without mixing Core Animation timestamps into that clock.
 
 Before callbacks arrive, or on older macOS, the fallback uses the display mode's
@@ -66,7 +68,8 @@ Since payload `2.1.31-lcs.7`, the writes of a frame that changes two or more
 windows go in one SkyLight transaction: one WindowServer message, and every
 window changes in the same frame. A transaction reports no per-window error, so
 a window that closed keeps its fade until the fade ends. If SkyLight refuses a
-transaction, the payload returns to individual writes for good.
+transaction, the payload returns to individual writes for good. The worker runs
+at user-interactive QoS instead of inheriting Dock's.
 
 Reduce Motion suppresses navigation fades, as do rapid repeats, visible
 destinations and fullscreen Spaces. Navigation itself remains immediate.
@@ -90,6 +93,10 @@ The opt-in [display probe](../tests/fade/display.m) uses real AppKit callbacks
 with simulated alpha writes and creates no windows. On this host's two 60 Hz
 Dell U3223QE displays, it recorded 9–10 writes per window for a 150 ms recovery,
 then zero retained links. Stalling its main run loop also recovered; TSan passed.
+Payload `2.1.31-lcs.7` adds tests for one transaction per frame, the fallback
+after a refused commit and a frame recorded while the lock is held; the probe
+still records 10 writes per window. Whether Dock may set other applications'
+window alpha through a transaction is checked live, not by these tests.
 An isolated lcs.11 timer baseline with two simulated windows recorded 33–34
 total writes in each of five trials, versus 18–20 for the new probe. These are
 call counts, not rendered frames, CPU/GPU measurements or live Dock acceptance.

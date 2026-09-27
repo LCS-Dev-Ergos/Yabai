@@ -21,18 +21,17 @@ static NSMutableDictionary *window_fade_displays;
 
 - (void)frame:(CADisplayLink *)link
 {
+    window_fade_display_frame(self.display);
+
+    // Only disposing of an idle link needs the lock. A busy worker never
+    // makes this callback wait; the next frame checks again.
     if (pthread_mutex_trylock(&window_fade_lock) != 0) return;
 
     bool active = false;
-    for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
-        if (fade->display != self.display) continue;
-
-        active = true;
-        fade->display_paced = true;
-        fade->frame_ready = true;
+    for (struct window_fade_context *fade = window_fades; fade && !active; fade = fade->next) {
+        active = fade->display == self.display;
     }
 
-    if (active) pthread_cond_signal(&window_fade_cond);
     pthread_mutex_unlock(&window_fade_lock);
 
     if (!active) {
