@@ -174,6 +174,49 @@ another visible window of the destination application, largely in repeated
 WindowServer visibility lookups. That is a further candidate for reducing IPC;
 this queue correction does not alter the focus or visibility checks.
 
+## Activated lcs.13 as an interactive agent
+
+The lcs.13 switch also gave the launchd agent `ProcessType = Interactive`, as
+yabai's own service file does, and set `window_opacity_duration` to zero in
+Dotfiles. Without a ProcessType, launchd throttles an agent's CPU and I/O:
+before the switch every yabai thread ran at priority 20, against 37 for skhd and
+SketchyBar; afterwards the agent reports spawn type `interactive (4)`.
+
+On 2026-09-27, four conditions on Desktops 6/7 alternated the focus opacity
+duration 0/0.1/0.1/0 s. Each ran 12 isolated switches 0.8 s apart through the
+installed wrapper, a 16 × 150 ms burst and a matched idle interval:
+
+| Duration | Isolated median / max | Burst drain | WindowServer CPU, burst / idle |
+| --- | ---: | ---: | ---: |
+| 0 s | 83 / 145 ms | 100 ms | 2.34 / 0.38 s |
+| 0.1 s | 73 / 247 ms | 135 ms | 2.23 / 0.38 s |
+| 0.1 s | 71 / 244 ms | 107 ms | 2.45 / 0.45 s |
+| 0 s | 108 / 344 ms | 106 ms | 2.19 / 0.33 s |
+
+Burst and idle intervals lasted about 2.8 and 3.3 s. The duration made no
+measurable difference; zero only avoids work. The last burst request finished
+100–135 ms after it was sent, so the burst no longer built a queue. The burst
+medians of this run are not reported: the probe reaped clients late. A later
+run with corrected reaping, while WindowServer used 33% of a core at idle,
+measured 239 ms isolated median, 428 ms burst median, 143 ms drain, and 0.86 s
+and 1.93 s to drain 40 relative requests at 30 ms without and with interleaved
+queries. Load varied between runs; none of this isolates one change.
+
+A 1 ms sample of eight isolated switches placed 434 samples in the navigation
+request, about 54 ms each. The cross-display raise check took 196: 104 asking
+the Space of each window of the destination application, 81 resolving their
+displays. `SLSCopyManagedDisplayForSpace`, behind `space_display_id`, fetches
+WindowServer's state of every Desktop on each call; the destination's display
+lookup took another 53 samples and selector parsing 8. Focusing the window took
+135, the scripting-addition requests 39. In Dock, alpha writes took 14 samples
+in total, so the fade worker is not a hot spot with one window per Desktop.
+
+The follow-up answers these lookups from one `SLSCopyManagedDisplaySpaces` reply
+per request and lists the application's windows on the Desktops visible on other
+displays with one query. A navigation with nothing to dim also skips the Dock
+round trip that only cancels effects, once none can still run. Raw evidence is
+in ignored `build/lcs13-measurements-*.json` and `build/lcs13-isolated-*.sample.txt`.
+
 ## Remaining work
 
 Profile again before changing the focus workaround's 40 ms delay: it exists
