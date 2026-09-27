@@ -255,8 +255,10 @@ compared.
 ## Activated lcs.16 and lcs.17
 
 On 2026-09-27 lcs.16 ran with payload `2.1.31-lcs.7` / `0x5D` and the main
-display at "looks like 2560×1440". Transactions set other applications' window
-alpha: two kitty windows showed intermediate values at the same timestamps.
+display at "looks like 2560×1440". Two kitty windows showed intermediate alpha
+values at the same timestamps. That does not show that transactions set other
+applications' window alpha: after the first frame, these payloads wrote each
+window on its own (see [effects](effects.md)).
 A fade trace wrote its first frame about 2 ms after the start, then stood still
 for 54 ms: Dock's main thread delivered the display callbacks late after the
 switch, and the display-paced watchdog was 50 ms. lcs.17 writes a frame from
@@ -302,6 +304,29 @@ bright orange cloud turns VS Code's `#1a1b26` background brown-orange before
 it darkens again; at 0.9 they passed 10%. Raw evidence is in ignored
 `build/lcs17-*.log`, `build/displays-lcs17-3008-apps.json` and the probes next
 to them.
+
+## Activated lcs.19: the crossfade that never ran
+
+On 2026-09-27 lcs.19 ran with payload `2.1.31-lcs.9` / `0x5D`, pacing on. A
+live check of the crossfade (`crossfade-check.py`: one switch, a return
+midway, three stacked Desktops, four paced `next`) found none: every request
+left its destination at alpha 0 and level 1, and the Desktop switched without
+an effect. Dock logged no crossfade signpost. In a client process,
+`SLSTransactionCommit` returned the transaction's address plus `0x48` in 3 of 3
+empty commits, and Dock never uses the value: the payload had read it as a
+refusal after committing, and the daemon's fallback switched instantly. The
+four Desktops involved (6 to 9) were black when shown. Neither a native
+Control-number switch nor Mission Control restored them, nor could a client
+connection set their alpha; a Dock restart was not tried. lcs.20 checks no
+commit and restores such Desktops when the payload loads.
+
+The paced `next` steps began 255, 372 and 262 ms apart; each step itself took
+34 to 100 ms. The first waited, as designed, until 150 ms after the activation
+of ChatGPT that ended the step before it. The second and third began 272 and
+162 ms after they were due at the 100 ms rhythm: something else held the event
+loop. lcs.20 adds a signpost for every event handled in more than 10 ms, and
+each step reports how late it ran. Raw evidence is in ignored
+`build/lcs19-*.log`.
 
 ## Remaining work
 
