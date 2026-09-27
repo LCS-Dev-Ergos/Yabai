@@ -20,7 +20,6 @@ static struct
     int generation;
     ProcessSerialNumber psn;
     uint32_t window_id;
-    uint32_t previous_id;
 } g_space_navigation_focus;
 
 static void window_manager_make_key_window(ProcessSerialNumber *window_psn, uint32_t window_id);
@@ -56,19 +55,19 @@ static void space_navigation_focus_window(ProcessSerialNumber *psn, uint32_t win
 
     g_space_navigation_focus.psn = *psn;
     g_space_navigation_focus.window_id = window_id;
-    g_space_navigation_focus.previous_id = g_window_manager.focused_window_id;
 
     space_navigation_focus_schedule(g_space_navigation_focus.generation, SPACE_NAVIGATION_FOCUS_DELAY_NS);
 }
 
-// Event loop, once the delay has passed. A focus change to any other window
-// in the meantime, such as a click, wins over the navigation.
+// Event loop, once the delay has passed. A click on another application in
+// the meantime wins over the navigation. Another window of this application
+// becoming focused does not: it is usually an earlier navigation's activation
+// that the busy application handled late, and without this activation that
+// window pulls its Desktop back into view.
 static void space_navigation_focus_resume(int generation)
 {
     if (generation != g_space_navigation_focus.generation) return;
-
-    uint32_t focused_id = g_window_manager.focused_window_id;
-    if (focused_id != g_space_navigation_focus.previous_id && focused_id != g_space_navigation_focus.window_id) return;
+    if (!psn_equals(&g_window_manager.focused_window_psn, &g_space_navigation_focus.psn)) return;
 
     space_navigation_focus_post(&g_space_navigation_focus.psn, g_space_navigation_focus.window_id, 0x01);
 

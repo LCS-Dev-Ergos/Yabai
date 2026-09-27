@@ -73,8 +73,11 @@ because some applications miss a focus change whose events arrive together
 ([#2694](https://github.com/asmvik/yabai/pull/2694)). Until then it left 10 ms.
 The destination window shows inactive until the activation lands, which reads
 as a title-bar flash, so navigation uses 10 ms. It does not sleep in the event
-loop: the activation runs as a later event, dropped if another navigation,
-command or focus change comes first.
+loop: the activation runs as a later event, dropped if another navigation or
+command comes first, or if focus moves to another application. Focus moving to
+another window of the same application does not drop it: that is usually an
+earlier navigation's activation handled late by a busy application, and
+without the new activation its Desktop would come back into view.
 
 Navigation records the window it focused, so the activation handler that
 follows uses it instead of asking the application, which is busy with the

@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Fork navigation no longer drops the activation of the next window of one application when that application reports an earlier navigation's window focused late, which after rapid switches pulled the previous Desktop back into view
 - Payload fades write every window's alpha for a frame in one SkyLight transaction, keep display frames that arrive while the fade lock is busy and run their worker at user-interactive QoS; payload version is now *2.1.31-lcs.7*
 - Fork navigation decides the cross-display raise before switching Desktop and answers tiled windows from their view, querying WindowServer only for floating or unmanaged windows
 - Fork navigation between two windows of one application activates the new window 10 ms after deactivating the old one instead of 40 ms, shortening the inactive title bar on arrival

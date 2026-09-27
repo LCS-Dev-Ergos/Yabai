@@ -128,12 +128,21 @@ int main(void)
     space_navigation_focus_resume(scheduled_generation);
     assert(call_count == 5 && calls[4].window_id == 52);
 
-    // A click on a third window wins; the target already focused does not.
+    // A click on another application wins.
+    reset();
+    space_navigation_focus_window(&same, 51);
+    g_window_manager.focused_window_psn = other;
+    g_window_manager.focused_window_id = 70;
+    space_navigation_focus_resume(scheduled_generation);
+    assert(call_count == 1);
+
+    // Another window of the application, such as an earlier activation that
+    // the application handled late, does not; nor does the target itself.
     reset();
     space_navigation_focus_window(&same, 51);
     g_window_manager.focused_window_id = 70;
     space_navigation_focus_resume(scheduled_generation);
-    assert(call_count == 1);
+    assert(call_count == 4 && calls[3].window_id == 51);
 
     reset();
     space_navigation_focus_window(&same, 51);
