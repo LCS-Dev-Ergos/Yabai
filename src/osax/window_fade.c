@@ -16,12 +16,17 @@ struct window_fade_context
     double next_frame;
     bool display_paced;
     bool frame_ready;
+    bool write;
+    bool failed;
 };
 
 static pthread_mutex_t window_fade_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t window_fade_cond = PTHREAD_COND_INITIALIZER;
 static struct window_fade_context *window_fades;
 static bool window_fade_worker_started;
+
+// Cleared for good once SkyLight refuses a transaction.
+static bool window_fade_transactions = true;
 
 static void window_fade_display_stop(uint32_t display);
 
@@ -58,31 +63,63 @@ static void window_fade_remove(struct window_fade_context **slot)
     free(fade);
 }
 
+// Writes the alpha of every window marked in this frame. One transaction is
+// one WindowServer message, and all windows change in the same frame. It
+// reports no per-window error: a window that closed keeps its fade until the
+// fade ends. Individual writes remain for single windows and as fallback.
+static void window_fade_apply(int writes)
+{
+    if (writes > 1 && window_fade_transactions) {
+        CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
+
+        if (transaction) {
+            for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
+                if (fade->write) SLSTransactionSetWindowAlpha(transaction, fade->wid, fade->current);
+            }
+
+            bool committed = SLSTransactionCommit(transaction, 0) == 0;
+            CFRelease(transaction);
+            if (committed) return;
+        }
+
+        window_fade_transactions = false;
+    }
+
+    for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
+        if (fade->write) fade->failed = SLSSetWindowAlpha(SLSMainConnectionID(), fade->wid, fade->current) != 0;
+    }
+}
+
 // The worker and all requests hold window_fade_lock while applying alpha.
 // An immediate request therefore cannot be overwritten by an older frame.
 static void window_fade_tick(double now)
 {
-    struct window_fade_context **slot = &window_fades;
+    int writes = 0;
 
-    while (*slot) {
-        struct window_fade_context *fade = *slot;
+    for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
+        fade->write = false;
+
         double end = fade->started + fade->duration;
-        if (!fade->frame_ready && now < fade->next_frame && now < end) {
-            slot = &fade->next;
-            continue;
-        }
+        if (!fade->frame_ready && now < fade->next_frame && now < end) continue;
 
         fade->frame_ready = false;
         fade->next_frame = now + (fade->display_paced ? 0.05 : fade->interval);
+
         float alpha = window_fade_alpha(fade, now);
-        bool failed = false;
-
         if (alpha != fade->current) {
-            failed = SLSSetWindowAlpha(SLSMainConnectionID(), fade->wid, alpha) != 0;
+            fade->write = true;
             fade->current = alpha;
+            ++writes;
         }
+    }
 
-        if (failed || now >= fade->started + fade->duration) {
+    if (writes) window_fade_apply(writes);
+
+    struct window_fade_context **slot = &window_fades;
+    while (*slot) {
+        struct window_fade_context *fade = *slot;
+
+        if (fade->failed || now >= fade->started + fade->duration) {
             window_fade_remove(slot);
         } else {
             slot = &fade->next;
@@ -139,6 +176,8 @@ static void window_fade_set(uint32_t wid, float alpha, float duration)
     fade->display = 0;
     fade->display_paced = false;
     fade->frame_ready = false;
+    fade->write = false;
+    fade->failed = false;
     fade->interval = 1.0 / 120.0;
     fade->next_frame = fade->started;
 

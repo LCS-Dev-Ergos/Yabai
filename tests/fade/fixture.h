@@ -1,3 +1,4 @@
+#include <CoreFoundation/CoreFoundation.h>
 #include <assert.h>
 #include <errno.h>
 #include <math.h>
@@ -24,8 +25,14 @@ static float alphas[64];
 static int alpha_calls;
 static int alpha_reads;
 static int thread_calls;
+static int single_writes;
+static int commits;
 static useconds_t alpha_delay;
-static bool fail_get, fail_set, fail_thread, fail_alloc;
+static bool fail_get, fail_set, fail_commit, fail_thread, fail_alloc;
+
+// Writes queued in the open transaction, applied by its commit.
+static struct sa_window_opacity queued[64];
+static int queued_count;
 
 static int SLSMainConnectionID(void)
 {
@@ -46,9 +53,40 @@ static int SLSSetWindowAlpha(int cid, uint32_t wid, float alpha)
     assert(isfinite(alpha) && alpha >= 0.0f && alpha <= 1.0f);
 
     ++alpha_calls;
+    ++single_writes;
     if (alpha_delay) usleep(alpha_delay);
     if (!fail_set) alphas[wid] = alpha;
     return fail_set;
+}
+
+static CFTypeRef SLSTransactionCreate(int cid)
+{
+    assert(queued_count == 0);
+    return CFRetain(kCFNull);
+}
+
+static int SLSTransactionSetWindowAlpha(CFTypeRef transaction, uint32_t wid, float alpha)
+{
+    assert(transaction && wid < 64 && queued_count < 64);
+    assert(isfinite(alpha) && alpha >= 0.0f && alpha <= 1.0f);
+
+    queued[queued_count++] = (struct sa_window_opacity) { wid, alpha };
+    return 0;
+}
+
+static int SLSTransactionCommit(CFTypeRef transaction, int synchronous)
+{
+    assert(transaction);
+    ++commits;
+    if (alpha_delay) usleep(alpha_delay);
+
+    for (int i = 0; !fail_commit && i < queued_count; ++i) {
+        ++alpha_calls;
+        alphas[queued[i].wid] = queued[i].alpha;
+    }
+
+    queued_count = 0;
+    return fail_commit;
 }
 
 static int create_worker(pthread_t *thread, const pthread_attr_t *attributes,

@@ -62,6 +62,12 @@ invalidated on the main run loop; the worker sleeps when its list is empty.
 Late frames skip ahead. Scheduler and SkyLight delays still affect completion;
 display callbacks are opportunities, not presentation fences or real-time guarantees.
 
+Since payload `2.1.31-lcs.7`, the writes of a frame that changes two or more
+windows go in one SkyLight transaction: one WindowServer message, and every
+window changes in the same frame. A transaction reports no per-window error, so
+a window that closed keeps its fade until the fade ends. If SkyLight refuses a
+transaction, the payload returns to individual writes for good.
+
 Reduce Motion suppresses navigation fades, as do rapid repeats, visible
 destinations and fullscreen Spaces. Navigation itself remains immediate.
 Resolution/scaling settings are neither changed nor used to choose the curve.
