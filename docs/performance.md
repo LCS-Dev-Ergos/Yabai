@@ -252,6 +252,57 @@ large backing surfaces did. Raw evidence is in ignored `build/displays-*.json`
 and `build/displays-*-yabai.sample.txt`. Lower-resolution modes remain to be
 compared.
 
+## Activated lcs.16 and lcs.17
+
+On 2026-09-27 lcs.16 ran with payload `2.1.31-lcs.7` / `0x5D` and the main
+display at "looks like 2560×1440". Transactions set other applications' window
+alpha: two kitty windows showed intermediate values at the same timestamps.
+A fade trace wrote its first frame about 2 ms after the start, then stood still
+for 54 ms: Dock's main thread delivered the display callbacks late after the
+switch, and the display-paced watchdog was 50 ms. lcs.17 writes a frame from
+the worker half a frame late instead.
+
+A focus check per Desktop pair runs 20 slow alternations and 5 bursts of 8
+requests 30 ms apart, and reads the frontmost application's Accessibility focus.
+On lcs.16, 3/4 (two VS Code windows) ended wrong in 1 of 5 bursts (4 of 5 on
+lcs.15), with a 206 ms median time to focus; 7/8 (two Edge windows) had no
+misses at 220 ms. Four `next`/`prev` requests 120 ms apart across Desktops 5–9
+ended short in 2 of 6 sequences through `space.sh` and 2 of 10 straight to the
+socket, every request succeeding. With "switch to a Space with open windows"
+disabled, 6 of 10 did. The debug log showed Edge reactivating itself on its
+windows after later navigation and pulling the main display back.
+
+lcs.17 ran with payload `2.1.31-lcs.8` / `0x5D` and the main display back at
+3008×1692 (20.4 Mpx per display):
+
+| Check | Result |
+| --- | --- |
+| Edge sequences, `space.sh` / socket | 8/10 and 9/10 correct |
+| Focus 3/4 | no misses, 231.5 ms median |
+| Focus 7/8 | every step to Desktop 7 left focus on Edge's Desktop 8 window |
+| Fade 0.7/250 ms on 6/7 | first two switches: 62–67 and 39 ms gaps; next four: 16 values about 16.7 ms apart |
+| Workload 6/7 | isolated 53 ms median, burst drain 74 ms, lap 20/20 at 59.5 ms, 40 repeats 284 ms |
+
+All three short sequences went forward from 5 toward the empty Desktop 9 and
+ended on Edge's Desktop 7 or 8; every backward sequence, which ends by
+activating VS Code, was correct. An intermediate step's late Edge activation is
+only undone when the final Desktop activates a window of its own.
+
+Without the synthesized click, activating Edge while it is already active does
+not move its key window. A replay from Desktop 8 to 7 left focus on the Desktop
+8 window in 1 of 3 trials with activation and AXRaise, and in none of 3 with the
+order of `window --focus`. The following release keeps that order for an
+application that is already active.
+
+WindowServer used 44% of a core at rest and 76% during the burst; ChatGPT,
+VS Code and Edge used 78–131% of a core during bursts and repeats. Alpha reads
+are WindowServer state, not presented frames. The visible flash of the 0.7
+fade is photometric: the destination windows pass 30% of the wallpaper, whose
+bright orange cloud turns VS Code's `#1a1b26` background brown-orange before
+it darkens again; at 0.9 they passed 10%. Raw evidence is in ignored
+`build/lcs17-*.log`, `build/displays-lcs17-3008-apps.json` and the probes next
+to them.
+
 ## Remaining work
 
 The 40 ms same-application focus delay is kept for application compatibility
