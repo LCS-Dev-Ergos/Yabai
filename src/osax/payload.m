@@ -1099,6 +1099,10 @@ static void *handle_connection(void *unused)
         int sockfd = accept(daemon_sockfd, NULL, 0);
         if (sockfd == -1) continue;
 
+        // A reply to a daemon that stopped waiting must not raise SIGPIPE in Dock.
+        int on = 1;
+        setsockopt(sockfd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+
         //
         // NOTE: Handlers create autoreleased objects (array literals, SkyLight
         // results) on this thread, so each request drains its own pool.

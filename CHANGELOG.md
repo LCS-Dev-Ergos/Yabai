@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Scripting-addition requests stop waiting for Dock after one second, and the payload never raises SIGPIPE when replying to a daemon that stopped waiting
 - Fork navigation keeps the synthesized click of `window --focus` when it raises a window of the application that is already active: activation alone left Edge's keyboard focus on its window of the Desktop the user had left
 - Payload fades no longer stand still for 50 ms when Dock's main thread delays display callbacks after a Space switch; the worker writes a frame itself half a frame late, and payload version is now *2.1.31-lcs.8*
 - Fork navigation raises an application with a window on another display without the synthesized click of `window --focus`, which a busy Edge handled late and which pulled a Desktop back after rapid navigation
