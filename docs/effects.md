@@ -23,7 +23,10 @@ last presented frame.
 
 Every navigation cancels obsolete effects on its destination display, including
 rapid repeats and empty destinations. Cancellation restores the latest target;
-effects on other displays continue. Preparation/start failure attempts immediate
+effects on other displays continue. Only navigation starts display effects, so
+the daemon records when each may still run: its duration plus 100 ms for the
+worker's watchdog and scheduling. A preparation with nothing to dim then skips
+its synchronous Dock round trip once the display's last effect has ended. Preparation/start failure attempts immediate
 restoration and is reported. Transport loss or a failed WindowServer write can
 still prevent restoration; this protocol is not a compositor transaction.
 

@@ -27,11 +27,24 @@ int main(void)
     }
 
     assert(focus_calls == 31 && opacity_calls == 0);
-    assert(batch_calls == 32); // Repeats cancel obsolete effects, including empty destinations.
+    assert(batch_calls == 8); // Repeats cancel the running effect, then skip the Dock.
 
     timestamp += 200000000;
     assert(space_navigation_run(active_space, 1, false, .95f, .1f));
     assert(opacity_calls == 4);
+
+    // Only a display whose effect may still run is asked to cancel it.
+    batch_calls = 0;
+    timestamp += 30000000;
+    assert(space_navigation_run(active_space, 2, false, .95f, 0));
+    assert(batch_calls == 1);
+
+    assert(space_navigation_run(active_space, 3, false, .95f, 0));
+    assert(batch_calls == 1);
+
+    timestamp += 300000000;
+    assert(space_navigation_run(active_space, 2, false, .95f, 0));
+    assert(batch_calls == 1);
 
     reset();
 
@@ -119,7 +132,7 @@ int main(void)
 
     reduce_motion = true;
     assert(space_navigation_run(active_space, 2, false, .95f, .1f));
-    assert(opacity_calls == 0 && focus_calls == 1 && batch_calls == 1);
+    assert(opacity_calls == 0 && focus_calls == 1 && batch_calls == 0);
 
     reset();
 

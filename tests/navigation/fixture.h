@@ -80,6 +80,7 @@ static void reset(void)
     seconds_since_click = 1000.0;
     space_navigation_last_time = 0;
     space_navigation_forget();
+    memset(space_navigation_effect_until, 0, sizeof(space_navigation_effect_until));
     visible = fullscreen = mission_control = animating = false;
     focus_success = true;
 
