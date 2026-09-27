@@ -60,47 +60,28 @@ static void test_cancellation_and_errors(void)
     fail_thread = false;
 }
 
-static void test_frame_batching(void)
+static void test_frame_writes(void)
 {
-    // Every window due in a frame is written in one transaction.
+    // Every window due in a frame gets a write of its own; no transaction,
+    // whose commit could not tell whether it applied.
     add_fade(1);
     add_fade(2);
     int singles = single_writes;
-    int batches = commits;
+    int created = transactions_created;
     window_fade_tick(10.05);
-    assert(commits == batches + 1 && single_writes == singles);
+    assert(single_writes == singles + 2 && transactions_created == created);
     assert(fabsf(alphas[1] - 0.9f) < 0.00001f && alphas[2] == alphas[1]);
 
     window_fade_tick(11.0);
-    assert(commits == batches + 2 && alphas[1] == 1.0f && alphas[2] == 1.0f && !window_fades);
-
-    // A single window needs no transaction.
-    add_fade(3);
-    window_fade_tick(11.0);
-    assert(commits == batches + 2 && single_writes == singles + 1 && alphas[3] == 1.0f);
-
-    // A refused transaction falls back to individual writes, for good.
-    add_fade(1);
-    add_fade(2);
-    fail_commit = true;
-    window_fade_tick(11.0);
-    fail_commit = false;
-    assert(commits == batches + 3 && single_writes == singles + 3 && !window_fade_transactions);
-    assert(alphas[1] == 1.0f && alphas[2] == 1.0f && !window_fades);
-
-    add_fade(1);
-    add_fade(2);
-    window_fade_tick(11.0);
-    assert(commits == batches + 3 && single_writes == singles + 5 && !window_fades);
-
-    window_fade_transactions = true;
+    assert(single_writes == singles + 4 && alphas[1] == 1.0f && alphas[2] == 1.0f && !window_fades);
+    assert(transactions_created == created);
 }
 
 int main(void)
 {
     test_elapsed_time();
     test_cancellation_and_errors();
-    test_frame_batching();
+    test_frame_writes();
     test_navigation_ownership();
     test_navigation_cadence();
     test_crossfade();
@@ -108,6 +89,6 @@ int main(void)
     test_display_frame_without_lock();
     test_navigation_batch();
 
-    puts("fade: elapsed time, easing, cancellation, errors, frame batching, crossfades and concurrency passed");
+    puts("fade: elapsed time, easing, cancellation, errors, frame writes, crossfades and concurrency passed");
     return 0;
 }

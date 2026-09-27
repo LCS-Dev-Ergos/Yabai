@@ -67,12 +67,14 @@ invalidated on the main run loop; the worker sleeps when its list is empty.
 Late frames skip ahead. Scheduler and SkyLight delays still affect completion;
 display callbacks are opportunities, not presentation fences or real-time guarantees.
 
-Since payload `2.1.31-lcs.7`, the writes of a frame that changes two or more
-windows go in one SkyLight transaction: one WindowServer message, and every
-window changes in the same frame. A transaction reports no per-window error, so
-a window that closed keeps its fade until the fade ends. If SkyLight refuses a
-transaction, the payload returns to individual writes for good. The worker runs
-at user-interactive QoS instead of inheriting Dock's.
+Each window gets its own write per frame, which reports its own error: a
+window that closed ends its fade. Payloads `2.1.31-lcs.7` to `lcs.9` put the
+windows of a frame in one SkyLight transaction and returned to individual
+writes for good once a commit looked refused. `SLSTransactionCommit` returns no
+status, though: on macOS 27.2 its value is a pointer, never 0, and Dock ignores
+it. The first frame with two windows after Dock started therefore always
+switched those payloads to individual writes; `2.1.31-lcs.10` keeps only them.
+The worker runs at user-interactive QoS instead of inheriting Dock's.
 
 Reduce Motion suppresses navigation fades, as do rapid repeats, visible
 destinations and fullscreen Spaces. Navigation itself remains immediate.
@@ -96,10 +98,10 @@ The opt-in [display probe](../tests/fade/display.m) uses real AppKit callbacks
 with simulated alpha writes and creates no windows. On this host's two 60 Hz
 Dell U3223QE displays, it recorded 9–10 writes per window for a 150 ms recovery,
 then zero retained links. Stalling its main run loop also recovered; TSan passed.
-Payload `2.1.31-lcs.7` adds tests for one transaction per frame, the fallback
-after a refused commit and a frame recorded while the lock is held; the probe
-still records 10 writes per window. Whether Dock may set other applications'
-window alpha through a transaction is checked live, not by these tests.
+Payload `2.1.31-lcs.7` added tests for one transaction per frame and the
+fallback after a refused commit, both gone with the transactions in
+`2.1.31-lcs.10`, and for a frame recorded while the lock is held; the probe
+still records 10 writes per window.
 An isolated lcs.11 timer baseline with two simulated windows recorded 33–34
 total writes in each of five trials, versus 18–20 for the new probe. These are
 call counts, not rendered frames, CPU/GPU measurements or live Dock acceptance.
@@ -113,7 +115,7 @@ acceptance remain separate gates from the isolated probe.
 
 ## Desktop crossfade
 
-Payload `2.1.31-lcs.9` can crossfade the whole display, requested with
+Payload `2.1.31-lcs.10` can crossfade the whole display, requested with
 `crossfade` in place of the starting opacity (see [navigation](navigation.md)).
 The window fade dims the destination's windows, so the wallpaper shows through
 them: at alpha 0.7 on this host, VS Code's dark background turned brown-orange
@@ -142,9 +144,14 @@ Desktop underneath fades the top one out from where it is, at the same pace;
 going forward again turns it around. A fourth Desktop, or one deeper in the
 stack, first ends the crossfade where it was heading. Every other Desktop
 operation (focus without an effect, create, destroy, move) first ends all
-crossfades. A transaction refused at the start leaves the screen as it was and
-the daemon switches without an effect; a refused frame ends the crossfade at
-once. `killall Dock` restores every Desktop.
+crossfades. When SkyLight cannot create a transaction at the start, the screen
+stays as it was and the daemon switches without an effect; a frame without one
+is skipped.
+
+No commit is checked, since `SLSTransactionCommit` returns no status. Payload
+`2.1.31-lcs.9` read its value as one and took every first transaction for a
+refusal: the daemon switched without an effect, and the destination stayed at
+alpha 0 and level 1, black whenever it was shown.
 
 Crossfades share the window fades' lock, worker and display links, including the
 half-frame fallback. Reduce Motion keeps them, since its own Desktop transition
@@ -156,8 +163,9 @@ crossfade's start, turns and end and every frame written, crossfade or window
 fade; [testing](testing.md) describes how to record them.
 
 `fade_tests` checks the transaction order, monotonic alpha, levels, the end
-state, turns, stacking, refused or missing transactions, the worker's deadline
-and display pacing against a model of WindowServer's Desktops. None of this
+state, turns, stacking, missing transactions, the worker's deadline and display
+pacing against a model of WindowServer's Desktops, whose commit, like
+SkyLight's, never returns 0. None of this
 establishes how WindowServer composites two Desktops shown at once, or the
 frames it presents: that is the live check.
 

@@ -148,8 +148,9 @@ exec "$yabai" -m space --navigate "$action" "$selector" "$effect" "$duration"
 ```
 
 Update the package and script together. `crossfade` needs payload
-`2.1.31-lcs.9`; with an older payload Dock refuses it and navigation switches
-without an effect.
+`2.1.31-lcs.10`: an older payload either refuses it, and navigation switches
+without an effect, or, `2.1.31-lcs.9`, also leaves the destination transparent
+(see [effects](effects.md#desktop-crossfade)).
 
 ## Verification boundaries
 

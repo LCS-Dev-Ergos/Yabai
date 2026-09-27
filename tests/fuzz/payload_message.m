@@ -56,7 +56,6 @@ void SLSHideSpaces(int cid, CFArrayRef space_list) {}
 CFTypeRef SLSTransactionCreate(int cid) { return CFArrayCreate(NULL, NULL, 0, &kCFTypeArrayCallBacks); }
 CGError SLSTransactionCommit(CFTypeRef transaction, int synchronous) { return 0; }
 CGError SLSTransactionOrderWindowGroup(CFTypeRef transaction, uint32_t wid, int order, uint32_t rel_wid) { return 0; }
-CGError SLSTransactionSetWindowAlpha(CFTypeRef transaction, uint32_t wid, float alpha) { return 0; }
 CGError SLSTransactionSetWindowSystemAlpha(CFTypeRef transaction, uint32_t wid, float alpha) { return 0; }
 CGError SLSTransactionSetSpaceAlpha(CFTypeRef transaction, uint64_t sid, float alpha) { return 0; }
 CGError SLSTransactionSetSpaceAbsoluteLevel(CFTypeRef transaction, uint64_t sid, int level) { return 0; }

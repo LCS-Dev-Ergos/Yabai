@@ -35,9 +35,6 @@ static dispatch_semaphore_t window_fade_wake;
 // one bit per display number modulo 64. A shared bit costs an extra write.
 static _Atomic uint64_t window_fade_frames;
 
-// Cleared for good once SkyLight refuses a transaction.
-static bool window_fade_transactions = true;
-
 static void window_fade_display_stop(uint32_t display);
 
 // Signposts for Instruments, subsystem com.lcs.yabai: every window fade and
@@ -124,28 +121,13 @@ static void window_fade_remove(struct window_fade_context **slot)
     free(fade);
 }
 
-// Writes the alpha of every window marked in this frame. One transaction is
-// one WindowServer message, and all windows change in the same frame. It
-// reports no per-window error: a window that closed keeps its fade until the
-// fade ends. Individual writes remain for single windows and as fallback.
-static void window_fade_apply(int writes)
+// Writes the alpha of every window marked in this frame, one write per window:
+// each reports its own error, and a window that failed, closed for instance,
+// ends its fade. A SkyLight transaction would carry them in one message, but
+// its commit returns no status (see space_crossfade_commit), so we could not
+// tell whether it changed other applications' windows.
+static void window_fade_apply(void)
 {
-    if (writes > 1 && window_fade_transactions) {
-        CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
-
-        if (transaction) {
-            for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
-                if (fade->write) SLSTransactionSetWindowAlpha(transaction, fade->wid, fade->current);
-            }
-
-            bool committed = SLSTransactionCommit(transaction, 0) == 0;
-            CFRelease(transaction);
-            if (committed) return;
-        }
-
-        window_fade_transactions = false;
-    }
-
     for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
         if (fade->write) fade->failed = SLSSetWindowAlpha(SLSMainConnectionID(), fade->wid, fade->current) != 0;
     }
@@ -180,7 +162,7 @@ static void window_fade_tick(double now)
 
     if (writes) {
         os_signpost_event_emit(window_fade_log(), OS_SIGNPOST_ID_EXCLUSIVE, "fade frame", "windows %d", writes);
-        window_fade_apply(writes);
+        window_fade_apply();
     }
 
     struct window_fade_context **slot = &window_fades;

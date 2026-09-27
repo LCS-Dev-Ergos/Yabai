@@ -43,8 +43,7 @@ static float space_crossfade_alpha(struct space_crossfade *fade, double now)
     return fade->from + (fade->to - fade->from) * (float) eased;
 }
 
-// One transaction per crossfade and frame. The last frame also settles. A
-// refused frame settles at once instead of leaving a Desktop half shown.
+// One transaction per crossfade and frame. The last frame also settles.
 static void space_crossfade_tick(double now)
 {
     for (int i = 0; i < SPACE_CROSSFADE_DISPLAYS; ++i) {
@@ -76,6 +75,6 @@ static void space_crossfade_tick(double now)
         SLSTransactionSetSpaceAlpha(transaction, fade->spaces[fade->count - 1], fade->current);
         os_signpost_event_emit(window_fade_log(), OS_SIGNPOST_ID_EXCLUSIVE, "crossfade frame",
                                "display %u alpha %.3f paced %d", fade->display, fade->current, fade->display_paced);
-        if (!space_crossfade_commit(transaction)) space_crossfade_finish(fade);
+        space_crossfade_commit(transaction);
     }
 }

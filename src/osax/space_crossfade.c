@@ -57,11 +57,13 @@ static uint64_t space_crossfade_target(struct space_crossfade *fade)
     return fade->spaces[fade->to == 0.0f ? fade->count - 2 : fade->count - 1];
 }
 
-static bool space_crossfade_commit(CFTypeRef transaction)
+// SLSTransactionCommit returns no status: on macOS 27.2 its value is a
+// pointer, never 0, and Dock ignores it too. We cannot tell whether
+// WindowServer applied a transaction, so nothing here depends on it.
+static void space_crossfade_commit(CFTypeRef transaction)
 {
-    bool committed = SLSTransactionCommit(transaction, 0) == 0;
+    SLSTransactionCommit(transaction, 0);
     CFRelease(transaction);
-    return committed;
 }
 
 static void space_crossfade_forget(struct space_crossfade *fade)

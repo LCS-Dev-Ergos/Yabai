@@ -190,26 +190,17 @@ static void test_crossfade_failures(void)
     assert(!space_crossfade_start(1, CFSTR("display"), 1, 2, 0.2f, 0.0f));
     assert(transactions_created == created && !space_crossfade_find(1));
 
-    // A refused start leaves the screen as it was.
-    fail_commit = true;
+    // Without a transaction, a start leaves the screen as it was.
+    fail_transaction = true;
     assert(!crossfade_start(1, 2));
-    fail_commit = false;
+    fail_transaction = false;
     crossfade_expect_settled(1);
-
-    // A refused frame settles at once.
-    assert(crossfade_start(1, 2));
-    struct space_crossfade *fade = space_crossfade_find(1);
-    double started = fade->started;
-    fail_commit = true;
-    space_crossfade_tick(started + CROSSFADE_FRAME + CROSSFADE_EPSILON);
-    fail_commit = false;
-    assert(!space_crossfade_find(1));
 
     // Without a transaction, frames are skipped; the end still forgets it.
     crossfade_reset();
     assert(crossfade_start(1, 2));
-    fade = space_crossfade_find(1);
-    started = fade->started;
+    struct space_crossfade *fade = space_crossfade_find(1);
+    double started = fade->started;
     fail_transaction = true;
     space_crossfade_tick(started + CROSSFADE_FRAME + CROSSFADE_EPSILON);
     assert(space_crossfade_find(1));

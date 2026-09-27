@@ -40,7 +40,7 @@ static bool space_crossfade_turn(struct space_crossfade *fade, uint64_t dest, fl
     if (!transaction) return false;
 
     SLSTransactionSetManagedDisplayCurrentSpace(transaction, fade->uuid, dest);
-    if (!space_crossfade_commit(transaction)) return false;
+    space_crossfade_commit(transaction);
 
     os_signpost_event_emit(window_fade_log(), OS_SIGNPOST_ID_EXCLUSIVE, "crossfade turn",
                            "display %u to %llu alpha %.3f", fade->display, dest, fade->current);
@@ -65,15 +65,15 @@ static bool space_crossfade_push(struct space_crossfade *fade, uint64_t dest)
         SLSTransactionShowSpace(transaction, fade->spaces[i]);
     }
 
-    if (!space_crossfade_commit(transaction)) return false;
+    space_crossfade_commit(transaction);
 
     fade->spaces[fade->count++] = dest;
     return true;
 }
 
 // Crossfades the display from `source`, the current Desktop, to `dest`. When
-// SkyLight refuses, it returns false with the screen left as it was, and the
-// caller switches Desktop without an effect.
+// SkyLight cannot create a transaction, it returns false with the screen left
+// as it was, and the caller switches Desktop without an effect.
 static bool space_crossfade_start(uint32_t display, CFStringRef uuid, uint64_t source, uint64_t dest,
                                   float duration, float interval)
 {

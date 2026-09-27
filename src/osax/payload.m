@@ -65,7 +65,6 @@ extern void SLSHideSpaces(int cid, CFArrayRef space_list);
 extern CFTypeRef SLSTransactionCreate(int cid);
 extern CGError SLSTransactionCommit(CFTypeRef transaction, int synchronous);
 extern CGError SLSTransactionOrderWindowGroup(CFTypeRef transaction, uint32_t wid, int order, uint32_t rel_wid);
-extern CGError SLSTransactionSetWindowAlpha(CFTypeRef transaction, uint32_t wid, float alpha);
 extern CGError SLSTransactionSetWindowSystemAlpha(CFTypeRef transaction, uint32_t wid, float alpha);
 extern CGError SLSTransactionSetSpaceAlpha(CFTypeRef transaction, uint64_t sid, float alpha);
 extern CGError SLSTransactionSetSpaceAbsoluteLevel(CFTypeRef transaction, uint64_t sid, int level);
