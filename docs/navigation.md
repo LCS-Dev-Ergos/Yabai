@@ -3,16 +3,18 @@
 This fork adds one daemon request for keyboard and bar navigation:
 
 ```sh
-yabai -m space --navigate focus next 0.95 0.1
+yabai -m space --navigate focus next crossfade 0.25
 yabai -m space --navigate focus prev 0.95 0.1
-yabai -m space --navigate focus 3 0.95 0.1
+yabai -m space --navigate focus 3 crossfade 0.25
 yabai -m space --navigate move 3 0.95 0.1
 ```
 
-Arguments are the action (`focus` or `move`), a space selector, the starting
-opacity in `(0,1]`, and the fade duration in `[0,1]` seconds. A zero duration
-disables the fade. `next` and `prev` wrap to the first/last space, like the
-previous shell script. Other selectors follow the ordinary space selectors.
+Arguments are the action (`focus` or `move`), a space selector, the effect and
+its duration in `[0,1]` seconds. The effect is `crossfade`, a
+[crossfade of the display](effects.md#desktop-crossfade), or the starting
+opacity in `(0,1]` of the destination's windows. A zero duration disables it.
+`next` and `prev` wrap to the first/last space, like the previous shell
+script. Other selectors follow the ordinary space selectors.
 `move` sends the focused window to the destination and follows it. It does
 not move or reorder the Desktop itself; that is what `space --move` and
 `space --display` do.
@@ -111,11 +113,12 @@ The Dotfiles `home/desktop/yabai/space.sh` can keep its existing entry points
 and delegate directly with `exec`:
 
 ```sh
-exec "$yabai" -m space --navigate "$action" "$selector" "$fade_from" "$fade_duration"
+exec "$yabai" -m space --navigate "$action" "$selector" "$effect" "$duration"
 ```
 
-Update the package and script together. This command requires the new daemon
-but works with payload `2.1.31-lcs.2`; it does not change the payload protocol.
+Update the package and script together. `crossfade` needs payload
+`2.1.31-lcs.9`; with an older payload Dock refuses it and navigation switches
+without an effect.
 
 ## Verification boundaries
 

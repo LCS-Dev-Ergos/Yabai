@@ -58,6 +58,11 @@ CGError SLSTransactionCommit(CFTypeRef transaction, int synchronous) { return 0;
 CGError SLSTransactionOrderWindowGroup(CFTypeRef transaction, uint32_t wid, int order, uint32_t rel_wid) { return 0; }
 CGError SLSTransactionSetWindowAlpha(CFTypeRef transaction, uint32_t wid, float alpha) { return 0; }
 CGError SLSTransactionSetWindowSystemAlpha(CFTypeRef transaction, uint32_t wid, float alpha) { return 0; }
+CGError SLSTransactionSetSpaceAlpha(CFTypeRef transaction, uint64_t sid, float alpha) { return 0; }
+CGError SLSTransactionSetSpaceAbsoluteLevel(CFTypeRef transaction, uint64_t sid, int level) { return 0; }
+CGError SLSTransactionShowSpace(CFTypeRef transaction, uint64_t sid) { return 0; }
+CGError SLSTransactionHideSpace(CFTypeRef transaction, uint64_t sid) { return 0; }
+CGError SLSTransactionSetManagedDisplayCurrentSpace(CFTypeRef transaction, CFStringRef display, uint64_t sid) { return 0; }
 CGError SLSSetWindowSubLevel(int cid, uint32_t wid, int level) { return 0; }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)

@@ -1,5 +1,6 @@
 #include "fixture.h"
 #include "concurrency.c"
+#include "crossfade.c"
 #include "navigation.c"
 
 static void test_elapsed_time(void)
@@ -102,10 +103,11 @@ int main(void)
     test_frame_batching();
     test_navigation_ownership();
     test_navigation_cadence();
+    test_crossfade();
     test_concurrent_requests();
     test_display_frame_without_lock();
     test_navigation_batch();
 
-    puts("fade: elapsed time, easing, cancellation, errors, frame batching and concurrency passed");
+    puts("fade: elapsed time, easing, cancellation, errors, frame batching, crossfades and concurrency passed");
     return 0;
 }

@@ -29,14 +29,16 @@ editor's root `compile_commands.json` symlink.
   other displays, the fallback to WindowServer for unknown or unreadable data and
   the window numbers the cross-display raise check reads.
 - `navigation_focus_tests` checks the deferred focus between two windows of one
-  application: the event sequence and its 40 ms spacing, and cancellation by a
-  newer navigation, another command or a focus change.
+  application: the event sequence and its 10 ms spacing, and cancellation by a
+  newer navigation, another command or a focus change; and both raise paths.
 - `navigation_queue_tests` checks how relative requests are recognized and
   merged while one waits: repeats, separate presses, directions, interleaved
   queries, allocation failure and concurrent admission/consumption.
 - `focus_tests` exercises production focus-event handling with simulated OS
   calls: reuse of pending observations, stale activations, invalid/hidden or
   minimized windows, and the normal AX fallback, including no focused window.
+- `fade_tests` also runs the [Desktop crossfade](effects.md#desktop-crossfade)
+  against a model of WindowServer's Desktops.
 - `fade_tests` checks the production [opacity engine](effects.md) with simulated
   SkyLight calls, including timing, focus ownership, shared navigation epochs,
   display cadence/cancellation, failure restoration and concurrent requests.
@@ -70,6 +72,14 @@ build/fade-display-probe
 Run it from an active desktop session on macOS 14+. It checks callback delivery,
 idle link disposal and recovery with its main run loop stalled. It does not
 measure rendered frames or validate execution inside Dock.
+
+## Signposts
+
+The payload emits signposts in subsystem `com.lcs.yabai`, category `effects`,
+for crossfades and every fade frame written. Record them with Instruments'
+os_signpost instrument, for example by adding it to the Animation Hitches
+template, to see them against WindowServer's frames. They cost nothing while
+nothing records them.
 
 ## Static analysis
 

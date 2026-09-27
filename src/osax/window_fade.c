@@ -1,5 +1,6 @@
 #include <dispatch/dispatch.h>
 #include <math.h>
+#include <os/signpost.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <time.h>
@@ -39,6 +40,23 @@ static bool window_fade_transactions = true;
 
 static void window_fade_display_stop(uint32_t display);
 
+// Signposts for Instruments, subsystem com.lcs.yabai: every window fade and
+// crossfade frame written, on the timeline of WindowServer's frames. Only
+// code holding window_fade_lock emits them.
+static os_log_t window_fade_log(void)
+{
+    static os_log_t log;
+    if (!log) log = os_log_create("com.lcs.yabai", "effects");
+    return log;
+}
+
+// Desktop crossfades share this lock, the worker and the display links; see
+// space_crossfade.c.
+static void space_crossfade_take_frames(uint64_t frames);
+static bool space_crossfade_deadline(double *deadline);
+static void space_crossfade_tick(double now);
+static bool space_crossfade_active(uint32_t display);
+
 static double window_fade_now(void)
 {
     struct timespec time;
@@ -69,6 +87,8 @@ static void window_fade_take_frames(void)
 {
     uint64_t frames = atomic_exchange(&window_fade_frames, 0);
     if (!frames) return;
+
+    space_crossfade_take_frames(frames);
 
     for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
         if (!fade->display || !(frames & window_fade_display_bit(fade->display))) continue;
@@ -158,7 +178,10 @@ static void window_fade_tick(double now)
         }
     }
 
-    if (writes) window_fade_apply(writes);
+    if (writes) {
+        os_signpost_event_emit(window_fade_log(), OS_SIGNPOST_ID_EXCLUSIVE, "fade frame", "windows %d", writes);
+        window_fade_apply(writes);
+    }
 
     struct window_fade_context **slot = &window_fades;
     while (*slot) {

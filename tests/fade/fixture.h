@@ -12,12 +12,16 @@
 #include "../../src/osax/common.h"
 
 #ifndef FADE_DISPLAY_LINK
+static int display_starts, display_stops;
+
 static void window_fade_display_start(uint32_t display)
 {
+    ++display_starts;
 }
 
 static void window_fade_display_stop(uint32_t display)
 {
+    ++display_stops;
 }
 #endif
 
@@ -29,6 +33,9 @@ static int single_writes;
 static int commits;
 static useconds_t alpha_delay;
 static bool fail_get, fail_set, fail_commit, fail_thread, fail_alloc;
+
+// Lets a test start effects without a worker thread, and tick them itself.
+static bool fake_worker;
 
 // Writes queued in the open transaction, applied by its commit.
 static struct sa_window_opacity queued[64];
@@ -59,10 +66,87 @@ static int SLSSetWindowAlpha(int cid, uint32_t wid, float alpha)
     return fail_set;
 }
 
+// Desktop operations queued in the open transaction, in order. A commit
+// applies them to a model of WindowServer's Desktops and appends them to the
+// log of committed operations.
+enum space_op { SPACE_ALPHA, SPACE_LEVEL, SPACE_SHOW, SPACE_HIDE, SPACE_CURRENT };
+
+struct space_record
+{
+    enum space_op op;
+    uint64_t sid;
+    float value;
+};
+
+static struct space_record space_queued[64];
+static int space_queued_count;
+static struct space_record space_log[256];
+static int space_log_count;
+static int transactions_created;
+static bool fail_transaction;
+
+static struct
+{
+    bool shown;
+    float alpha;
+    int level;
+} space_state[16];
+
+static uint64_t current_space;
+
 static CFTypeRef SLSTransactionCreate(int cid)
 {
-    assert(queued_count == 0);
-    return CFRetain(kCFNull);
+    assert(queued_count == 0 && space_queued_count == 0);
+    ++transactions_created;
+    return fail_transaction ? NULL : CFRetain(kCFNull);
+}
+
+static int space_queue(CFTypeRef transaction, enum space_op op, uint64_t sid, float value)
+{
+    assert(transaction && sid && sid < 16 && space_queued_count < 64);
+    space_queued[space_queued_count++] = (struct space_record) { op, sid, value };
+    return 0;
+}
+
+static int SLSTransactionSetSpaceAlpha(CFTypeRef transaction, uint64_t sid, float alpha)
+{
+    assert(isfinite(alpha) && alpha >= 0.0f && alpha <= 1.0f);
+    return space_queue(transaction, SPACE_ALPHA, sid, alpha);
+}
+
+static int SLSTransactionSetSpaceAbsoluteLevel(CFTypeRef transaction, uint64_t sid, int level)
+{
+    return space_queue(transaction, SPACE_LEVEL, sid, (float) level);
+}
+
+static int SLSTransactionShowSpace(CFTypeRef transaction, uint64_t sid)
+{
+    return space_queue(transaction, SPACE_SHOW, sid, 0.0f);
+}
+
+static int SLSTransactionHideSpace(CFTypeRef transaction, uint64_t sid)
+{
+    return space_queue(transaction, SPACE_HIDE, sid, 0.0f);
+}
+
+static int SLSTransactionSetManagedDisplayCurrentSpace(CFTypeRef transaction, CFStringRef display, uint64_t sid)
+{
+    assert(display);
+    return space_queue(transaction, SPACE_CURRENT, sid, 0.0f);
+}
+
+static void space_apply(struct space_record *record)
+{
+    switch (record->op) {
+    case SPACE_ALPHA: space_state[record->sid].alpha = record->value; break;
+    case SPACE_LEVEL: space_state[record->sid].level = (int) record->value; break;
+    case SPACE_SHOW: space_state[record->sid].shown = true; break;
+    case SPACE_HIDE: space_state[record->sid].shown = false; break;
+    case SPACE_CURRENT: current_space = record->sid; break;
+    }
+
+    assert(space_log_count < 256);
+    space_log[space_log_count++] = *record;
 }
 
 static int SLSTransactionSetWindowAlpha(CFTypeRef transaction, uint32_t wid, float alpha)
@@ -85,7 +169,12 @@ static int SLSTransactionCommit(CFTypeRef transaction, int synchronous)
         alphas[queued[i].wid] = queued[i].alpha;
     }
 
+    for (int i = 0; !fail_commit && i < space_queued_count; ++i) {
+        space_apply(&space_queued[i]);
+    }
+
     queued_count = 0;
+    space_queued_count = 0;
     return fail_commit;
 }
 
@@ -93,6 +182,7 @@ static int create_worker(pthread_t *thread, const pthread_attr_t *attributes,
                          void *(*entry)(void *), void *context)
 {
     ++thread_calls;
+    if (fake_worker) return 0;
     return fail_thread ? EAGAIN : pthread_create(thread, attributes, entry, context);
 }
 
@@ -108,6 +198,7 @@ static void *allocate_fade(size_t count, size_t size)
 #include "../../src/osax/window_fade_display.m"
 #endif
 #include "../../src/osax/window_fade_navigation.c"
+#include "../../src/osax/space_crossfade.c"
 #undef pthread_create
 #undef calloc
 

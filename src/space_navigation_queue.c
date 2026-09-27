@@ -59,8 +59,9 @@ static bool space_navigation_request_number(const char *token, bool allow_zero)
     return value <= 1.0f && (allow_zero ? value >= 0.0f : value > 0.0f);
 }
 
-// Returns 1 for `space --navigate focus next <opacity> <duration>`, -1 for
-// prev, and 0 for anything else, including an incomplete message.
+// Returns 1 for `space --navigate focus next <effect> <duration>`, where the
+// effect is crossfade or a starting opacity, -1 for prev, and 0 for anything
+// else, including an incomplete message.
 static int space_navigation_request_direction(const char *bytes, int length)
 {
     int size;
@@ -79,7 +80,8 @@ static int space_navigation_request_direction(const char *bytes, int length)
 
     if (cursor != end || *token[6] != '\0') return 0;
     if (strcmp(token[0], "space") != 0 || strcmp(token[1], "--navigate") != 0 || strcmp(token[2], "focus") != 0) return 0;
-    if (!space_navigation_request_number(token[4], false) || !space_navigation_request_number(token[5], true)) return 0;
+    if (strcmp(token[4], "crossfade") != 0 && !space_navigation_request_number(token[4], false)) return 0;
+    if (!space_navigation_request_number(token[5], true)) return 0;
 
     if (strcmp(token[3], "next") == 0) return 1;
     if (strcmp(token[3], "prev") == 0) return -1;

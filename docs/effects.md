@@ -111,6 +111,56 @@ Include reversals, held keys, empty Desktops, Edge across displays and actual
 monitor sleep/reconfiguration. Live payload display-link behavior and visual
 acceptance remain separate gates from the isolated probe.
 
+## Desktop crossfade
+
+Payload `2.1.31-lcs.9` can crossfade the whole display, requested with
+`crossfade` in place of the starting opacity (see [navigation](navigation.md)).
+The window fade dims the destination's windows, so the wallpaper shows through
+them: at alpha 0.7 on this host, VS Code's dark background turned brown-orange
+over the wallpaper's bright cloud before it darkened again, which reads as a
+flash. Every Desktop has its own wallpaper window (11 `Wallpaper` windows of
+WindowManager for 11 Desktops), so a Desktop is an opaque layer, and blending
+two of them never shows the wallpaper.
+
+Dock animates its own Space transitions this way. Its binary imports
+`SLSTransactionSetSpaceAlpha`, `SLSTransactionSetSpaceAbsoluteLevel`,
+`SLSTransactionShowSpace` and `SLSTransactionSetSpaceTransform`; its code
+computes a Desktop's alpha from the progress of an animation and ends by
+restoring level 0 and alpha 1, the values every Desktop has at rest.
+
+One transaction sets the destination's alpha to 0, puts it a level above the
+Desktops shown, shows it and makes it current; the Desktops below are shown
+again in the same transaction, in case the change of current Desktop hid them.
+Each frame then commits one transaction with the destination's alpha
+(smoothstep), and the last one hides the other Desktops and restores alpha 1 and
+level 0. The daemon's request returns once the destination is current, and
+activation follows at once.
+
+A navigation during a crossfade puts its destination on top, up to three
+layers, so the blend on screen continues without a jump. Going back to the
+Desktop underneath fades the top one out from where it is, at the same pace;
+going forward again turns it around. A fourth Desktop, or one deeper in the
+stack, first ends the crossfade where it was heading. Every other Desktop
+operation (focus without an effect, create, destroy, move) first ends all
+crossfades. A transaction refused at the start leaves the screen as it was and
+the daemon switches without an effect; a refused frame ends the crossfade at
+once. `killall Dock` restores every Desktop.
+
+Crossfades share the window fades' lock, worker and display links, including the
+half-frame fallback. Reduce Motion keeps them, since its own Desktop transition
+is a crossfade. Fullscreen Desktops, and destinations already visible on another
+display, switch without one.
+
+Signposts in subsystem `com.lcs.yabai`, category `effects`, mark each
+crossfade's start, turns and end and every frame written, crossfade or window
+fade; [testing](testing.md) describes how to record them.
+
+`fade_tests` checks the transaction order, monotonic alpha, levels, the end
+state, turns, stacking, refused or missing transactions, the worker's deadline
+and display pacing against a model of WindowServer's Desktops. None of this
+establishes how WindowServer composites two Desktops shown at once, or the
+frames it presents: that is the live check.
+
 ## Native compositor investigation
 
 The reconstructed [Mousecape SkyLight declarations](https://github.com/alexzielenski/Mousecape/blob/master/Mousecape/mousecloak/CGSInternal/CGSWindow.h)

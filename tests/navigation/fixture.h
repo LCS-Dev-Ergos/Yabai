@@ -51,6 +51,9 @@ static bool visible, fullscreen, mission_control, animating, focus_success, sing
 static bool other_window_tiled;
 static int focus_calls, opacity_calls, window_focus_calls, raise_calls, move_calls, display_calls;
 static int click_raise_calls;
+static int crossfade_calls;
+static bool crossfade_success;
+static float last_crossfade_duration;
 static int opacity_fail_at;
 static bool expect_fade_started;
 static bool reduce_motion;
@@ -73,6 +76,19 @@ static struct
 
 #include "stubs.h"
 #include "../../src/space_navigation.c"
+
+// A single activating step with the window fade, as before the schedule.
+static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, float alpha, float duration)
+{
+    struct space_navigation_step step = {
+        .sid = sid,
+        .move = move,
+        .alpha = alpha,
+        .duration = duration
+    };
+
+    return space_navigation_run_step(current, &step);
+}
 
 static void reset(void)
 {
@@ -100,6 +116,9 @@ static void reset(void)
 
     focus_calls = opacity_calls = window_focus_calls = raise_calls = move_calls = display_calls = 0;
     click_raise_calls = 0;
+    crossfade_calls = 0;
+    crossfade_success = true;
+    last_crossfade_duration = 0.0f;
     focused_id = noted_id = 0;
     opacity_fail_at = 0;
     expect_fade_started = false;

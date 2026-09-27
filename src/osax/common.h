@@ -4,7 +4,7 @@
 #define SA_SOCKET_PATH_FMT "/tmp/yabai-sa_%s.socket"
 #define SA_SOCKET_BUFF_LEN 0x1000
 
-#define OSAX_VERSION                "2.1.31-lcs.8"
+#define OSAX_VERSION                "2.1.31-lcs.9"
 
 #define SA_OPACITY_BATCH_MAX 400
 
@@ -60,6 +60,7 @@ enum sa_opcode
     SA_OPCODE_WINDOW_TO_SPACE       = 0x13,
     SA_OPCODE_WINDOW_OPACITY_FOCUS  = 0x14,
     SA_OPCODE_WINDOW_OPACITY_BATCH  = 0x15,
+    SA_OPCODE_SPACE_FOCUS_CROSSFADE = 0x16,
 };
 
 #endif

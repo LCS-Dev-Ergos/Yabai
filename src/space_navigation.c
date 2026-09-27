@@ -120,8 +120,24 @@ static bool space_navigation_needs_raise(struct window *window, uint32_t display
 
 #include "space_navigation_effects.c"
 
-static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, float alpha, float duration)
+// One Desktop switch of a navigation. Its effect is either the fade of the
+// destination's windows from `alpha`, or a crossfade of the whole display.
+struct space_navigation_step
 {
+    uint64_t sid;
+    bool move;
+    bool crossfade;
+    float alpha;
+    float duration;
+};
+
+static bool space_navigation_run_step(uint64_t current, struct space_navigation_step *step)
+{
+    uint64_t sid = step->sid;
+    bool move = step->move;
+    float alpha = step->alpha;
+    float duration = step->duration;
+
     if (current == sid) return true;
 
     // A deferred focus from the previous navigation must not follow this one.
@@ -158,24 +174,43 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
 
     uint64_t now = read_os_timer();
 
+    // The crossfade blends two opaque Desktops, so it stays under Reduce
+    // Motion, whose own Desktop transition is a crossfade. It needs a hidden
+    // destination and ordinary Desktops on both sides.
+    bool crossfade = step->crossfade && duration > 0.0f && !space_navigation_space_visible(sid)
+        && !space_navigation_space_fullscreen(sid) && !space_navigation_space_fullscreen(current);
+
     // Repeated navigation stays immediate. Suppress effects, never navigation.
-    bool fade = duration > 0.0f && alpha < 1.0f && !space_navigation_space_visible(sid)
+    bool fade = !step->crossfade && duration > 0.0f && alpha < 1.0f && !space_navigation_space_visible(sid)
         && !space_navigation_space_fullscreen(sid)
         && (space_navigation_last_time == 0 || now - space_navigation_last_time >= 180000000ULL)
         && !space_navigation_reduce_motion();
 
     uint32_t focus_id = focus ? focus->id : 0;
-    struct space_navigation_effect effect;
-    bool effects_ok = space_navigation_prepare_effect(&effect, display, ids, count, focus_id, alpha, fade);
+    struct space_navigation_effect effect = { .count = 0 };
+    bool effects_ok = step->crossfade || space_navigation_prepare_effect(&effect, display, ids, count, focus_id, alpha, fade);
+    bool success;
 
-    // Unlike generic --focus, do not silently fall back to asynchronous gestures
-    // after dimming windows: failure must restore opacity before returning.
-    bool success = effects_ok && scripting_addition_focus_space(sid);
+    if (crossfade) {
+        // A crossfade that Dock refuses leaves the Desktop as it was: switch
+        // without an effect.
+        float interval = space_navigation_frame_interval(display);
+        success = scripting_addition_focus_space_crossfade(display, sid, duration, interval)
+               || scripting_addition_focus_space(sid);
+    } else if (step->crossfade) {
+        success = scripting_addition_focus_space(sid);
+    } else {
+        // Unlike generic --focus, do not silently fall back to asynchronous
+        // gestures after dimming windows: failure must restore opacity
+        // before returning.
+        success = effects_ok && scripting_addition_focus_space(sid);
 
-    // Start the entire group before application activation or AXRaise can
-    // block. Failure restores ordinary opacity without leaving dim windows.
-    effects_ok = space_navigation_start_effect(&effect, display,
-        success ? focus_id : g_window_manager.focused_window_id, alpha, duration, success) && effects_ok;
+        // Start the entire group before application activation or AXRaise
+        // can block. Failure restores ordinary opacity without leaving dim
+        // windows.
+        effects_ok = space_navigation_start_effect(&effect, display,
+            success ? focus_id : g_window_manager.focused_window_id, alpha, duration, success) && effects_ok;
+    }
 
     if (success) {
         space_navigation_last_time = now;

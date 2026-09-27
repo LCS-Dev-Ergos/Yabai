@@ -55,6 +55,8 @@ int main(void)
 {
     assert(DIRECTION("space", "--navigate", "focus", "next", "0.95", "0.1") == 1);
     assert(DIRECTION("space", "--navigate", "focus", "prev", "1", "0") == -1);
+    assert(DIRECTION("space", "--navigate", "focus", "next", "crossfade", "0.2") == 1);
+    assert(DIRECTION("space", "--navigate", "focus", "next", "crossfades", "0.2") == 0);
 
     assert(DIRECTION("space", "--navigate", "move", "next", "0.95", "0.1") == 0);
     assert(DIRECTION("space", "--navigate", "focus", "3", "0.95", "0.1") == 0);

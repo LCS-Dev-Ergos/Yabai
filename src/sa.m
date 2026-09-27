@@ -448,8 +448,9 @@ static bool scripting_addition_send_bytes(char *bytes, int length)
         if (socket_connect(sockfd, g_sa_socket_file)) {
             if (send(sockfd, bytes, length, 0) != -1) {
                 ssize_t received = recv(sockfd, &dummy, 1, 0);
-                result = bytes[sizeof(int16_t)] != SA_OPCODE_WINDOW_OPACITY_BATCH
-                    || (received == 1 && dummy == 'k');
+                uint8_t opcode = bytes[sizeof(int16_t)];
+                bool replies = opcode == SA_OPCODE_WINDOW_OPACITY_BATCH || opcode == SA_OPCODE_SPACE_FOCUS_CROSSFADE;
+                result = !replies || (received == 1 && dummy == 'k');
             }
         }
 

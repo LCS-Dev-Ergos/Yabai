@@ -67,6 +67,11 @@ extern CGError SLSTransactionCommit(CFTypeRef transaction, int synchronous);
 extern CGError SLSTransactionOrderWindowGroup(CFTypeRef transaction, uint32_t wid, int order, uint32_t rel_wid);
 extern CGError SLSTransactionSetWindowAlpha(CFTypeRef transaction, uint32_t wid, float alpha);
 extern CGError SLSTransactionSetWindowSystemAlpha(CFTypeRef transaction, uint32_t wid, float alpha);
+extern CGError SLSTransactionSetSpaceAlpha(CFTypeRef transaction, uint64_t sid, float alpha);
+extern CGError SLSTransactionSetSpaceAbsoluteLevel(CFTypeRef transaction, uint64_t sid, int level);
+extern CGError SLSTransactionShowSpace(CFTypeRef transaction, uint64_t sid);
+extern CGError SLSTransactionHideSpace(CFTypeRef transaction, uint64_t sid);
+extern CGError SLSTransactionSetManagedDisplayCurrentSpace(CFTypeRef transaction, CFStringRef display_ref, uint64_t sid);
 extern CGError SLSSetWindowSubLevel(int cid, uint32_t wid, int level);
 
 static id dock_spaces;
@@ -761,6 +766,8 @@ static void do_window_move(char *message)
 #include "window_fade.c"
 #include "window_fade_display.m"
 #include "window_fade_navigation.c"
+#include "space_crossfade.c"
+#include "space_crossfade_handler.m"
 #include "window_opacity_handlers.c"
 
 static void do_window_opacity(char *message)
@@ -1001,12 +1008,22 @@ static void do_handshake(int sockfd)
 static void handle_message(int sockfd, char *message)
 {
     enum sa_opcode op = *message++;
+
+    // Fork: other Desktop operations first end any crossfade at its target.
+    if (op == SA_OPCODE_SPACE_FOCUS || op == SA_OPCODE_SPACE_CREATE
+        || op == SA_OPCODE_SPACE_DESTROY || op == SA_OPCODE_SPACE_MOVE) {
+        space_crossfade_finish_all();
+    }
+
     switch (op) {
     case SA_OPCODE_HANDSHAKE: {
         do_handshake(sockfd);
     } break;
     case SA_OPCODE_SPACE_FOCUS: {
         do_space_focus(message);
+    } break;
+    case SA_OPCODE_SPACE_FOCUS_CROSSFADE: {
+        do_space_focus_crossfade(sockfd, message);
     } break;
     case SA_OPCODE_SPACE_CREATE: {
         do_space_create(message);

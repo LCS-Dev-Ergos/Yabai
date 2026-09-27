@@ -157,6 +157,16 @@ static bool scripting_addition_focus_space(uint64_t sid)
     return focus_success;
 }
 
+// Dock's reply to a crossfade: 'k' switches Desktop, anything else leaves it.
+static bool scripting_addition_focus_space_crossfade(uint32_t display, uint64_t sid, float duration, float interval)
+{
+    ++crossfade_calls;
+    last_crossfade_duration = duration;
+    if (crossfade_success) active_space = sid;
+
+    return crossfade_success;
+}
+
 static float space_navigation_frame_interval(uint32_t display)
 {
     return 1.0f / 60.0f;

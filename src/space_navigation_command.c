@@ -125,19 +125,28 @@ static void space_navigation_request(FILE *rsp, char **message)
     uint64_t current = space_navigation_active_space();
     struct selector selector = space_navigation_selector(message, current, move);
 
-    float alpha;
+    float alpha = 1.0f;
     float duration;
     struct token from = get_token(message);
     struct token time = get_token(message);
+    bool crossfade = token_equals(from, "crossfade");
 
     if (!current || !selector.did_parse || !selector.sid
-        || !space_navigation_number(from, &alpha) || alpha == 0.0f
+        || (!crossfade && (!space_navigation_number(from, &alpha) || alpha == 0.0f))
         || !space_navigation_number(time, &duration)) {
-        daemon_fail(rsp, "navigate expects SPACE_SEL, opacity in (0,1] and duration in [0,1] seconds.\n");
+        daemon_fail(rsp, "navigate expects SPACE_SEL, crossfade or an opacity in (0,1], and a duration in [0,1] seconds.\n");
         return;
     }
 
-    if (!space_navigation_run(current, selector.sid, move, alpha, duration)) {
+    struct space_navigation_step step = {
+        .sid = selector.sid,
+        .move = move,
+        .crossfade = crossfade,
+        .alpha = alpha,
+        .duration = duration
+    };
+
+    if (!space_navigation_run_step(current, &step)) {
         daemon_fail(rsp, "navigation failed: check scripting addition, Mission Control, display animation and window eligibility.\n");
     }
 }

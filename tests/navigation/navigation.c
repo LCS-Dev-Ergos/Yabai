@@ -1,5 +1,6 @@
 #include "fixture.h"
 #include "raise.c"
+#include "steps.c"
 
 int main(void)
 {
@@ -192,7 +193,9 @@ int main(void)
     assert(space_navigation_step_index(3, 11, 30) == 11);
     assert(space_navigation_step_index(1, 1, -1) == 1);
 
-    puts("navigation: burst, restoration, custom opacity, display and move checks passed");
+    test_steps();
+
+    puts("navigation: burst, restoration, custom opacity, display, move, crossfade and step checks passed");
 
     return 0;
 }

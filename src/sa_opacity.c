@@ -27,3 +27,16 @@ bool scripting_addition_set_opacity_batch(uint32_t display, uint8_t phase, float
 
     return sa_payload_send(SA_OPCODE_WINDOW_OPACITY_BATCH);
 }
+
+// Switches to `sid` with a crossfade of the display, see
+// osax/space_crossfade.c. False means the Desktop did not change and the
+// caller should switch without an effect.
+bool scripting_addition_focus_space_crossfade(uint32_t display, uint64_t sid, float duration, float interval)
+{
+    sa_payload_init();
+    pack(display);
+    pack(sid);
+    pack(duration);
+    pack(interval);
+    return sa_payload_send(SA_OPCODE_SPACE_FOCUS_CROSSFADE);
+}
