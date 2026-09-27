@@ -249,6 +249,49 @@ static void test_crossfade_pacing(void)
     crossfade_expect_settled(2);
 }
 
+static void test_crossfade_restore(void)
+{
+    // Desktops left transparent or raised go back to rest in one transaction;
+    // Desktops at rest and fullscreen ones are left alone.
+    crossfade_reset();
+    managed_space_count = 6;
+    for (int i = 0; i < 6; ++i) {
+        managed_spaces[i].sid = (uint64_t) i + 1;
+        managed_spaces[i].type = i == 4 ? 4 : 0;
+    }
+
+    space_state[3].alpha = 0.0f;
+    space_state[3].level = 1;
+    space_state[4].level = 2;
+    space_state[5].alpha = 0.0f;
+
+    int created = transactions_created;
+    int committed = commits;
+    assert(space_crossfade_restore() == 2);
+    assert(transactions_created == created + 1 && commits == committed + 1);
+    assert(space_state[3].alpha == 1.0f && space_state[3].level == 0);
+    assert(space_state[4].alpha == 1.0f && space_state[4].level == 0);
+    assert(space_state[5].alpha == 0.0f);
+
+    // Nothing to restore, no transaction.
+    space_state[5].alpha = 1.0f;
+    assert(space_crossfade_restore() == 0 && transactions_created == created + 1);
+
+    // A running crossfade keeps its Desktops as they are.
+    assert(crossfade_start(1, 2));
+    assert(space_state[2].alpha == 0.0f && space_crossfade_restore() == 0);
+    space_crossfade_finish_all();
+    crossfade_expect_settled(2);
+
+    // Nor is anything restored without the Desktop list.
+    created = transactions_created;
+    space_state[2].alpha = 0.5f;
+    managed_space_count = -1;
+    assert(space_crossfade_restore() == 0 && transactions_created == created);
+    managed_space_count = 0;
+    space_state[2].alpha = 1.0f;
+}
+
 static void test_crossfade(void)
 {
     int calls = thread_calls;
@@ -259,6 +302,7 @@ static void test_crossfade(void)
     test_crossfade_stacking();
     test_crossfade_failures();
     test_crossfade_pacing();
+    test_crossfade_restore();
 
     // Later tests start the real worker, and count its creation alone.
     fake_worker = false;

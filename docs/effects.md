@@ -151,7 +151,10 @@ is skipped.
 No commit is checked, since `SLSTransactionCommit` returns no status. Payload
 `2.1.31-lcs.9` read its value as one and took every first transaction for a
 refusal: the daemon switched without an effect, and the destination stayed at
-alpha 0 and level 1, black whenever it was shown.
+alpha 0 and level 1, black whenever it was shown. Dock's own switches and
+Mission Control leave a Desktop's alpha and level as they are, so since
+`2.1.31-lcs.10` the payload, when it loads, puts every user Desktop that is not
+at alpha 1 and level 0 back there and logs how many it restored.
 
 Crossfades share the window fades' lock, worker and display links, including the
 half-frame fallback. Reduce Motion keeps them, since its own Desktop transition
@@ -163,9 +166,9 @@ crossfade's start, turns and end and every frame written, crossfade or window
 fade; [testing](testing.md) describes how to record them.
 
 `fade_tests` checks the transaction order, monotonic alpha, levels, the end
-state, turns, stacking, missing transactions, the worker's deadline and display
-pacing against a model of WindowServer's Desktops, whose commit, like
-SkyLight's, never returns 0. None of this
+state, turns, stacking, missing transactions, the restore at load, the worker's
+deadline and display pacing against a model of WindowServer's Desktops, whose
+commit, like SkyLight's, never returns 0. None of this
 establishes how WindowServer composites two Desktops shown at once, or the
 frames it presents: that is the live check.
 

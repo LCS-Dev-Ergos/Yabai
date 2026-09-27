@@ -71,6 +71,8 @@ extern CGError SLSTransactionSetSpaceAbsoluteLevel(CFTypeRef transaction, uint64
 extern CGError SLSTransactionShowSpace(CFTypeRef transaction, uint64_t sid);
 extern CGError SLSTransactionHideSpace(CFTypeRef transaction, uint64_t sid);
 extern CGError SLSTransactionSetManagedDisplayCurrentSpace(CFTypeRef transaction, CFStringRef display_ref, uint64_t sid);
+extern float SLSSpaceGetAlpha(int cid, uint64_t sid);
+extern int SLSSpaceGetAbsoluteLevel(int cid, uint64_t sid);
 extern CGError SLSSetWindowSubLevel(int cid, uint32_t wid, int level);
 
 static id dock_spaces;
@@ -1186,4 +1188,8 @@ void load_payload(void)
     } else {
         NSLog(@"[yabai-sa] failed to spawn thread..");
     }
+
+    // Fork: Desktops an earlier crossfade left transparent become opaque again.
+    int restored = space_crossfade_restore();
+    if (restored) NSLog(@"[yabai-sa] restored %d desktops after an unfinished crossfade..", restored);
 }

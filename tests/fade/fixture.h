@@ -160,6 +160,61 @@ static int SLSTransactionCommit(CFTypeRef transaction, int synchronous)
     return 0x48;
 }
 
+static float SLSSpaceGetAlpha(int cid, uint64_t sid)
+{
+    assert(sid && sid < 16);
+    return space_state[sid].alpha;
+}
+
+static int SLSSpaceGetAbsoluteLevel(int cid, uint64_t sid)
+{
+    assert(sid && sid < 16);
+    return space_state[sid].level;
+}
+
+// The Desktops SLSCopyManagedDisplaySpaces reports, all on one display, with
+// their types. It reports nothing while managed_space_count is -1.
+static struct
+{
+    uint64_t sid;
+    int type;
+} managed_spaces[16];
+
+static int managed_space_count;
+
+static CFDictionaryRef dictionary_of(CFStringRef key0, CFTypeRef value0, CFStringRef key1, CFTypeRef value1)
+{
+    const void *keys[] = { key0, key1 };
+    const void *values[] = { value0, value1 };
+    return CFDictionaryCreate(NULL, keys, values, key1 ? 2 : 1,
+                              &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+}
+
+static CFArrayRef SLSCopyManagedDisplaySpaces(int cid)
+{
+    if (managed_space_count < 0) return NULL;
+
+    CFMutableArrayRef spaces = CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
+
+    for (int i = 0; i < managed_space_count; ++i) {
+        CFNumberRef sid = CFNumberCreate(NULL, kCFNumberSInt64Type, &managed_spaces[i].sid);
+        CFNumberRef type = CFNumberCreate(NULL, kCFNumberIntType, &managed_spaces[i].type);
+        CFDictionaryRef space = dictionary_of(CFSTR("id64"), sid, CFSTR("type"), type);
+
+        CFArrayAppendValue(spaces, space);
+        CFRelease(space);
+        CFRelease(type);
+        CFRelease(sid);
+    }
+
+    CFDictionaryRef display = dictionary_of(CFSTR("Spaces"), spaces, NULL, NULL);
+    CFArrayRef displays = CFArrayCreate(NULL, (const void **) &display, 1, &kCFTypeArrayCallBacks);
+
+    CFRelease(display);
+    CFRelease(spaces);
+    return displays;
+}
+
 static int create_worker(pthread_t *thread, const pthread_attr_t *attributes,
                          void *(*entry)(void *), void *context)
 {

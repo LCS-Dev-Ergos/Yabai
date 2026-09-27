@@ -62,6 +62,8 @@ CGError SLSTransactionSetSpaceAbsoluteLevel(CFTypeRef transaction, uint64_t sid,
 CGError SLSTransactionShowSpace(CFTypeRef transaction, uint64_t sid) { return 0; }
 CGError SLSTransactionHideSpace(CFTypeRef transaction, uint64_t sid) { return 0; }
 CGError SLSTransactionSetManagedDisplayCurrentSpace(CFTypeRef transaction, CFStringRef display, uint64_t sid) { return 0; }
+float SLSSpaceGetAlpha(int cid, uint64_t sid) { return 1.0f; }
+int SLSSpaceGetAbsoluteLevel(int cid, uint64_t sid) { return 0; }
 CGError SLSSetWindowSubLevel(int cid, uint32_t wid, int level) { return 0; }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)

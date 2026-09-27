@@ -115,5 +115,69 @@ static void space_crossfade_finish_all(void)
     pthread_mutex_unlock(&window_fade_lock);
 }
 
+// Whether a running crossfade shows `sid`.
+static bool space_crossfade_holds(uint64_t sid)
+{
+    for (int i = 0; i < SPACE_CROSSFADE_DISPLAYS; ++i) {
+        for (int j = 0; j < space_crossfades[i].count; ++j) {
+            if (space_crossfades[i].spaces[j] == sid) return true;
+        }
+    }
+
+    return false;
+}
+
+// Puts every Desktop that is not at rest back at alpha 1 and level 0, when the
+// payload loads. SkyLight keeps a Desktop's alpha and level until Dock sets
+// them again, and Dock's own switches and Mission Control leave them as they
+// are: a crossfade that did not settle, cut short by a Dock crash for
+// instance, would leave its Desktops transparent for good. Only user Desktops
+// (type 0) crossfade, and those of a running crossfade are left to it.
+// Returns how many it restored.
+static int space_crossfade_restore(void)
+{
+    int cid = SLSMainConnectionID();
+    CFArrayRef displays = SLSCopyManagedDisplaySpaces(cid);
+    if (!displays) return 0;
+
+    pthread_mutex_lock(&window_fade_lock);
+
+    CFTypeRef transaction = NULL;
+    int restored = 0;
+
+    for (CFIndex i = 0; i < CFArrayGetCount(displays); ++i) {
+        CFDictionaryRef display = CFArrayGetValueAtIndex(displays, i);
+        CFArrayRef spaces = CFDictionaryGetValue(display, CFSTR("Spaces"));
+        if (!spaces) continue;
+
+        for (CFIndex j = 0; j < CFArrayGetCount(spaces); ++j) {
+            CFDictionaryRef space = CFArrayGetValueAtIndex(spaces, j);
+            CFNumberRef sid_ref = CFDictionaryGetValue(space, CFSTR("id64"));
+            CFNumberRef type_ref = CFDictionaryGetValue(space, CFSTR("type"));
+
+            uint64_t sid = 0;
+            int type = -1;
+            if (!sid_ref || !CFNumberGetValue(sid_ref, kCFNumberSInt64Type, &sid) || !sid) continue;
+            if (!type_ref || !CFNumberGetValue(type_ref, kCFNumberIntType, &type) || type != 0) continue;
+
+            if (space_crossfade_holds(sid)) continue;
+            if (SLSSpaceGetAlpha(cid, sid) == 1.0f && SLSSpaceGetAbsoluteLevel(cid, sid) == 0) continue;
+
+            if (!transaction) transaction = SLSTransactionCreate(cid);
+            if (!transaction) break;
+
+            SLSTransactionSetSpaceAlpha(transaction, sid, 1.0f);
+            SLSTransactionSetSpaceAbsoluteLevel(transaction, sid, 0);
+            ++restored;
+        }
+    }
+
+    if (transaction) space_crossfade_commit(transaction);
+
+    pthread_mutex_unlock(&window_fade_lock);
+    CFRelease(displays);
+    return restored;
+}
+
 #include "space_crossfade_start.c"
 #include "space_crossfade_frames.c"
