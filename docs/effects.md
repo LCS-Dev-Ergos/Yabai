@@ -57,9 +57,12 @@ wait for application focus, and multiple callbacks cannot queue stale frames. In
 worker execution, without mixing Core Animation timestamps into that clock.
 
 Before callbacks arrive, or on older macOS, the fallback uses the display mode's
-refresh rate (60 Hz if unspecified, capped at 240 Hz). After callbacks start, a
-50 ms watchdog and the original endpoint deadline prevent a stalled run loop,
-sleep or disconnect from leaving an indefinitely active effect. Idle links are
+refresh rate (60 Hz if unspecified, capped at 240 Hz). After callbacks start,
+the worker writes a frame itself when a callback is half a frame late, and the
+original endpoint deadline still ends the effect. Dock's main thread delivers
+the callbacks and is busy right after a Space switch: with the former 50 ms
+watchdog, lcs.7 fades stood still for about 54 ms just after they started.
+A stalled run loop, sleep or disconnect cannot leave an active effect. Idle links are
 invalidated on the main run loop; the worker sleeps when its list is empty.
 Late frames skip ahead. Scheduler and SkyLight delays still affect completion;
 display callbacks are opportunities, not presentation fences or real-time guarantees.

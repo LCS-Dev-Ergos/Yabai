@@ -143,8 +143,12 @@ static void window_fade_tick(double now)
         double end = fade->started + fade->duration;
         if (!fade->frame_ready && now < fade->next_frame && now < end) continue;
 
+        // A display-paced fade waits for its display's callback, but not for
+        // long: Dock's main thread delivers the callbacks and is busy right
+        // after a Space switch, when the fade starts. Half a frame late, the
+        // worker writes the frame itself.
         fade->frame_ready = false;
-        fade->next_frame = now + (fade->display_paced ? 0.05 : fade->interval);
+        fade->next_frame = now + fade->interval * (fade->display_paced ? 1.5 : 1.0);
 
         float alpha = window_fade_alpha(fade, now);
         if (alpha != fade->current) {
