@@ -4,7 +4,22 @@
 #define SA_SOCKET_PATH_FMT "/tmp/yabai-sa_%s.socket"
 #define SA_SOCKET_BUFF_LEN 0x1000
 
-#define OSAX_VERSION                "2.1.31-lcs.5"
+#define OSAX_VERSION                "2.1.31-lcs.6"
+
+#define SA_OPACITY_BATCH_MAX 400
+
+struct sa_window_opacity
+{
+    uint32_t wid;
+    float alpha;
+};
+
+enum sa_opacity_phase
+{
+    SA_OPACITY_PREPARE,
+    SA_OPACITY_START,
+    SA_OPACITY_RESTORE
+};
 
 #define OSAX_ATTRIB_DOCK_SPACES     0x01
 #define OSAX_ATTRIB_DPPM            0x02
@@ -43,6 +58,8 @@ enum sa_opcode
     SA_OPCODE_WINDOW_ORDER_IN       = 0x11,
     SA_OPCODE_WINDOW_LIST_TO_SPACE  = 0x12,
     SA_OPCODE_WINDOW_TO_SPACE       = 0x13,
+    SA_OPCODE_WINDOW_OPACITY_FOCUS  = 0x14,
+    SA_OPCODE_WINDOW_OPACITY_BATCH  = 0x15,
 };
 
 #endif

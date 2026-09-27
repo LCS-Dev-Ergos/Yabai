@@ -16,7 +16,7 @@ editor's root `compile_commands.json` symlink.
 ## CTest and sanitizers
 
 - `yabai_tests` runs the upstream unit tests against the unity build, plus
-  navigation argument and signal dispatch regressions. The signal tests launch
+  navigation argument, opacity-policy protocol and signal dispatch regressions. The signal tests launch
   harmless local shell actions and check socket lifetime, isolated event
   variables and retained standard output/error. They do not run the daemon.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
@@ -31,7 +31,8 @@ editor's root `compile_commands.json` symlink.
   calls: reuse of pending observations, stale activations, invalid/hidden or
   minimized windows, and the normal AX fallback, including no focused window.
 - `fade_tests` checks the production [opacity engine](effects.md) with simulated
-  SkyLight calls, including timing, cancellation and concurrent requests.
+  SkyLight calls, including timing, focus ownership, shared navigation epochs,
+  display cadence/cancellation, failure restoration and concurrent requests.
 - `osax_patterns` checks the payload's lookups against the local Dock binary
   on Apple Silicon when `YABAI_BUILD_TOOLS=ON` (the default). It inspects the
   binary without loading a payload; see [Scripting addition](osax.md).
@@ -49,6 +50,19 @@ Dock. The standalone fade test is instrumented; run its race check with
 `cmake --build --preset thread-sanitize --target fade_tests` and
 `ctest --preset thread-sanitize -R fade_tests` after configuring that preset.
 Passing these checks does not verify live space or window operations.
+
+The optional display-link probe uses real AppKit callbacks with simulated
+alpha writes; it creates no windows and does not touch the running daemon:
+
+```sh
+clang -fsanitize=thread -g tests/fade/display.m \
+  -framework AppKit -framework QuartzCore -o build/fade-display-probe
+build/fade-display-probe
+```
+
+Run it from an active desktop session on macOS 14+. It checks callback delivery,
+idle link disposal and recovery with its main run loop stalled. It does not
+measure rendered frames or validate execution inside Dock.
 
 ## Static analysis
 
@@ -92,7 +106,9 @@ libFuzzer, ASan and UBSan:
   manipulate the running window manager are excluded.
 - `fuzz_payload_message`: request framing and reachable handler parsing with
   SkyLight calls stubbed and the payload constructor disabled. Dock-dependent
-  space handlers return early; threaded opacity fades are excluded.
+  space handlers return early. Opacity parsing, including focus/batch requests,
+  runs with worker/main-queue scheduling disabled and pending fades freed after
+  each input. Real threaded/display-link behavior belongs to the fade tests.
 
 Each target runs for `YABAI_FUZZ_SECONDS` (default 30), with a 10-second limit
 per input so blocked handlers produce timeout artifacts. CTest's `fuzz` preset

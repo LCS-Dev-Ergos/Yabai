@@ -4,9 +4,11 @@ int main(void)
 {
     reset();
 
+    expect_fade_started = true;
     assert(space_navigation_run(active_space, 2, false, .95f, .1f));
     assert(focus_calls == 1 && window_focus_calls == 1 && focused_id == 1);
     assert(opacity_calls == 4);
+    assert(batch_calls == 2);
     assert(effects[0].alpha == .95f && effects[0].duration == 0);
     assert(effects[2].alpha == 1.0f && effects[2].duration == .1f);
     assert(effects[3].alpha == .975f);
@@ -15,6 +17,7 @@ int main(void)
     assert(g_window_manager.normal_window_opacity == .975f);
 
     // At key-repeat speed every navigation survives but no new fades start.
+    expect_fade_started = false;
     opacity_calls = 0;
     for (int i = 0; i < 30; ++i) {
         timestamp += 30000000;
@@ -22,6 +25,7 @@ int main(void)
     }
 
     assert(focus_calls == 31 && opacity_calls == 0);
+    assert(batch_calls == 32); // Repeats cancel obsolete effects, including empty destinations.
 
     timestamp += 200000000;
     assert(space_navigation_run(active_space, 1, false, .95f, .1f));
@@ -52,7 +56,8 @@ int main(void)
 
     opacity_fail_at = 3;
     assert(!space_navigation_run(active_space, 2, false, .95f, .1f));
-    assert(focus_calls == 1 && opacity_calls == 4); // Report incomplete restoration.
+    assert(focus_calls == 1 && opacity_calls == 6); // Retry restoration and report failure.
+    assert(effects[4].duration == 0 && effects[5].duration == 0);
 
     reset();
 
@@ -100,6 +105,19 @@ int main(void)
     visible_space = 3;
     assert(space_navigation_run(active_space, 2, false, .95f, 0));
     assert(raise_calls == 1 && focused_id == 1);
+
+    reset();
+
+    other_window_space = visible_space = 3;
+    expect_fade_started = true;
+    assert(space_navigation_run(active_space, 2, false, .95f, .1f));
+    assert(raise_calls == 1 && opacity_calls == 4);
+
+    reset();
+
+    reduce_motion = true;
+    assert(space_navigation_run(active_space, 2, false, .95f, .1f));
+    assert(opacity_calls == 0 && focus_calls == 1 && batch_calls == 1);
 
     reset();
 

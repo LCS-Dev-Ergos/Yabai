@@ -34,7 +34,7 @@ set_target_properties(payload PROPERTIES
     OSX_ARCHITECTURES "${YABAI_OSAX_ARCHITECTURES}")
 target_compile_options(payload PRIVATE -O3)
 target_link_options(payload PRIVATE -F${PRIVATE_FRAMEWORKS})
-target_link_libraries(payload PRIVATE "-framework SkyLight" "-framework Foundation" "-framework Carbon")
+target_link_libraries(payload PRIVATE "-framework SkyLight" "-framework AppKit" "-framework QuartzCore" "-framework Carbon")
 
 add_executable(loader ${SRC}/osax/loader.m)
 set_target_properties(loader PROPERTIES
@@ -138,7 +138,7 @@ if(YABAI_FUZZ)
     add_executable(fuzz_payload_message tests/fuzz/payload_message.m)
     target_include_directories(fuzz_payload_message PRIVATE ${SRC}/osax)
     target_link_libraries(fuzz_payload_message PRIVATE
-        "-framework Foundation" "-framework Carbon" "-framework CoreGraphics")
+        "-framework AppKit" "-framework QuartzCore" "-framework Carbon" "-framework CoreGraphics")
 
     foreach(target daemon_message payload_message)
         set_target_properties(fuzz_${target} PROPERTIES

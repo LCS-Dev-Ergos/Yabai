@@ -758,6 +758,9 @@ static void do_window_move(char *message)
 }
 
 #include "window_fade.c"
+#include "window_fade_display.m"
+#include "window_fade_navigation.c"
+#include "window_opacity_handlers.c"
 
 static void do_window_opacity(char *message)
 {
@@ -1021,6 +1024,12 @@ static void handle_message(int sockfd, char *message)
     } break;
     case SA_OPCODE_WINDOW_OPACITY_FADE: {
         do_window_opacity_fade(message);
+    } break;
+    case SA_OPCODE_WINDOW_OPACITY_FOCUS: {
+        do_window_opacity_focus(message);
+    } break;
+    case SA_OPCODE_WINDOW_OPACITY_BATCH: {
+        do_window_opacity_batch(sockfd, message);
     } break;
     case SA_OPCODE_WINDOW_LAYER: {
         do_window_layer(message);

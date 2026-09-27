@@ -85,6 +85,8 @@ static bool space_navigation_needs_raise(struct window *window, uint32_t display
     return false;
 }
 
+#include "space_navigation_effects.c"
+
 static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, float alpha, float duration)
 {
     if (current == sid) return true;
@@ -119,26 +121,21 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
     // Repeated navigation stays immediate. Suppress effects, never navigation.
     bool fade = duration > 0.0f && alpha < 1.0f && !space_is_visible(sid)
         && !space_is_fullscreen(sid)
-        && (space_navigation_last_time == 0 || now - space_navigation_last_time >= 180000000ULL);
+        && (space_navigation_last_time == 0 || now - space_navigation_last_time >= 180000000ULL)
+        && !space_navigation_reduce_motion();
 
     uint32_t focus_id = focus ? focus->id : 0;
-    bool effects_ok = true;
-
-    if (fade) {
-        for (int i = 0; i < count; ++i) {
-            struct window *window = window_manager_find_window(&g_window_manager, ids[i]);
-            if (!space_navigation_window(window)) continue;
-
-            float end = space_navigation_opacity(window, focus_id);
-            if (alpha < end) {
-                effects_ok = scripting_addition_set_opacity(window->id, alpha, 0.0f) && effects_ok;
-            }
-        }
-    }
+    struct space_navigation_effect effect;
+    bool effects_ok = space_navigation_prepare_effect(&effect, display, ids, count, focus_id, alpha, fade);
 
     // Unlike generic --focus, do not silently fall back to asynchronous gestures
     // after dimming windows: failure must restore opacity before returning.
     bool success = effects_ok && scripting_addition_focus_space(sid);
+
+    // Start the entire group before application activation or AXRaise can
+    // block. Failure restores ordinary opacity without leaving dim windows.
+    effects_ok = space_navigation_start_effect(&effect, display,
+        success ? focus_id : g_window_manager.focused_window_id, alpha, duration, success) && effects_ok;
 
     if (success) {
         space_navigation_last_time = now;
@@ -170,18 +167,6 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
 
         space_navigation_anchor.sid = sid;
         space_navigation_anchor.time = read_os_timer();
-    }
-
-    if (fade) {
-        for (int i = 0; i < count; ++i) {
-            struct window *window = window_manager_find_window(&g_window_manager, ids[i]);
-            if (!space_navigation_window(window)) continue;
-
-            float end = space_navigation_opacity(window, success ? focus_id : g_window_manager.focused_window_id);
-            if (alpha < space_navigation_opacity(window, focus_id)) {
-                effects_ok = scripting_addition_set_opacity(window->id, end, success ? duration : 0.0f) && effects_ok;
-            }
-        }
     }
 
     return success && effects_ok;

@@ -15,9 +15,11 @@ typedef TEST_SIG(function);
 #include "navigation_args.c"
 #include "signal_dispatch.c"
 #include "signal_environment.c"
+#include "opacity_policy.c"
 
 #define TEST_ENTRY(name) { #name, test_##name },
 #define TEST_LIST                                              \
+    TEST_ENTRY(opacity_policy)                                 \
     TEST_ENTRY(signal_socket_lifetime)                         \
     TEST_ENTRY(signal_environment)                             \
     TEST_ENTRY(signal_standard_output)                         \

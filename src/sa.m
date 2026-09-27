@@ -443,8 +443,9 @@ static bool scripting_addition_send_bytes(char *bytes, int length)
     if (socket_open(&sockfd)) {
         if (socket_connect(sockfd, g_sa_socket_file)) {
             if (send(sockfd, bytes, length, 0) != -1) {
-                recv(sockfd, &dummy, 1, 0);
-                result = true;
+                ssize_t received = recv(sockfd, &dummy, 1, 0);
+                result = bytes[sizeof(int16_t)] != SA_OPCODE_WINDOW_OPACITY_BATCH
+                    || (received == 1 && dummy == 'k');
             }
         }
 
@@ -513,6 +514,8 @@ bool scripting_addition_set_opacity(uint32_t wid, float opacity, float duration)
     pack(duration);
     return sa_payload_send(duration > 0.0f ? SA_OPCODE_WINDOW_OPACITY_FADE : SA_OPCODE_WINDOW_OPACITY);
 }
+
+#include "sa_opacity.c"
 
 bool scripting_addition_set_layer(uint32_t wid, int layer)
 {

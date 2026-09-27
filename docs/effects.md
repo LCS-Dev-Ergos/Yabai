@@ -1,55 +1,101 @@
 # Opacity effects
 
-Payload `2.1.31-lcs.3` replaces the per-window fade threads with one shared
-worker. The worker sleeps on a condition variable when no fades are active.
-All requests and frame writes use the same mutex; an immediate opacity change
-cancels a pending fade before applying its value. Retargeting starts from the
-window's current alpha, and only the latest target for each window is retained.
+Payload `2.1.31-lcs.6` separates temporary Desktop navigation effects from
+ordinary focus opacity. This implements the ownership and pacing work from
+the [live investigation](effects-investigation.md) and
+[Apple motion research](apple-motion-research.md).
 
-The lcs.11 [live investigation](effects-investigation.md) found that ordinary
-zero-duration focus-opacity updates can interrupt navigation fades. The shared
-worker's timing tests do not cover that integration conflict. The
-[Apple motion research](apple-motion-research.md) describes the proposed
-ownership, sequencing and display-pacing work before selecting new curves.
+## Navigation lifecycle
 
-Progress is calculated from `CLOCK_MONOTONIC`, using an ease-out cubic curve:
-`1 - (1 - t)^3`. The endpoint is assigned exactly once elapsed time reaches
-the requested duration. Late frames skip ahead rather than replaying steps.
-This changes the shape of ordinary opacity fades as well as navigation fades.
+The daemon sends two bounded window lists: preparation before switching Space,
+then recovery immediately after the switch, before application activation or
+AXRaise. Recovery has one monotonic start time and duration for the whole list.
+It reuses the alpha just applied during preparation, avoiding a synchronous
+`SLSGetWindowAlpha` round trip per window. Custom opacity below the preparation
+alpha is preserved. More than 400 affected windows disables the whole effect
+instead of animating only part of a Desktop.
 
-One timer serves all active windows, at up to 120 frames per second. This is
-not display-link synchronization. System-call and scheduling delays can still
-delay frames and completion; the engine does not promise a hard real-time
-deadline. Even an overdue frame yields through a timed condition wait so a
-new request is not starved for the duration of an animation.
+The focus-policy opcode leaves a navigation effect intact when its target is
+unchanged. A different focus target continues from the last written alpha and
+keeps the original completion time. Explicit opacity commands still cancel an
+effect immediately. No claim is made that the last written alpha equals the
+last presented frame.
 
-Invalid alpha/duration values are ignored. Closed windows are removed when
-their alpha cannot be read or written. If allocation or worker creation fails,
-the requested opacity is applied immediately instead of leaving a stuck fade.
+Every navigation cancels obsolete effects on its destination display, including
+rapid repeats and empty destinations. Cancellation restores the latest target;
+effects on other displays continue. Preparation/start failure attempts immediate
+restoration and is reported. Transport loss or a failed WindowServer write can
+still prevent restoration; this protocol is not a compositor transaction.
 
-## Verification
+Batch validation completes before any mutation: finite values, bounded length,
+nonzero window/display IDs and unique window IDs. Batch replies explicitly
+report success/failure. The existing Space-focus protocol's acknowledgement
+does not establish that the destination application has rendered a frame.
 
-`fade_tests` exercises the production engine with simulated SkyLight calls.
-It checks easing and elapsed-time endpoints, skipped frames, cancellation,
-invalid input, failed system calls and worker creation, concurrent updates,
-and interruption when system calls are slower than a frame. ASan/UBSan and
-ThreadSanitizer can instrument this standalone test even though the injected
-payload itself is not instrumented by those presets.
+## Curve and pacing
 
-On the development host, a 100 ms fade with a simulated 4 ms cost for each
-alpha write took 184.5 ms with the old payload code and 106.2 ms with the new
-engine. This is a controlled timing check, not a measurement of visual quality
-or WindowServer CPU in the live Dock.
+Navigation uses bounded smoothstep `3t² - 2t³`, without overshoot and with zero
+endpoint slopes. A real target change rebases this curve from its current value;
+it does not preserve velocity. Ordinary non-navigation fades retain cubic
+ease-out `1 - (1 - t)^3` and their existing duration behavior.
+
+The installed wrapper's 0.9 alpha and 150 ms duration remain the first comparison
+baseline. At 60 Hz this spans about nine intervals. Removing premature focus
+cancellation and changing the curve already changes perceived duration; the
+final preference still needs comparison on the active release. There is no
+claim that this is Apple's own curve or its chosen Desktop duration.
+
+On macOS 14+, one `NSScreen` display link per active target display wakes the
+shared worker. Callbacks use a nonblocking lock attempt, set a latest-frame flag
+and signal; they never call SkyLight or wait for application focus. Multiple
+callbacks cannot queue stale frames. Interpolation uses `CLOCK_MONOTONIC` at
+worker execution, without mixing Core Animation timestamps into that clock.
+
+Before callbacks arrive, or on older macOS, the fallback uses the display mode's
+refresh rate (60 Hz if unspecified, capped at 240 Hz). After callbacks start, a
+50 ms watchdog and the original endpoint deadline prevent a stalled run loop,
+sleep or disconnect from leaving an indefinitely active effect. Idle links are
+invalidated on the main run loop; the worker sleeps when its list is empty.
+Late frames skip ahead. Scheduler and SkyLight delays still affect completion;
+display callbacks are opportunities, not presentation fences or real-time guarantees.
+
+Reduce Motion suppresses navigation fades, as do rapid repeats, visible
+destinations and fullscreen Spaces. Navigation itself remains immediate.
+Resolution/scaling settings are neither changed nor used to choose the curve.
+
+## Verification of this revision
+
+The pre-fix navigation test failed because window focus began before recovery.
+It now passes for ordinary focus and the cross-display raise path. The unity
+test also exercises the actual focus setter and socket encoding: focus policy,
+explicit opacity and batch acknowledgement have distinct verified behavior.
+
+`fade_tests` covers redundant focus, real retargeting, explicit cancellation,
+shared epochs, display isolation, fallback cadence, missed callbacks, allocation
+and system-call failure, concurrent requests and idle behavior. Debug and
+ASan/UBSan passed 6/6; TSan passed fade and navigation-queue tests. Static analysis
+passed both payload architectures and the daemon baseline. Two 60-second fuzz
+campaigns passed, including the new opacity parsers with scheduling disabled.
+
+The opt-in [display probe](../tests/fade/display.m) uses real AppKit callbacks
+with simulated alpha writes and creates no windows. On this host's two 60 Hz
+Dell U3223QE displays, it recorded 9–10 writes per window for a 150 ms recovery,
+then zero retained links. Stalling its main run loop also recovered; TSan passed.
+An isolated lcs.11 timer baseline with two simulated windows recorded 33–34
+total writes in each of five trials, versus 18–20 for the new probe. These are
+call counts, not rendered frames, CPU/GPU measurements or live Dock acceptance.
+
+Raw local logs are under ignored `build/lcs12-*.log`, with the timer comparison
+in `build/lcs11-cadence-baseline.log`. After activation, repeat the alpha A/B,
+fixed navigation workload, WindowServer/daemon CPU and rendered-frame checks.
+Include reversals, held keys, empty Desktops, Edge across displays and actual
+monitor sleep/reconfiguration. Live payload display-link behavior and visual
+acceptance remain separate gates from the isolated probe.
 
 ## Native compositor investigation
 
 The reconstructed [Mousecape SkyLight declarations](https://github.com/alexzielenski/Mousecape/blob/master/Mousecape/mousecloak/CGSInternal/CGSWindow.h)
-include a duration for `CGSSetWindowListAlpha`. Inspection of the installed
-macOS 27.2 SkyLight confirmed that `SLSSetWindowListAlpha` forwards float alpha
-and duration to a WindowServer message. A probe on its own temporary window
-returned success, but querying alpha returned the target immediately.
-
-Those observations do not establish the rendered transition, cancellation
-semantics or behavior on other applications' windows from Dock. Consequently
-this release uses the tested shared worker. Native interpolation, display-link
-pacing, spring curves and a configurable easing selector remain future work.
+include a duration for `CGSSetWindowListAlpha`. Inspection of local macOS 27.2
+confirmed forwarding to WindowServer, but an owned-window probe did not establish
+rendered interpolation, interruption or behavior from Dock on foreign windows.
+That path and spatial spring effects remain experimental.

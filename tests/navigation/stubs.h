@@ -119,6 +119,28 @@ static bool scripting_addition_focus_space(uint64_t sid)
     return focus_success;
 }
 
+static float space_navigation_frame_interval(uint32_t display)
+{
+    return 1.0f / 60.0f;
+}
+
+static bool space_navigation_reduce_motion(void)
+{
+    return reduce_motion;
+}
+
+static bool scripting_addition_set_opacity_batch(uint32_t display, uint8_t phase, float alpha, float duration,
+                                                float interval, struct sa_window_opacity *windows, uint32_t count)
+{
+    ++batch_calls;
+    bool success = true;
+    for (uint32_t i = 0; i < count; ++i) {
+        success = scripting_addition_set_opacity(windows[i].wid, windows[i].alpha, duration) && success;
+    }
+
+    return success;
+}
+
 static void display_manager_focus_display(uint32_t did, uint64_t sid)
 {
     ++display_calls;
@@ -126,6 +148,7 @@ static void display_manager_focus_display(uint32_t did, uint64_t sid)
 
 static void window_manager_focus_window_with_raise(int *psn, uint32_t id, void *ref)
 {
+    if (expect_fade_started) assert(opacity_calls == 4);
     ++window_focus_calls;
     ++raise_calls;
     focused_id = id;
@@ -133,6 +156,7 @@ static void window_manager_focus_window_with_raise(int *psn, uint32_t id, void *
 
 static void window_manager_focus_window_without_raise(int *psn, uint32_t id)
 {
+    if (expect_fade_started) assert(opacity_calls == 4);
     ++window_focus_calls;
     focused_id = id;
 }

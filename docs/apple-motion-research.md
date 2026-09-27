@@ -61,7 +61,9 @@ not promise that every destination application has rendered its first frame;
 do not turn it into a presentation fence or add an arbitrary waiting timer.
 [Notification contract](https://developer.apple.com/documentation/appkit/nsworkspace/activespacedidchangenotification).
 
-## Applying this to the current fork
+## Applying this to the lcs.11 baseline
+
+The subsequent implementation and its verification limits are in [effects.md](effects.md).
 
 The [navigation path](../src/space_navigation.c) dims destination windows,
 switches Space, focuses/possibly raises a window, then submits fades one by

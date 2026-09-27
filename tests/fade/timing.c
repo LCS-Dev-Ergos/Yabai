@@ -1,5 +1,6 @@
 #include "fixture.h"
 #include "concurrency.c"
+#include "navigation.c"
 
 static void test_elapsed_time(void)
 {
@@ -62,7 +63,10 @@ int main(void)
 {
     test_elapsed_time();
     test_cancellation_and_errors();
+    test_navigation_ownership();
+    test_navigation_cadence();
     test_concurrent_requests();
+    test_navigation_batch();
 
     puts("fade: elapsed time, easing, cancellation, errors and concurrency passed");
     return 0;

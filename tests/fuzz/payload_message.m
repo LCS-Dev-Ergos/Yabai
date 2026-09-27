@@ -5,11 +5,13 @@
 // payload.m is compiled in with its constructor disabled, and the SkyLight
 // calls it makes are stubbed below, so no request reaches WindowServer. The
 // space handlers return before parsing because no Dock instances are resolved.
-// Opacity fades are skipped here; their shared worker and timing are covered
-// by the dedicated fade tests.
+// Opacity parsing runs with worker/main-queue scheduling disabled. The real
+// scheduling, ownership and timing are covered by the dedicated fade tests.
 //
 
 #import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
+#import <QuartzCore/CADisplayLink.h>
 #include <Carbon/Carbon.h>
 #include <CoreGraphics/CoreGraphics.h>
 #include <fcntl.h>
@@ -25,7 +27,9 @@
 
 // Keeps load_payload from starting the socket daemon when the target loads.
 #define constructor unused
+#define dispatch_async(queue, block) ((void)0)
 #include "payload.m"
+#undef dispatch_async
 #undef constructor
 
 int SLSMainConnectionID(void) { return 0; }
@@ -69,11 +73,14 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     shutdown(fds[0], SHUT_WR);
 
     char message[SA_SOCKET_BUFF_LEN];
-    if (read_message(fds[1], message) && message[0] != SA_OPCODE_WINDOW_OPACITY_FADE) {
+    window_fade_worker_started = true; // No real thread can outlive one input.
+    if (read_message(fds[1], message)) {
         @autoreleasepool {
             handle_message(fds[1], message);
         }
     }
+
+    while (window_fades) window_fade_remove(&window_fades);
 
     close(fds[0]);
     close(fds[1]);

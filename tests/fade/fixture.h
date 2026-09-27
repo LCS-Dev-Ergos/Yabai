@@ -8,12 +8,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "../../src/osax/common.h"
+
+#ifndef FADE_DISPLAY_LINK
+static void window_fade_display_start(uint32_t display)
+{
+}
+
+static void window_fade_display_stop(uint32_t display)
+{
+}
+#endif
 
 static float alphas[64];
 static int alpha_calls;
+static int alpha_reads;
 static int thread_calls;
 static useconds_t alpha_delay;
-static bool fail_get, fail_set, fail_thread;
+static bool fail_get, fail_set, fail_thread, fail_alloc;
 
 static int SLSMainConnectionID(void)
 {
@@ -23,6 +35,7 @@ static int SLSMainConnectionID(void)
 static int SLSGetWindowAlpha(int cid, uint32_t wid, float *alpha)
 {
     assert(wid < 64);
+    ++alpha_reads;
     *alpha = alphas[wid];
     return fail_get;
 }
@@ -45,9 +58,20 @@ static int create_worker(pthread_t *thread, const pthread_attr_t *attributes,
     return fail_thread ? EAGAIN : pthread_create(thread, attributes, entry, context);
 }
 
+static void *allocate_fade(size_t count, size_t size)
+{
+    return fail_alloc ? NULL : calloc(count, size);
+}
+
 #define pthread_create create_worker
+#define calloc allocate_fade
 #include "../../src/osax/window_fade.c"
+#ifdef FADE_DISPLAY_LINK
+#include "../../src/osax/window_fade_display.m"
+#endif
+#include "../../src/osax/window_fade_navigation.c"
 #undef pthread_create
+#undef calloc
 
 static struct window_fade_context *add_fade(uint32_t wid)
 {

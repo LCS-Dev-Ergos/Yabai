@@ -8,15 +8,16 @@ static void *window_fade_worker(void *unused)
         double now = window_fade_now();
         window_fade_tick(now);
 
-        // One cadence for all windows, capped at 120 Hz. Late frames use
-        // current time rather than replaying missed steps or adding sleeps.
-        double deadline = now + 1.0 / 120.0;
+        // Display callbacks wake navigation fades; their watchdog also
+        // completes a fade if the screen sleeps or its run loop stalls.
+        double deadline = now + 1.0;
         for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
             double end = fade->started + fade->duration;
             if (end < deadline) deadline = end;
+            if (fade->next_frame < deadline) deadline = fade->next_frame;
         }
 
-        while (window_fades) {
+        if (window_fades) {
             double remaining = deadline - window_fade_now();
             // Even an overdue frame must sleep briefly: unlock/relock alone
             // can starve pending requests on an unfair pthread mutex.
@@ -27,9 +28,7 @@ static void *window_fade_worker(void *unused)
                 .tv_nsec = (long)((remaining - (time_t)remaining) * 1e9)
             };
 
-            // A new request may wake us early; keep the shared frame deadline.
             pthread_cond_timedwait_relative_np(&window_fade_cond, &window_fade_lock, &wait);
-            if (window_fade_now() >= deadline) break;
         }
     }
 

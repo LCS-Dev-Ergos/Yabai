@@ -790,7 +790,11 @@ void window_manager_set_window_opacity(struct window_manager *wm, struct window 
     if (!window_manager_is_window_eligible(window)) return;
     if (window->opacity != 0.0f)                    return;
 
-    window_manager_set_opacity(wm, window, opacity);
+    if (opacity == 0.0f) {
+        opacity = window->id == wm->focused_window_id ? wm->active_window_opacity : wm->normal_window_opacity;
+    }
+
+    scripting_addition_set_focus_opacity(window->id, opacity, wm->window_opacity_duration);
 }
 
 void window_manager_set_menubar_opacity(struct window_manager *wm, float opacity)
