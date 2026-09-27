@@ -388,6 +388,19 @@ visibility snapshot, window lists per Desktop, a window's Desktop) and in
 `AXRaise`, most of it waiting for replies. Raw evidence is in ignored
 `build/lcs20-*.log`.
 
+## Activated lcs.21
+
+On 2026-09-28 lcs.21 ran with payload `2.1.31-lcs.11` and `space.sh`
+requesting `crossfade 0.25`. Two crossfades from Desktop 6 to 7 stayed within
+both Desktops on every channel, moved monotonically and presented a frame
+every 16.7 ms. First and last visible change, two runs per duration: 150 ms
+63-130 and 147-163 ms (one run shrank to 2 frames behind a WindowServer
+stall), 200 ms 59-96 and 193-196 ms, 250 ms 73-81 and 231-240 ms. Edge bursts
+ended 6 of 6 right through `space.sh` and 6 of 6 through the socket, with no
+"ordered on non-visible space" switch in Dock's log. The user reports that
+SketchyBar briefly disappears during a crossfade to an empty or an Edge
+Desktop; not measured yet. Raw evidence is in ignored `build/lcs21-*.log`.
+
 ## Remaining work
 
 The 40 ms same-application focus delay is kept for application compatibility
