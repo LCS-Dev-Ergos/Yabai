@@ -40,6 +40,24 @@ static void test_raise_queries(void)
 
     reset();
 
+    // A tiled window answers from its view: raise when it is visible on the
+    // other display, not when it is hidden there or on this display.
+    other_window_tiled = true;
+    other_window_space = visible_space = 3;
+    assert(space_navigation_needs_raise(&windows[0], 1));
+    assert(window_list_queries == 0);
+
+    reset();
+
+    other_window_tiled = true;
+    other_window_space = 3;
+    assert(!space_navigation_needs_raise(&windows[0], 1));
+    other_window_space = 2;
+    assert(!space_navigation_needs_raise(&windows[0], 1));
+    assert(window_list_queries == 0);
+
+    reset();
+
     // With a single display there is nothing to ask.
     single_display = true;
     other_window_space = visible_space = 3;

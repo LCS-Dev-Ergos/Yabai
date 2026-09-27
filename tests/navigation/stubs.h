@@ -102,6 +102,18 @@ static struct window **window_manager_find_application_windows(void *wm, struct 
     return list;
 }
 
+// The second window is tiled in the view of other_window_space when
+// other_window_tiled is set, and floating otherwise.
+static struct view *window_manager_find_managed_window(void *wm, struct window *window)
+{
+    static struct view view;
+
+    if (!other_window_tiled || window != &windows[1]) return NULL;
+
+    view.sid = other_window_space;
+    return &view;
+}
+
 // The application's windows on the given spaces. The second window may sit
 // on a space of the other display.
 static int space_navigation_spaces_windows(uint64_t *spaces, int space_count, int cid, uint32_t *ids, int capacity)
@@ -109,6 +121,7 @@ static int space_navigation_spaces_windows(uint64_t *spaces, int space_count, in
     int count = 0;
 
     ++window_list_queries;
+    switches_at_query = focus_calls;
     assert(cid == app.connection && capacity >= 2);
 
     for (int i = 0; i < space_count; ++i) {

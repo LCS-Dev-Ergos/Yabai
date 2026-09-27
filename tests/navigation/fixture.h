@@ -29,6 +29,11 @@ struct window
     void *ref;
 };
 
+struct view
+{
+    uint64_t sid;
+};
+
 static struct application app;
 static struct window windows[2];
 
@@ -43,12 +48,14 @@ static struct
 static int g_space_manager;
 static uint64_t active_space, timestamp, visible_space, other_window_space;
 static bool visible, fullscreen, mission_control, animating, focus_success, single_display, single_window;
+static bool other_window_tiled;
 static int focus_calls, opacity_calls, window_focus_calls, raise_calls, move_calls, display_calls;
 static int opacity_fail_at;
 static bool expect_fade_started;
 static bool reduce_motion;
 static int batch_calls;
 static int window_list_queries, focus_cancels;
+static int switches_at_query;
 static uint32_t focused_id, noted_id;
 static double seconds_since_click;
 static uint32_t ids[] = { 1, 2 };
@@ -87,6 +94,7 @@ static void reset(void)
     space_navigation_forget();
     memset(space_navigation_effect_until, 0, sizeof(space_navigation_effect_until));
     visible = fullscreen = mission_control = animating = single_display = single_window = false;
+    other_window_tiled = false;
     focus_success = true;
 
     focus_calls = opacity_calls = window_focus_calls = raise_calls = move_calls = display_calls = 0;
@@ -96,4 +104,5 @@ static void reset(void)
     reduce_motion = false;
     batch_calls = 0;
     window_list_queries = focus_cancels = 0;
+    switches_at_query = -1;
 }

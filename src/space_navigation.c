@@ -67,26 +67,42 @@ static float space_navigation_opacity(struct window *window, uint32_t focused_id
                                     : g_window_manager.normal_window_opacity;
 }
 
-// An application activated with another window visible on a different
-// display, such as a Chromium browser, can make that window key instead.
-// Asking for the Space of each of its windows cost a WindowServer round trip
-// per window; one query lists its windows on the Desktops visible elsewhere,
-// and none is needed when it has no other window that could take focus.
-static bool space_navigation_needs_raise(struct window *window, uint32_t display)
+static bool space_navigation_spaces_contain(uint64_t *spaces, int count, uint64_t sid)
 {
-    int count = 0;
-    struct window **list = window_manager_find_application_windows(&g_window_manager, window->application, &count);
-
-    bool others = false;
-    for (int i = 0; !others && i < count; ++i) {
-        others = list[i] != window && space_navigation_window(list[i]);
+    for (int i = 0; i < count; ++i) {
+        if (spaces[i] == sid) return true;
     }
 
-    if (!others) return false;
+    return false;
+}
 
+// An application activated with another window visible on a different
+// display, such as a Chromium browser, can make that window key instead.
+// A tiled window's Desktop is the Space of its view. Only floating and
+// unmanaged windows need WindowServer, which lists the application's windows
+// on the Desktops visible elsewhere with one query.
+static bool space_navigation_needs_raise(struct window *window, uint32_t display)
+{
     uint64_t spaces[SPACE_NAVIGATION_DISPLAYS_MAX];
     int space_count = space_navigation_spaces_visible_elsewhere(display, spaces);
     if (!space_count) return false;
+
+    int count = 0;
+    struct window **list = window_manager_find_application_windows(&g_window_manager, window->application, &count);
+
+    bool unknown = false;
+    for (int i = 0; i < count; ++i) {
+        if (list[i] == window || !space_navigation_window(list[i])) continue;
+
+        struct view *view = window_manager_find_managed_window(&g_window_manager, list[i]);
+        if (!view) {
+            unknown = true;
+        } else if (space_navigation_spaces_contain(spaces, space_count, view->sid)) {
+            return true;
+        }
+    }
+
+    if (!unknown) return false;
 
     uint32_t ids[SPACE_NAVIGATION_WINDOWS_MAX];
     int id_count = space_navigation_spaces_windows(spaces, space_count, window->application->connection,
@@ -136,6 +152,10 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
         if (space_navigation_window(window)) focus = window;
     }
 
+    // Decided before the switch: afterwards WindowServer is busy showing the
+    // new Desktop, and each query waits for about a frame.
+    bool raise = focus && (move || space_navigation_needs_raise(focus, display));
+
     uint64_t now = read_os_timer();
 
     // Repeated navigation stays immediate. Suppress effects, never navigation.
@@ -170,7 +190,7 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
         }
 
         if (focus) {
-            if (move || space_navigation_needs_raise(focus, display)) {
+            if (raise) {
                 // Raising completes before the next navigation can switch
                 // away, so the application cannot raise it on a hidden space.
                 window_manager_focus_window_with_raise(&focus->application->psn, focus->id, focus->ref);

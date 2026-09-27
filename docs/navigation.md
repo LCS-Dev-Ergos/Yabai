@@ -60,10 +60,12 @@ When the destination's application has another window visible on a different
 display, navigation raises the destination window through Accessibility as
 `window --focus` does, which such an application honors. The raise completes
 before the next request runs, so it cannot pull a Desktop back into view.
-Other applications keep the cheaper focus without a raise. The check lists
-the application's window numbers on the Desktops visible on other displays
-with one query, instead of asking for the Space of each of its windows, and
-skips the query when the application has no other window that could take focus.
+Other applications keep the cheaper focus without a raise. A tiled window's
+Desktop is the Space of its view, so only floating and unmanaged windows need
+WindowServer: one query lists the application's window numbers on the Desktops
+visible on other displays. The decision is made before the switch, because
+afterwards WindowServer is busy showing the new Desktop and each synchronous
+call waits for about a frame.
 
 Between two windows of the application that is already active, upstream
 leaves 40 ms between deactivating the old window and activating the new one,
