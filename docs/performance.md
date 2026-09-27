@@ -217,10 +217,45 @@ displays with one query. A navigation with nothing to dim also skips the Dock
 round trip that only cancels effects, once none can still run. Raw evidence is
 in ignored `build/lcs13-measurements-*.json` and `build/lcs13-isolated-*.sample.txt`.
 
+## Display configurations on lcs.14
+
+On 2026-09-27, after a restart, the same workload ran with the MacBook display
+alone (120 Hz, 4112×2658 backing), one Dell alone (landscape 6016×3384 or
+rotated 3780×6720, 60 Hz) and both Dells (6016×3384 each), with only kitty and
+VS Code open. Desktops 3/4 both held VS Code. GPU figures are IOAccelerator
+device utilization sampled every 150 ms:
+
+| Setup | Idle WindowServer / GPU | Isolated median | Burst drain | 40 × 30 ms drain | Burst GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| MacBook | 5% / 1% | 70 ms | 75 ms | 31 ms | 37% |
+| Landscape Dell | 19% / 26% | 64 ms | 74 ms | 44 ms | 57% |
+| Rotated Dell | 19% / 22% | 64 ms | 99 ms | 18 ms | 58% |
+| Both Dells | 7% / 1% | 89 ms | 72 ms | 119 ms | 47% |
+
+No setup built a queue. With both displays the request took about 12 ms more,
+mostly WindowServer delivering the focus event records more slowly. The
+40 ms same-application focus delay was 77% of the request on every setup.
+
+With Edge, ChatGPT and TIDAL also open, on both displays: isolated 6/7 median
+53 ms, burst drain 153 ms (maximum 304 ms), 40 × 30 ms drain 323 ms, and
+WindowServer 76% of a core during the burst, when VS Code used 147% and ChatGPT
+120%. A `next` lap from Desktop 1 to 11 on the other display and a `prev` lap
+back landed correctly on all 20 steps. Empty Desktops took 13–20 ms, Edge's
+134–254 ms: Edge also had a window on the other display, so navigation raised
+through Accessibility (304 of 1,259 busy samples). The cross-display raise
+query took 218, 151 of them classifying windows. The lcs.15 follow-up skips
+that query when no other window could take focus, reads only window numbers,
+and defers the same-application activation instead of sleeping.
+
+Two displays alone did not reproduce the slowdown; applications repainting
+large backing surfaces did. Raw evidence is in ignored `build/displays-*.json`
+and `build/displays-*-yabai.sample.txt`. Lower-resolution modes remain to be
+compared.
+
 ## Remaining work
 
-Profile again before changing the focus workaround's 40 ms delay: it exists
-for application compatibility. Signal titles already come from `window->title`
+The 40 ms same-application focus delay is kept for application compatibility
+but no longer blocks the event loop. Signal titles already come from `window->title`
 through `window_title_ts`; the earlier suggestion of removing AX title queries
 there was incorrect. Keep focus correctness, event delivery and multi-display
 behavior in scope when measuring the focus-event changes.
