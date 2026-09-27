@@ -34,7 +34,7 @@ static uint64_t space_navigation_current_space(uint64_t active_sid)
     if (!sid || sid == active_sid) return active_sid;
 
     uint64_t age = read_os_timer() - space_navigation_anchor.time;
-    if (age >= SPACE_NAVIGATION_ANCHOR_NS || !space_is_visible(sid)) return active_sid;
+    if (age >= SPACE_NAVIGATION_ANCHOR_NS || !space_navigation_space_visible(sid)) return active_sid;
     if (space_navigation_seconds_since_click() * 1e9 < (double) age) return active_sid;
 
     return sid;
@@ -69,23 +69,22 @@ static float space_navigation_opacity(struct window *window, uint32_t focused_id
 
 // An application activated with another window visible on a different
 // display, such as a Chromium browser, can make that window key instead.
+// Asking for the Space of each of its windows cost a WindowServer round trip
+// per window; one query lists its windows on the Desktops visible elsewhere.
 static bool space_navigation_needs_raise(struct window *window, uint32_t display)
 {
-    int count = 0;
-    struct window **list = window_manager_find_application_windows(&g_window_manager, window->application, &count);
+    uint64_t spaces[SPACE_NAVIGATION_DISPLAYS_MAX];
+    int space_count = space_navigation_spaces_visible_elsewhere(display, spaces);
+    if (!space_count) return false;
 
-    for (int i = 0; i < count; ++i) {
-        struct window *other = list[i];
+    int count = 0;
+    uint32_t *list = space_window_list_for_connection(spaces, space_count, window->application->connection, &count, false);
+
+    for (int i = 0; list && i < count; ++i) {
+        struct window *other = window_manager_find_window(&g_window_manager, list[i]);
         if (other == window || !space_navigation_window(other)) continue;
 
-        uint64_t sid = window_space(other->id);
-        if (!sid) continue;
-
-        // Same-display windows cannot cause the cross-display focus steal.
-        // Reuse the display lookup instead of resolving it inside visibility
-        // and then again when deciding whether AXRaise is necessary.
-        uint32_t other_display = space_display_id(sid);
-        if (other_display && other_display != display && display_space_id(other_display) == sid) return true;
+        if (other->application == window->application) return true;
     }
 
     return false;
@@ -97,7 +96,7 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
 {
     if (current == sid) return true;
 
-    uint32_t display = space_display_id(sid);
+    uint32_t display = space_navigation_space_display(sid);
     if (mission_control_is_active() || display_manager_display_is_animating(display)) return false;
 
     struct window *focus = NULL;
@@ -105,7 +104,7 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
     if (move) {
         focus = window_manager_focused_window(&g_window_manager);
 
-        if (!space_navigation_window(focus) || space_is_fullscreen(sid)
+        if (!space_navigation_window(focus) || space_navigation_space_fullscreen(sid)
             || window_check_flag(focus, WINDOW_FULLSCREEN)) {
             return false;
         }
@@ -125,8 +124,8 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
     uint64_t now = read_os_timer();
 
     // Repeated navigation stays immediate. Suppress effects, never navigation.
-    bool fade = duration > 0.0f && alpha < 1.0f && !space_is_visible(sid)
-        && !space_is_fullscreen(sid)
+    bool fade = duration > 0.0f && alpha < 1.0f && !space_navigation_space_visible(sid)
+        && !space_navigation_space_fullscreen(sid)
         && (space_navigation_last_time == 0 || now - space_navigation_last_time >= 180000000ULL)
         && !space_navigation_reduce_motion();
 
@@ -146,7 +145,7 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
     if (success) {
         space_navigation_last_time = now;
 
-        if (space_display_id(current) != display) {
+        if (space_navigation_space_display(current) != display) {
             if (focus) {
                 display_manager_set_active_display_id(display);
                 window_manager_center_mouse(&g_window_manager, focus);

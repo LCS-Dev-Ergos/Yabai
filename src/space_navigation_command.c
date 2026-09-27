@@ -1,46 +1,22 @@
 #include "space_navigation_display.m"
+#include "space_navigation_spaces.c"
 #include "space_navigation.c"
 
 static uint64_t space_navigation_active_space(void)
 {
     // Read WindowServer's active display directly; querying the focused
     // application's AX window during every switch can stall navigation.
-    return space_navigation_current_space(display_space_id(display_manager_active_display_id()));
+    return space_navigation_current_space(space_navigation_display_space(display_manager_active_display_id()));
 }
 
 // The space `steps` places after sid in mission-control order, wrapping.
 static uint64_t space_navigation_step(uint64_t sid, int steps)
 {
-    CFArrayRef display_spaces_ref = SLSCopyManagedDisplaySpaces(g_connection);
-    if (!display_spaces_ref) return 0;
-
-    uint64_t *space_list = NULL;
-    int index = 0;
-
-    int display_spaces_count = CFArrayGetCount(display_spaces_ref);
-    for (int i = 0; i < display_spaces_count; ++i) {
-        CFDictionaryRef display_ref = CFArrayGetValueAtIndex(display_spaces_ref, i);
-        CFArrayRef spaces_ref = CFDictionaryGetValue(display_ref, CFSTR("Spaces"));
-
-        int spaces_count = CFArrayGetCount(spaces_ref);
-        for (int j = 0; j < spaces_count; ++j) {
-            CFDictionaryRef space_ref = CFArrayGetValueAtIndex(spaces_ref, j);
-            CFNumberRef sid_ref = CFDictionaryGetValue(space_ref, CFSTR("id64"));
-
-            uint64_t space_id = 0;
-            CFNumberGetValue(sid_ref, CFNumberGetType(sid_ref), &space_id);
-
-            ts_buf_push(space_list, space_id);
-            if (space_id == sid) index = ts_buf_len(space_list);
-        }
-    }
-
-    CFRelease(display_spaces_ref);
-
+    int index = space_navigation_spaces_index(sid);
     if (!index) return 0;
 
-    int count = ts_buf_len(space_list);
-    return space_list[space_navigation_step_index(index, count, steps) - 1];
+    int count = g_space_navigation_spaces.count;
+    return space_navigation_spaces_at(space_navigation_step_index(index, count, steps));
 }
 
 // A command that can change focus ends the anchor: relative navigation then
@@ -90,17 +66,28 @@ static bool space_navigation_number(struct token token, float *number)
     return isfinite(*number) && *number >= 0.0f && *number <= 1.0f;
 }
 
-static void space_navigation_command(FILE *rsp, char **message)
+// Relative requests that joined this one and mission-control indices resolve
+// from the snapshot; other selectors go through the ordinary parser.
+static struct selector space_navigation_selector(char **message, uint64_t current, bool move)
 {
-    struct token action = get_token(message);
-    bool move = token_equals(action, "move");
+    char *start = *message;
+    struct token token = get_token(message);
+    struct token_value value = token_to_value(token);
 
-    if (!move && !token_equals(action, "focus")) {
-        daemon_fail(rsp, "navigate expects focus or move.\n");
-        return;
+    // Requests that joined this one while it waited move it further.
+    if (!move && g_space_navigation_claim.active && current) {
+        uint64_t sid = g_space_navigation_claim.steps
+                     ? space_navigation_step(current, g_space_navigation_claim.steps)
+                     : current;
+
+        return (struct selector) { .token = token, .did_parse = true, .sid = sid };
     }
 
-    uint64_t current = space_navigation_active_space();
+    if (value.type == TOKEN_TYPE_INT) {
+        return (struct selector) { .token = token, .did_parse = true, .sid = space_navigation_spaces_at(value.int_value) };
+    }
+
+    *message = start;
     struct selector selector = parse_space_selector(NULL, message, current, false);
 
     if (!selector.sid && token_equals(selector.token, ARGUMENT_COMMON_SEL_NEXT)) {
@@ -111,12 +98,21 @@ static void space_navigation_command(FILE *rsp, char **message)
         selector.sid = space_manager_last_space();
     }
 
-    // Requests that joined this one while it waited move it further.
-    if (!move && g_space_navigation_claim.active && current) {
-        selector.sid = g_space_navigation_claim.steps
-                     ? space_navigation_step(current, g_space_navigation_claim.steps)
-                     : current;
+    return selector;
+}
+
+static void space_navigation_request(FILE *rsp, char **message)
+{
+    struct token action = get_token(message);
+    bool move = token_equals(action, "move");
+
+    if (!move && !token_equals(action, "focus")) {
+        daemon_fail(rsp, "navigate expects focus or move.\n");
+        return;
     }
+
+    uint64_t current = space_navigation_active_space();
+    struct selector selector = space_navigation_selector(message, current, move);
 
     float alpha;
     float duration;
@@ -133,4 +129,15 @@ static void space_navigation_command(FILE *rsp, char **message)
     if (!space_navigation_run(current, selector.sid, move, alpha, duration)) {
         daemon_fail(rsp, "navigation failed: check scripting addition, Mission Control, display animation and window eligibility.\n");
     }
+}
+
+static void space_navigation_command(FILE *rsp, char **message)
+{
+    CFArrayRef displays = SLSCopyManagedDisplaySpaces(g_connection);
+    space_navigation_spaces_load(displays);
+    if (displays) CFRelease(displays);
+
+    space_navigation_request(rsp, message);
+
+    g_space_navigation_spaces.loaded = false;
 }

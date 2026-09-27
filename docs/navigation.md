@@ -21,7 +21,9 @@ The daemon resolves the selector, optionally moves the window, finds the
 frontmost eligible window, sets opacity, switches space and focuses the
 window within one event-loop request. The active display is read from
 WindowServer, and the already frontmost window is focused without an AXRaise
-round trip. It does not spawn `jq` or child yabai
+round trip. One `SLSCopyManagedDisplaySpaces` reply per request answers the
+Desktop order, displays, visibility and type; a Desktop it does not know is
+asked about individually. It does not spawn `jq` or child yabai
 clients, and never changes `window_opacity_duration` or per-window overrides.
 The `move` action still raises the moved window at its destination.
 Custom opacity is preserved, including windows already dimmer than the fade's
@@ -58,7 +60,9 @@ When the destination's application has another window visible on a different
 display, navigation raises the destination window through Accessibility as
 `window --focus` does, which such an application honors. The raise completes
 before the next request runs, so it cannot pull a Desktop back into view.
-Other applications keep the cheaper focus without a raise.
+Other applications keep the cheaper focus without a raise. The check lists
+the application's windows on the Desktops visible on other displays with one
+query, instead of asking for the Space of each of its windows.
 
 Navigation records the window it focused, so the activation handler that
 follows uses it instead of asking the application, which is busy with the
@@ -98,7 +102,8 @@ but works with payload `2.1.31-lcs.2`; it does not change the payload protocol.
 simulated OS calls. It covers repeat bursts, opacity restoration on failure,
 custom opacity, window eligibility, display focus, window moves, the starting
 Desktop of relative navigation and the raise decision.
-`navigation_queue_tests` covers request recognition and merging, and the
+`navigation_spaces_tests` reads a constructed `SLSCopyManagedDisplaySpaces`
+reply and checks its lookups and fallbacks. `navigation_queue_tests` covers request recognition and merging, and the
 daemon fuzz target runs the request check. The upstream unity-test executable
 also checks numeric argument validation. None of these tests establishes
 visual quality, application focus behavior or live Dock behavior.

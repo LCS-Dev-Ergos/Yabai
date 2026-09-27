@@ -13,16 +13,23 @@ static uint64_t space_manager_active_space(void)
     return active_space;
 }
 
-static uint32_t space_display_id(uint64_t sid)
+// Spaces 1 and 2 belong to display 1, 3 and 4 to display 2.
+static uint32_t space_navigation_space_display(uint64_t sid)
 {
-    ++display_queries;
     return sid >= 3 ? 2 : 1;
 }
 
-static uint64_t display_space_id(uint32_t display)
+static uint64_t space_navigation_display_space(uint32_t display)
 {
-    ++current_space_queries;
     return display == 2 ? (visible_space == 3 ? 3 : 4) : active_space;
+}
+
+static int space_navigation_spaces_visible_elsewhere(uint32_t display, uint64_t *list)
+{
+    if (single_display) return 0;
+
+    list[0] = space_navigation_display_space(display == 1 ? 2 : 1);
+    return 1;
 }
 
 static bool mission_control_is_active(void)
@@ -40,7 +47,7 @@ static struct window *window_manager_focused_window(void *wm)
     return &windows[0];
 }
 
-static bool space_is_fullscreen(uint64_t sid)
+static bool space_navigation_space_fullscreen(uint64_t sid)
 {
     return fullscreen;
 }
@@ -66,9 +73,8 @@ static uint64_t read_os_timer(void)
     return timestamp;
 }
 
-static bool space_is_visible(uint64_t sid)
+static bool space_navigation_space_visible(uint64_t sid)
 {
-    ++visibility_queries;
     return visible || (visible_space && sid == visible_space);
 }
 
@@ -85,21 +91,22 @@ static double CGEventSourceSecondsSinceLastEventType(int state, int type)
     return seconds_since_click;
 }
 
-static struct window **window_manager_find_application_windows(void *wm, struct application *application, int *count)
+// The application's windows on the given spaces. The second window may sit
+// on a space of the other display.
+static uint32_t *space_window_list_for_connection(uint64_t *spaces, int space_count, int cid, int *count, bool minimized)
 {
-    static struct window *list[2];
+    static uint32_t list[2];
 
-    list[0] = &windows[0];
-    list[1] = &windows[1];
-    *count = 2;
+    ++window_list_queries;
+    assert(cid == app.connection && !minimized);
+
+    *count = 0;
+    for (int i = 0; i < space_count; ++i) {
+        if (spaces[i] == 1) list[(*count)++] = 1;
+        if (other_window_space && spaces[i] == other_window_space) list[(*count)++] = 2;
+    }
 
     return list;
-}
-
-// The second window may sit on a space of the other display.
-static uint64_t window_space(uint32_t id)
-{
-    return id == 2 ? other_window_space : 1;
 }
 
 static void window_focus_note(uint32_t id)

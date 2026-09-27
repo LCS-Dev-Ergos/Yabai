@@ -24,6 +24,9 @@ editor's root `compile_commands.json` symlink.
   restoration, the starting Desktop of relative navigation and the raise for
   applications with windows on two displays; numeric arguments are also
   covered by the unity tests.
+- `navigation_spaces_tests` reads a constructed Desktop snapshot: mission-control
+  order across displays, visibility, fullscreen type, the Desktops visible on
+  other displays and the fallback to WindowServer for unknown or unreadable data.
 - `navigation_queue_tests` checks how relative requests are recognized and
   merged while one waits: repeats, separate presses, directions, interleaved
   queries, allocation failure and concurrent admission/consumption.

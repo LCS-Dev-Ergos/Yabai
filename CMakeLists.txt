@@ -110,6 +110,12 @@ target_compile_options(navigation_queue_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_
 target_link_options(navigation_queue_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
 add_test(NAME navigation_queue_tests COMMAND navigation_queue_tests)
 
+add_executable(navigation_spaces_tests tests/navigation/spaces.c)
+target_compile_options(navigation_spaces_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
+target_link_options(navigation_spaces_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
+target_link_libraries(navigation_spaces_tests PRIVATE "-framework CoreFoundation")
+add_test(NAME navigation_spaces_tests COMMAND navigation_spaces_tests)
+
 add_executable(focus_tests tests/focus/events.c)
 target_compile_options(focus_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
 target_link_options(focus_tests PRIVATE ${YABAI_SANITIZE_FLAGS})

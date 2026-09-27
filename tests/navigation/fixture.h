@@ -17,6 +17,7 @@ struct application
 {
     bool is_hidden;
     int psn;
+    int connection;
 };
 
 struct window
@@ -41,13 +42,13 @@ static struct
 
 static int g_space_manager;
 static uint64_t active_space, timestamp, visible_space, other_window_space;
-static bool visible, fullscreen, mission_control, animating, focus_success;
+static bool visible, fullscreen, mission_control, animating, focus_success, single_display;
 static int focus_calls, opacity_calls, window_focus_calls, raise_calls, move_calls, display_calls;
 static int opacity_fail_at;
 static bool expect_fade_started;
 static bool reduce_motion;
 static int batch_calls;
-static int visibility_queries, display_queries, current_space_queries;
+static int window_list_queries;
 static uint32_t focused_id, noted_id;
 static double seconds_since_click;
 static uint32_t ids[] = { 1, 2 };
@@ -59,12 +60,15 @@ static struct
     float duration;
 } effects[16];
 
+#define SPACE_NAVIGATION_DISPLAYS_MAX 16
+
 #include "stubs.h"
 #include "../../src/space_navigation.c"
 
 static void reset(void)
 {
     memset(&app, 0, sizeof(app));
+    app.connection = 7;
 
     windows[0] = (struct window) { .id = 1, .application = &app };
     windows[1] = (struct window) { .id = 2, .application = &app };
@@ -81,7 +85,7 @@ static void reset(void)
     space_navigation_last_time = 0;
     space_navigation_forget();
     memset(space_navigation_effect_until, 0, sizeof(space_navigation_effect_until));
-    visible = fullscreen = mission_control = animating = false;
+    visible = fullscreen = mission_control = animating = single_display = false;
     focus_success = true;
 
     focus_calls = opacity_calls = window_focus_calls = raise_calls = move_calls = display_calls = 0;
@@ -90,5 +94,5 @@ static void reset(void)
     expect_fade_started = false;
     reduce_motion = false;
     batch_calls = 0;
-    visibility_queries = display_queries = current_space_queries = 0;
+    window_list_queries = 0;
 }
