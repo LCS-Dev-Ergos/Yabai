@@ -1667,6 +1667,8 @@ static EVENT_HANDLER(SPACE_NAVIGATION_DISPATCH)
 }
 #pragma clang diagnostic pop
 
+#include "event_loop_trace.c"
+
 static void *event_loop_run(void *context)
 {
     struct event *head, *next;
@@ -1684,7 +1686,10 @@ static void *event_loop_run(void *context)
                 if (!next) goto empty;
             } while (!__sync_bool_compare_and_swap(&event_loop->head, head, next));
 
-            switch (__atomic_load_n(&next->type, __ATOMIC_RELAXED)) {
+            enum event_type type = __atomic_load_n(&next->type, __ATOMIC_RELAXED);
+            uint64_t started = read_os_timer();
+
+            switch (type) {
 #define EVENT_TYPE_ENTRY(value) case value: EVENT_HANDLER_##value(__atomic_load_n(&next->context, __ATOMIC_RELAXED), __atomic_load_n(&next->param1, __ATOMIC_RELAXED)); break;
                 EVENT_TYPE_LIST
 #undef EVENT_TYPE_ENTRY
@@ -1692,6 +1697,7 @@ static void *event_loop_run(void *context)
 
             event_signal_flush();
             ts_reset();
+            event_loop_trace(type, started);
 
             profile_end_and_print();
         }

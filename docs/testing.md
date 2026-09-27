@@ -80,11 +80,21 @@ measure rendered frames or validate execution inside Dock.
 ## Signposts
 
 The daemon and the payload emit signposts in subsystem `com.lcs.yabai`:
-category `navigation` for requests, steps, activations and the focus that
-confirms them, category `effects` for crossfades and every fade frame written.
+category `navigation` for requests, steps (with how late each ran after it
+could), activations and the focus that confirms them; category `events` for
+every daemon event handled in more than 10 ms, which delays everything queued
+behind it; category `effects` for crossfades and every fade frame written.
 Record them with Instruments' os_signpost instrument, for example by adding it
 to the Animation Hitches template, to see them against WindowServer's frames.
-They cost nothing while nothing records them.
+The unified log keeps them as well, for a few minutes depending on how much
+else it records, so they can be read shortly afterwards:
+
+```sh
+/usr/bin/log show --last 5m --signpost --style compact \
+    --predicate 'subsystem == "com.lcs.yabai"'
+```
+
+In zsh, a bare `log` is a builtin, hence the full path.
 
 ## Static analysis
 

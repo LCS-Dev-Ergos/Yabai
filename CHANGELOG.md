@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 - Payload crossfades no longer read `SLSTransactionCommit`'s value as a status: it is never 0 on macOS 27.2, so every crossfade of *2.1.31-lcs.9* switched without an effect and left its destination Desktop transparent. Fade frames are written one window at a time, and payload version is now *2.1.31-lcs.10*
 - Payload restores, when it loads, user Desktops that an unfinished crossfade left transparent or raised
+- Fork daemon emits a signpost for every event handled in more than 10 ms, and each navigation step reports how late it ran
 - Fork navigation can crossfade the whole display between Desktops, as Dock does for its own Space transitions, instead of fading the destination's windows in over the wallpaper; payload version is now *2.1.31-lcs.9*
 - Fork navigation runs as steps of one Desktop from a bounded queue, at most one every 100 ms and after an activation not before the application reports focus or 150 ms pass; only the last queued step activates an application, and `space_navigation_pacing off` restores immediate navigation
 - Fork navigation and effects emit signposts in subsystem `com.lcs.yabai` for Instruments

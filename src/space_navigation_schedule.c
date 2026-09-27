@@ -41,6 +41,7 @@ static struct
     uint64_t last_step;
     uint32_t activated;     // The window the last step activated, until it reports focus.
     uint64_t activated_at;
+    uint64_t confirmed_at;  // When the last activation reported focus.
 
     // When the earliest wake requested is due, 0 when none is.
     uint64_t timer;
@@ -170,6 +171,12 @@ static void space_navigation_schedule_pump(void)
         return;
     }
 
+    // How long the step waited after it could run, while the event loop was
+    // busy with other events.
+    uint64_t runnable = due > head->time ? due : head->time;
+    if (g_space_navigation_schedule.confirmed_at > runnable) runnable = g_space_navigation_schedule.confirmed_at;
+    double late = (now - runnable) / 1e6;
+
     struct space_navigation_request request = *head;
     int direction = request.steps > 0 ? 1 : request.steps < 0 ? -1 : 0;
 
@@ -195,8 +202,8 @@ static void space_navigation_schedule_pump(void)
 
     bool activate = g_space_navigation_schedule.count == 0;
     os_signpost_interval_begin(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "step",
-                               "direction %d sid %llu activate %d duration %.3f",
-                               direction, request.sid, activate, duration);
+                               "direction %d sid %llu activate %d duration %.3f late %.1f ms",
+                               direction, request.sid, activate, duration, late);
 
     bool success = space_navigation_execute(&request, direction, activate, duration);
     os_signpost_interval_end(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "step", "success %d", success);
@@ -231,6 +238,7 @@ static void space_navigation_schedule_focused(uint32_t window_id)
 
     os_signpost_event_emit(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "focused", "window %u", window_id);
     g_space_navigation_schedule.activated = 0;
+    g_space_navigation_schedule.confirmed_at = read_os_timer();
     space_navigation_schedule_pump();
 }
 
