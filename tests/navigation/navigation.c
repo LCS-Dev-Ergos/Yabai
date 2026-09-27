@@ -1,7 +1,9 @@
 #include "fixture.h"
+#include "raise.c"
 
 int main(void)
 {
+    test_raise_queries();
     reset();
 
     expect_fade_started = true;

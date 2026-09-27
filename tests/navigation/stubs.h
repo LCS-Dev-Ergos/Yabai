@@ -15,7 +15,14 @@ static uint64_t space_manager_active_space(void)
 
 static uint32_t space_display_id(uint64_t sid)
 {
-    return sid == 3 ? 2 : 1;
+    ++display_queries;
+    return sid >= 3 ? 2 : 1;
+}
+
+static uint64_t display_space_id(uint32_t display)
+{
+    ++current_space_queries;
+    return display == 2 ? (visible_space == 3 ? 3 : 4) : active_space;
 }
 
 static bool mission_control_is_active(void)
@@ -61,6 +68,7 @@ static uint64_t read_os_timer(void)
 
 static bool space_is_visible(uint64_t sid)
 {
+    ++visibility_queries;
     return visible || (visible_space && sid == visible_space);
 }
 

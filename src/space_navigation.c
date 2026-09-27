@@ -79,7 +79,13 @@ static bool space_navigation_needs_raise(struct window *window, uint32_t display
         if (other == window || !space_navigation_window(other)) continue;
 
         uint64_t sid = window_space(other->id);
-        if (sid && space_is_visible(sid) && space_display_id(sid) != display) return true;
+        if (!sid) continue;
+
+        // Same-display windows cannot cause the cross-display focus steal.
+        // Reuse the display lookup instead of resolving it inside visibility
+        // and then again when deciding whether AXRaise is necessary.
+        uint32_t other_display = space_display_id(sid);
+        if (other_display && other_display != display && display_space_id(other_display) == sid) return true;
     }
 
     return false;

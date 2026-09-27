@@ -47,6 +47,7 @@ static int opacity_fail_at;
 static bool expect_fade_started;
 static bool reduce_motion;
 static int batch_calls;
+static int visibility_queries, display_queries, current_space_queries;
 static uint32_t focused_id, noted_id;
 static double seconds_since_click;
 static uint32_t ids[] = { 1, 2 };
@@ -88,4 +89,5 @@ static void reset(void)
     expect_fade_started = false;
     reduce_motion = false;
     batch_calls = 0;
+    visibility_queries = display_queries = current_space_queries = 0;
 }
