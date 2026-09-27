@@ -328,6 +328,66 @@ loop. lcs.20 adds a signpost for every event handled in more than 10 ms, and
 each step reports how late it ran. Raw evidence is in ignored
 `build/lcs19-*.log`.
 
+## Activated lcs.20: first live crossfades
+
+On 2026-09-27 lcs.20 ran with payload `2.1.31-lcs.10` / `0x5D`, pacing on. When
+it loaded, the payload restored the four Desktops lcs.19 had left transparent
+("restored 4 desktops"); every Desktop read alpha 1 and level 0. The crossfade
+check passed all four scenarios: during a crossfade three wallpaper windows
+were on screen (the source stays shown below the destination), the
+destination's alpha rose, a return midway faded it back out, three Desktops
+stacked, four paced `next` ran as four crossfades, and each ended with every
+Desktop at rest and one shown per display. Dock's signposts put the frames
+16.7 ms apart while display callbacks arrived and 25.6 ms apart when they came
+late, sometimes for a whole crossfade: the worker waited half a frame before
+each late frame.
+
+`effect-ab.py` recorded display 3 with ScreenCaptureKit while switching
+between Desktops 3 and 5 (VS Code), 6 and 7 (ChatGPT, Edge) and 7 and 8 (Edge),
+four switches per pair and effect, 1.2 s apart through the socket. For the
+centre of the screen it reports when the first changed frame appeared, when
+the last one did, and how far luminance or any colour channel went outside
+the range between the two Desktops (0-255):
+
+| Effect | First change (median) | Last change (median) | Gaps over two frames | Worst channel excursion |
+| --- | --- | --- | --- | --- |
+| None | 30.8 ms | 30.8 ms | 0 of 12 | 0.2 |
+| Window fade, 0.7, 250 ms | 38.7 ms | 224.3 ms | 2 of 12 | 15.3 |
+| Crossfade, 250 ms | 95.1 ms | 249.3 ms | 2 of 12 | 11.3 |
+
+The crossfade's first change comes later partly by design, since smoothstep
+starts slowly, and partly because WindowServer sometimes presented nothing for
+100 to 200 ms after the switch while Dock kept writing frames on time; alpha
+reads from a client blocked for up to 280 ms meanwhile. Its excursion, like the
+window fade's, is the destination's wallpaper showing through its windows:
+WindowServer applies a Desktop's alpha to each window. With Desktop 7's
+wallpaper window at alpha 0 during the crossfade from 6, two switches stayed
+within both Desktops on every channel, against 8.6 and 10.9 without it
+(`build/lcs20-wallpaper-experiment.log`). lcs.21 hides the destination's
+wallpaper this way, and writes one frame per interval while callbacks are
+late.
+
+`edge-burst.py` ended 10 of 10 socket sequences and 7 of 10 through
+`space.sh` on the right Desktop, with the right focus. All three misses went
+forward to Desktop 9, now empty again, and ended on Edge's 7 or 8. Signposts
+and Dock's log show the cause: with presses 120 ms apart, the step to 7 was the
+last one queued when it ran, so it activated Edge; Edge confirmed focus, the
+following steps ran, and about 200 ms later Dock logged "switching to space 6
+for window(d1c) ... ordered on non-visible space" and switched back to 7.
+`AppleSpacesSwitchOnActivate` is already off; Dock also reads
+`workspaces-auto-swoosh`, which is unset here. `focus-check.py` measured 186.5
+ms median focus for 3/4 with one of five bursts ending on the wrong window, and
+239.5 ms for 7/8 with none: the lcs.18 fix holds.
+
+The daemon's event loop was held by single events for up to 512 ms (a
+navigation step raising Edge), 212 ms (`APPLICATION_FRONT_SWITCHED`), 301 ms
+(`SPACE_NAVIGATION_FOCUS`) and 577 ms (`SPACE_CHANGED`, during the user's own
+navigation). A paced step ran 186 ms late behind two of them. A 1 ms profile
+of ten Edge switches spent the loop's time in WindowServer queries (the
+visibility snapshot, window lists per Desktop, a window's Desktop) and in
+`AXRaise`, most of it waiting for replies. Raw evidence is in ignored
+`build/lcs20-*.log`.
+
 ## Remaining work
 
 The 40 ms same-application focus delay is kept for application compatibility
