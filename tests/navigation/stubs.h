@@ -91,22 +91,32 @@ static double CGEventSourceSecondsSinceLastEventType(int state, int type)
     return seconds_since_click;
 }
 
-// The application's windows on the given spaces. The second window may sit
-// on a space of the other display.
-static uint32_t *space_window_list_for_connection(uint64_t *spaces, int space_count, int cid, int *count, bool minimized)
+static struct window **window_manager_find_application_windows(void *wm, struct application *application, int *count)
 {
-    static uint32_t list[2];
+    static struct window *list[2];
 
-    ++window_list_queries;
-    assert(cid == app.connection && !minimized);
-
-    *count = 0;
-    for (int i = 0; i < space_count; ++i) {
-        if (spaces[i] == 1) list[(*count)++] = 1;
-        if (other_window_space && spaces[i] == other_window_space) list[(*count)++] = 2;
-    }
+    list[0] = &windows[0];
+    list[1] = &windows[1];
+    *count = single_window ? 1 : 2;
 
     return list;
+}
+
+// The application's windows on the given spaces. The second window may sit
+// on a space of the other display.
+static int space_navigation_spaces_windows(uint64_t *spaces, int space_count, int cid, uint32_t *ids, int capacity)
+{
+    int count = 0;
+
+    ++window_list_queries;
+    assert(cid == app.connection && capacity >= 2);
+
+    for (int i = 0; i < space_count; ++i) {
+        if (spaces[i] == 1) ids[count++] = 1;
+        if (other_window_space && spaces[i] == other_window_space) ids[count++] = 2;
+    }
+
+    return count;
 }
 
 static void window_focus_note(uint32_t id)

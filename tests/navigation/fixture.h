@@ -42,7 +42,7 @@ static struct
 
 static int g_space_manager;
 static uint64_t active_space, timestamp, visible_space, other_window_space;
-static bool visible, fullscreen, mission_control, animating, focus_success, single_display;
+static bool visible, fullscreen, mission_control, animating, focus_success, single_display, single_window;
 static int focus_calls, opacity_calls, window_focus_calls, raise_calls, move_calls, display_calls;
 static int opacity_fail_at;
 static bool expect_fade_started;
@@ -61,6 +61,7 @@ static struct
 } effects[16];
 
 #define SPACE_NAVIGATION_DISPLAYS_MAX 16
+#define SPACE_NAVIGATION_WINDOWS_MAX 256
 
 #include "stubs.h"
 #include "../../src/space_navigation.c"
@@ -85,7 +86,7 @@ static void reset(void)
     space_navigation_last_time = 0;
     space_navigation_forget();
     memset(space_navigation_effect_until, 0, sizeof(space_navigation_effect_until));
-    visible = fullscreen = mission_control = animating = single_display = false;
+    visible = fullscreen = mission_control = animating = single_display = single_window = false;
     focus_success = true;
 
     focus_calls = opacity_calls = window_focus_calls = raise_calls = move_calls = display_calls = 0;

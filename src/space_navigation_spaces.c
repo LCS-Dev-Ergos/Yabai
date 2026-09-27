@@ -135,30 +135,3 @@ static bool space_navigation_space_fullscreen(uint64_t sid)
 
     return g_space_navigation_spaces.type[index - 1] == 4;
 }
-
-// The current Desktops of the displays other than `did`, at most
-// SPACE_NAVIGATION_DISPLAYS_MAX of them.
-static int space_navigation_spaces_visible_elsewhere(uint32_t did, uint64_t *list)
-{
-    int count = 0;
-
-    if (g_space_navigation_spaces.loaded) {
-        for (int i = 0; i < g_space_navigation_spaces.display_count; ++i) {
-            uint32_t other = g_space_navigation_spaces.display_id[i];
-            uint64_t sid = other && other != did ? space_navigation_display_space(other) : 0;
-            if (sid) list[count++] = sid;
-        }
-
-        return count;
-    }
-
-    int display_count = 0;
-    uint32_t *displays = display_manager_active_display_list(&display_count);
-
-    for (int i = 0; displays && i < display_count && count < SPACE_NAVIGATION_DISPLAYS_MAX; ++i) {
-        uint64_t sid = displays[i] != did ? display_space_id(displays[i]) : 0;
-        if (sid) list[count++] = sid;
-    }
-
-    return count;
-}

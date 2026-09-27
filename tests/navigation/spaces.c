@@ -49,7 +49,20 @@ static uint32_t *display_manager_active_display_list(int *count)
     return list;
 }
 
+// Window lists the other-display query receives: the requested owner and
+// Desktops, and a reply of window numbers.
+static int g_connection = 1;
+static int window_owner;
+static CFArrayRef window_reply;
+
+static CFArrayRef SLSCopyWindowsWithOptionsAndTags(int cid, uint32_t owner, CFArrayRef spaces, uint32_t options, uint64_t *set_tags, uint64_t *clear_tags)
+{
+    window_owner = (int) owner;
+    return window_reply ? CFRetain(window_reply) : NULL;
+}
+
 #include "../../src/space_navigation_spaces.c"
+#include "../../src/space_navigation_other_displays.c"
 
 static CFDictionaryRef space(uint64_t sid, int type)
 {
@@ -128,6 +141,27 @@ int main(void)
     space_navigation_spaces_load(NULL);
     assert(!g_space_navigation_spaces.loaded);
 
+    // The other-display query keeps window numbers and stops at the capacity.
+    uint32_t numbers[] = { 40, 41, 42 };
+    CFNumberRef items[] = {
+        CFNumberCreate(NULL, kCFNumberSInt32Type, &numbers[0]),
+        CFNumberCreate(NULL, kCFNumberSInt32Type, &numbers[1]),
+        CFNumberCreate(NULL, kCFNumberSInt32Type, &numbers[2])
+    };
+    const void *reply_items[] = { items[0], CFSTR("not a number"), items[1], items[2] };
+    window_reply = CFArrayCreate(NULL, reply_items, 4, &kCFTypeArrayCallBacks);
+
+    uint32_t ids[2];
+    uint64_t spaces[] = { 21 };
+    assert(space_navigation_spaces_windows(spaces, 1, 7, ids, 2) == 2);
+    assert(window_owner == 7 && ids[0] == 40 && ids[1] == 41);
+
+    CFRelease(window_reply);
+    window_reply = NULL;
+    assert(space_navigation_spaces_windows(spaces, 1, 7, ids, 2) == 0);
+
+    for (int i = 0; i < 3; ++i) CFRelease(items[i]);
+
     CFRelease(reply);
     CFRelease(broken);
     for (int i = 0; i < 3; ++i) CFRelease(a_spaces[i]);
@@ -135,7 +169,7 @@ int main(void)
     CFRelease(displays[0]);
     CFRelease(displays[1]);
 
-    puts("navigation spaces: snapshot order, displays, visibility, type and fallback checks passed");
+    puts("navigation spaces: snapshot order, displays, visibility, type, fallback and window query checks passed");
 
     return 0;
 }

@@ -61,8 +61,9 @@ display, navigation raises the destination window through Accessibility as
 `window --focus` does, which such an application honors. The raise completes
 before the next request runs, so it cannot pull a Desktop back into view.
 Other applications keep the cheaper focus without a raise. The check lists
-the application's windows on the Desktops visible on other displays with one
-query, instead of asking for the Space of each of its windows.
+the application's window numbers on the Desktops visible on other displays
+with one query, instead of asking for the Space of each of its windows, and
+skips the query when the application has no other window that could take focus.
 
 Navigation records the window it focused, so the activation handler that
 follows uses it instead of asking the application, which is busy with the

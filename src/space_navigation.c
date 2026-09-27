@@ -70,18 +70,30 @@ static float space_navigation_opacity(struct window *window, uint32_t focused_id
 // An application activated with another window visible on a different
 // display, such as a Chromium browser, can make that window key instead.
 // Asking for the Space of each of its windows cost a WindowServer round trip
-// per window; one query lists its windows on the Desktops visible elsewhere.
+// per window; one query lists its windows on the Desktops visible elsewhere,
+// and none is needed when it has no other window that could take focus.
 static bool space_navigation_needs_raise(struct window *window, uint32_t display)
 {
+    int count = 0;
+    struct window **list = window_manager_find_application_windows(&g_window_manager, window->application, &count);
+
+    bool others = false;
+    for (int i = 0; !others && i < count; ++i) {
+        others = list[i] != window && space_navigation_window(list[i]);
+    }
+
+    if (!others) return false;
+
     uint64_t spaces[SPACE_NAVIGATION_DISPLAYS_MAX];
     int space_count = space_navigation_spaces_visible_elsewhere(display, spaces);
     if (!space_count) return false;
 
-    int count = 0;
-    uint32_t *list = space_window_list_for_connection(spaces, space_count, window->application->connection, &count, false);
+    uint32_t ids[SPACE_NAVIGATION_WINDOWS_MAX];
+    int id_count = space_navigation_spaces_windows(spaces, space_count, window->application->connection,
+                                                   ids, SPACE_NAVIGATION_WINDOWS_MAX);
 
-    for (int i = 0; list && i < count; ++i) {
-        struct window *other = window_manager_find_window(&g_window_manager, list[i]);
+    for (int i = 0; i < id_count; ++i) {
+        struct window *other = window_manager_find_window(&g_window_manager, ids[i]);
         if (other == window || !space_navigation_window(other)) continue;
 
         if (other->application == window->application) return true;

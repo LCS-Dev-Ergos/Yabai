@@ -26,7 +26,8 @@ editor's root `compile_commands.json` symlink.
   covered by the unity tests.
 - `navigation_spaces_tests` reads a constructed Desktop snapshot: mission-control
   order across displays, visibility, fullscreen type, the Desktops visible on
-  other displays and the fallback to WindowServer for unknown or unreadable data.
+  other displays, the fallback to WindowServer for unknown or unreadable data and
+  the window numbers the cross-display raise check reads.
 - `navigation_queue_tests` checks how relative requests are recognized and
   merged while one waits: repeats, separate presses, directions, interleaved
   queries, allocation failure and concurrent admission/consumption.

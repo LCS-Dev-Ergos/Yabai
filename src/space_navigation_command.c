@@ -1,5 +1,6 @@
 #include "space_navigation_display.m"
 #include "space_navigation_spaces.c"
+#include "space_navigation_other_displays.c"
 #include "space_navigation.c"
 
 static uint64_t space_navigation_active_space(void)

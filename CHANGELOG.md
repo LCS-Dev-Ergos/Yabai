@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Fork navigation skips the cross-display raise query for applications without another window that could take focus, and reads only window numbers when it queries
 - Fork navigation answers Desktop order, display, visibility and type from one WindowServer snapshot per request, and checks for application windows visible on other displays with one query instead of two per window
 - Fork navigation with nothing to dim skips the scripting-addition cancellation round trip once no effect can still run on the destination display
 - Relative navigation keeps merging repeats after interleaved queries or other commands, using ordered groups instead of disabling merging until the first group runs

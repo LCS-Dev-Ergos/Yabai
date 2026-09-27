@@ -24,10 +24,19 @@ static void test_raise_queries(void)
 
     reset();
 
-    // Neither does a minimized window on the visible one.
+    // Neither does a minimized window on the visible one, and an application
+    // without another window that could take focus needs no query.
     other_window_space = visible_space = 3;
     windows[1].flags = WINDOW_MINIMIZE;
     assert(!space_navigation_needs_raise(&windows[0], 1));
+    assert(window_list_queries == 0);
+
+    reset();
+
+    single_window = true;
+    other_window_space = visible_space = 3;
+    assert(!space_navigation_needs_raise(&windows[0], 1));
+    assert(window_list_queries == 0);
 
     reset();
 
