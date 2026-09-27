@@ -78,6 +78,11 @@ static void window_manager_focus_window_without_raise(ProcessSerialNumber *psn, 
     record('w', psn, window_id, 0);
 }
 
+static void window_manager_focus_window_with_raise(ProcessSerialNumber *psn, uint32_t window_id, AXUIElementRef ref)
+{
+    record('r', psn, window_id, 0);
+}
+
 #include "../../src/space_navigation_focus.c"
 
 static void window_manager_make_key_window(ProcessSerialNumber *psn, uint32_t window_id)
@@ -168,6 +173,13 @@ int main(void)
     space_navigation_raise_window(&other, 60, (AXUIElementRef) (uintptr_t) 60);
     assert(call_count == 2 && calls[0].kind == 'f' && calls[0].window_id == 60);
     assert(calls[1].kind == 'a' && calls[1].window_id == 60 && scheduled_generation == -1);
+
+    // The already active application keeps window --focus's raise, which
+    // moves its key window.
+    reset();
+    space_navigation_raise_window(&same, 51, (AXUIElementRef) (uintptr_t) 51);
+    assert(call_count == 1 && calls[0].kind == 'r' && calls[0].window_id == 51);
+    assert(scheduled_generation == -1);
 
     puts("navigation focus: deferred activation, cancellation, focus change and raise checks passed");
 

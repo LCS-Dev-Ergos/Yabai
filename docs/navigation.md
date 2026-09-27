@@ -63,7 +63,9 @@ completes before the next request runs, so it cannot pull a Desktop back into
 view. Unlike `window --focus`, it posts no synthesized click: Edge, busy with
 the switch, handled that click hundreds of milliseconds late, after rapid
 navigation had moved on, and the click activated Edge again and brought its
-Desktop back.
+Desktop back. An application that is already active keeps the raise of
+`window --focus`, click included: activation alone does not move its key
+window, and Edge kept keyboard focus on its window of the Desktop left behind.
 Other applications keep the cheaper focus without a raise. A tiled window's
 Desktop is the Space of its view, so only floating and unmanaged windows need
 WindowServer: one query lists the application's window numbers on the Desktops

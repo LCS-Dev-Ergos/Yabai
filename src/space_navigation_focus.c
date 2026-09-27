@@ -60,13 +60,22 @@ static void space_navigation_focus_window(ProcessSerialNumber *psn, uint32_t win
 }
 
 // Navigation's raise, for an application with a window visible on another
-// display: it activates the application on the window and raises the window
-// through Accessibility, which makes it key. Unlike window --focus it posts no
-// synthesized click. A busy application such as Edge handled that click
-// hundreds of milliseconds late, after the user had moved on; the click then
-// activated it again and pulled its Desktop back into view.
+// display. An inactive application is activated on the window, which is then
+// raised through Accessibility; that makes it key. Unlike window --focus this
+// posts no synthesized click: a busy Edge handled the click hundreds of
+// milliseconds late, after the user had moved on, and the click activated it
+// again and pulled its Desktop back into view.
+//
+// An application that is already active does not change its key window on
+// activation, and Edge left keyboard focus on its window of the Desktop the
+// user had left. It keeps window --focus's raise, click included.
 static void space_navigation_raise_window(ProcessSerialNumber *psn, uint32_t window_id, AXUIElementRef ref)
 {
+    if (psn_equals(psn, &g_window_manager.focused_window_psn)) {
+        window_manager_focus_window_with_raise(psn, window_id, ref);
+        return;
+    }
+
     _SLPSSetFrontProcessWithOptions(psn, window_id, kCPSUserGenerated);
     AXUIElementPerformAction(ref, kAXRaiseAction);
 }
