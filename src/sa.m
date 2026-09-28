@@ -453,7 +453,7 @@ static bool scripting_addition_send_bytes(char *bytes, int length)
             if (send(sockfd, bytes, length, 0) != -1) {
                 ssize_t received = recv(sockfd, &dummy, 1, 0);
                 uint8_t opcode = bytes[sizeof(int16_t)];
-                bool replies = opcode == SA_OPCODE_WINDOW_OPACITY_BATCH || opcode == SA_OPCODE_SPACE_FOCUS_CROSSFADE;
+                bool replies = opcode == SA_OPCODE_WINDOW_OPACITY_BATCH;
                 result = !replies || (received == 1 && dummy == 'k');
             }
         }

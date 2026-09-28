@@ -1,6 +1,5 @@
 #include "fixture.h"
 #include "concurrency.c"
-#include "crossfade.c"
 #include "navigation.c"
 
 static void test_elapsed_time(void)
@@ -62,19 +61,18 @@ static void test_cancellation_and_errors(void)
 
 static void test_frame_writes(void)
 {
-    // Every window due in a frame gets a write of its own; no transaction,
-    // whose commit could not tell whether it applied.
+    // Every window due in a frame gets a write of its own. The fixture
+    // declares no SkyLight transaction, whose commit could not tell whether
+    // it applied, so the fade cannot use one and still build.
     add_fade(1);
     add_fade(2);
     int singles = single_writes;
-    int created = transactions_created;
     window_fade_tick(10.05);
-    assert(single_writes == singles + 2 && transactions_created == created);
+    assert(single_writes == singles + 2);
     assert(fabsf(alphas[1] - 0.9f) < 0.00001f && alphas[2] == alphas[1]);
 
     window_fade_tick(11.0);
     assert(single_writes == singles + 4 && alphas[1] == 1.0f && alphas[2] == 1.0f && !window_fades);
-    assert(transactions_created == created);
 }
 
 int main(void)
@@ -84,11 +82,10 @@ int main(void)
     test_frame_writes();
     test_navigation_ownership();
     test_navigation_cadence();
-    test_crossfade();
     test_concurrent_requests();
     test_display_frame_without_lock();
     test_navigation_batch();
 
-    puts("fade: elapsed time, easing, cancellation, errors, frame writes, crossfades and concurrency passed");
+    puts("fade: elapsed time, easing, cancellation, errors, frame writes and concurrency passed");
     return 0;
 }

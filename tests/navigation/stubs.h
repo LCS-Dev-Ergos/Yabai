@@ -202,16 +202,6 @@ static bool space_navigation_snapshot_start(float duration, bool success)
     return success;
 }
 
-// Retained only to catch an accidental return to the legacy Dock opcode.
-static bool scripting_addition_focus_space_crossfade(uint32_t display, uint64_t sid, float duration, float interval)
-{
-    ++crossfade_calls;
-    last_crossfade_duration = duration;
-    if (crossfade_success) active_space = sid;
-
-    return crossfade_success;
-}
-
 static void space_navigation_schedule_activated(uint32_t window_id)
 {
     activated_id = window_id;

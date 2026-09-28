@@ -185,101 +185,26 @@ behind others, and those a held key repeats, blend in 125 ms at most (see
 [navigation](navigation.md#pacing)). With pacing disabled, interruption
 discards the previous image; seamless retargeting in that mode is not promised. Reduce Motion retains this nonspatial
 blend. Fullscreen Desktops and already-visible destinations switch without it.
-No blur is applied. The payload's legacy crossfade opcode remains for protocol
-compatibility, but this daemon no longer calls it.
+No blur is applied.
 
-### Legacy Space crossfade (through lcs.22)
+### Space-alpha crossfade (removed)
 
-The following describes the retained payload implementation, not the current
-daemon renderer.
+Through lcs.22 the payload crossfaded Desktops itself, as Dock animates its own
+Space transitions: one SkyLight transaction per frame set the destination's
+alpha, level and visibility. The snapshot crossfade replaced it, and payload
+`2.1.31-lcs.13` removed it along with opcode `0x16`, which stays reserved. What
+it established still holds:
 
-Payload `2.1.31-lcs.10` can crossfade the whole display, requested with
-`crossfade` in place of the starting opacity (see [navigation](navigation.md)).
-The window fade dims the destination's windows, so the wallpaper shows through
-them: at alpha 0.7 on this host, VS Code's dark background turned brown-orange
-over the wallpaper's bright cloud before it darkened again, which reads as a
-flash. Every Desktop has its own wallpaper window (11 `Wallpaper` windows of
-WindowManager for 11 Desktops), at a level below the desktop window level.
+- WindowServer applies a Desktop's alpha to each of its windows, not to the
+  Desktop as a whole, so a half-transparent destination shows its own wallpaper
+  through its windows.
+- `SLSTransactionCommit` returns no status: on macOS 27.2 its value is a
+  pointer, never 0. A transaction's effect can only be read back or seen in
+  captured frames, which is why window fades write each window on its own.
+- A Desktop left at another alpha or level stays that way: Dock's own switches
+  and Mission Control do not reset them.
 
-WindowServer applies a Desktop's alpha to each of its windows, not to the
-Desktop as a whole: with the destination at alpha 0.5, its windows are
-half transparent over its own wallpaper, which shows through them with a
-weight of up to a quarter. On lcs.20 a crossfade from ChatGPT to Edge raised
-the red channel of the centre of the screen up to 11 levels above both
-Desktops, against 15 for the window fade. Payload `2.1.31-lcs.11` turns the
-destination's wallpaper window transparent for the crossfade when the
-destination's ordinary windows cover at least 80% of the display; with the
-wallpaper hidden by hand, the same crossfade stayed within both Desktops on
-every channel. A Desktop with less covered, or empty, keeps its wallpaper and
-fades in whole, since hiding it would show the Desktop below around its
-windows until the end.
-
-Dock animates its own Space transitions this way. Its binary imports
-`SLSTransactionSetSpaceAlpha`, `SLSTransactionSetSpaceAbsoluteLevel`,
-`SLSTransactionShowSpace` and `SLSTransactionSetSpaceTransform`; its code
-computes a Desktop's alpha from the progress of an animation and ends by
-restoring level 0 and alpha 1, the values every Desktop has at rest.
-
-One transaction sets the destination's alpha to 0, shows it and makes it
-current; the Desktops below are shown again in the same transaction, in case
-the change of current Desktop hid them. The `2.1.31-lcs.12` candidate keeps the
-destination at level 0 and lowers older layers to -1/-2. Earlier versions
-raised it above level 0, allowing an empty destination's wallpaper to obscure
-global windows such as SketchyBar. The new ordering still needs live validation
-for the bar and Finder's shared Desktop windows; see the
-[candidate report](reports/lcs22-space-crossfade.md).
-Each frame then commits one transaction with the destination's alpha
-(smoothstep), and the last one hides the other Desktops and restores alpha 1 and
-level 0. The daemon's request returns once the destination is current, and
-activation follows at once.
-
-A navigation during a crossfade puts its destination on top, up to three
-layers, so the blend on screen continues without a jump. Going back to the
-Desktop underneath fades the top one out from where it is, at the same pace;
-going forward again turns it around. A fourth Desktop, or one deeper in the
-stack, first ends the crossfade where it was heading. Every other Desktop
-operation (focus without an effect, create, destroy, move) first ends all
-crossfades. When SkyLight cannot create a transaction at the start, the screen
-stays as it was and the daemon switches without an effect; a frame without one
-is skipped. Since `2.1.31-lcs.12`, a separate empty transaction is reserved
-before starting. Completion and cancellation use it, so allocation failure
-after the first frame no longer discards the state without restoring Desktops.
-
-The same revision measures the union of window rectangles instead of adding
-overlapping areas. The bounded scan uses at most 128 rectangles; excess windows
-can underestimate coverage, keeping the wallpaper visible. A window at desktop
-level is eligible for wallpaper alpha changes only if its owner executable is
-the system WindowManager. An unreadable or different owner is left untouched.
-The 80% threshold remains a heuristic: transparent content and the uncovered
-margin still need visual checks, and wallpaper writes are separate from Space
-transactions.
-
-No commit is checked, since `SLSTransactionCommit` returns no status. Payload
-`2.1.31-lcs.9` read its value as one and took every first transaction for a
-refusal: the daemon switched without an effect, and the destination stayed at
-alpha 0 and level 1, black whenever it was shown. Dock's own switches and
-Mission Control leave a Desktop's alpha and level as they are, so since
-`2.1.31-lcs.10` the payload, when it loads, puts every user Desktop that is not
-at alpha 1 and level 0 back there and logs how many it restored; on lcs.20 it
-restored the four Desktops lcs.19 had left transparent. Since `2.1.31-lcs.11`
-it also makes their wallpaper windows opaque again.
-
-Crossfades share the window fades' lock, worker and display links, including the
-half-frame fallback. Reduce Motion keeps them, since its own Desktop transition
-is a crossfade. Fullscreen Desktops, and destinations already visible on another
-display, switch without one.
-
-Signposts in subsystem `com.lcs.yabai`, category `effects`, mark each
-crossfade's start, turns and end and every frame written, crossfade or window
-fade; [testing](testing.md) describes how to record them.
-
-`fade_tests` checks the transaction order, monotonic alpha, levels, the end
-state, turns, stacking, missing transactions, the restore at load, the hidden
-wallpaper, the worker's deadline and display pacing against a model of
-WindowServer's Desktops, whose commit, like SkyLight's, never returns 0. None
-of this establishes how WindowServer composites two Desktops shown at once, or
-the frames it presents: that is the live check, described in
-[performance](performance.md).
+The [lcs.22 report](reports/lcs22-space-crossfade.md) has the measurements.
 
 ## Native compositor investigation
 

@@ -6,15 +6,13 @@ static void *window_fade_worker(void *unused)
         double now = window_fade_now();
         window_fade_take_frames();
         window_fade_tick(now);
-        space_crossfade_tick(now);
 
         dispatch_time_t until = DISPATCH_TIME_FOREVER;
 
-        // Display callbacks wake navigation fades and crossfades; their
-        // watchdog also completes one if the screen sleeps or its run loop
-        // stalls.
+        // Display callbacks wake navigation fades; their watchdog also
+        // completes one if the screen sleeps or its run loop stalls.
         double deadline = now + 1.0;
-        bool active = space_crossfade_deadline(&deadline);
+        bool active = false;
 
         for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
             double end = fade->started + fade->duration;

@@ -54,8 +54,6 @@ editor's root `compile_commands.json` symlink.
 - `focus_tests` exercises production focus-event handling with simulated OS
   calls: reuse of pending observations, stale activations, invalid/hidden or
   minimized windows, and the normal AX fallback, including no focused window.
-- `fade_tests` also runs the [Desktop crossfade](effects.md#desktop-crossfade)
-  against a model of WindowServer's Desktops.
 - `fade_tests` checks the production [opacity engine](effects.md) with simulated
   SkyLight calls, including timing, focus ownership, shared navigation epochs,
   display cadence/cancellation, failure restoration and concurrent requests.
@@ -97,8 +95,8 @@ category `navigation` for requests, steps (with how late each ran after it
 could), activations and the focus that confirms them; category `events` for
 every daemon event handled in more than 10 ms, which delays everything queued
 behind it; category `effects` for the daemon's snapshots (capture and
-preparation time, or why none was used), and the payload's crossfades and
-every fade frame it writes.
+preparation time, or why none was used), and every fade frame the payload
+writes.
 Record them with Instruments' os_signpost instrument, for example by adding it
 to the Animation Hitches template, to see them against WindowServer's frames.
 The unified log keeps them as well, for a few minutes depending on how much

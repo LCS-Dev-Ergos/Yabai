@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Payload no longer contains the Space-alpha crossfade, which the daemon stopped using when the snapshot crossfade replaced it; opcode `0x16` stays reserved, and payload version is now *2.1.31-lcs.13*
 - Daemon queues events in a ring that grows when the event loop falls behind, instead of a pool that wrapped over events not yet handled, and handles only the latest of consecutive mouse moves
 - Scripting-addition requests that do not fit the payload's 4 KiB message size are refused instead of overflowing the daemon's stack, and signals beyond their storage are dropped with a warning instead of written past it
 - Fork navigation no longer holds the daemon while it captures a crossfade's snapshot: a paced step asks for the capture and returns, and switches Desktop when the image or its 150 ms deadline arrives; a click, Mission Control, a display animation or another command during the capture stops the step, and a missing or late image gives an ordinary switch

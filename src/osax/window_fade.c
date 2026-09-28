@@ -37,22 +37,15 @@ static _Atomic uint64_t window_fade_frames;
 
 static void window_fade_display_stop(uint32_t display);
 
-// Signposts for Instruments, subsystem com.lcs.yabai: every window fade and
-// crossfade frame written, on the timeline of WindowServer's frames. Only
-// code holding window_fade_lock emits them.
+// Signposts for Instruments, subsystem com.lcs.yabai: every window fade frame
+// written, on the timeline of WindowServer's frames. Only code holding
+// window_fade_lock emits them.
 static os_log_t window_fade_log(void)
 {
     static os_log_t log;
     if (!log) log = os_log_create("com.lcs.yabai", "effects");
     return log;
 }
-
-// Desktop crossfades share this lock, the worker and the display links; see
-// space_crossfade.c.
-static void space_crossfade_take_frames(uint64_t frames);
-static bool space_crossfade_deadline(double *deadline);
-static void space_crossfade_tick(double now);
-static bool space_crossfade_active(uint32_t display);
 
 static double window_fade_now(void)
 {
@@ -84,8 +77,6 @@ static void window_fade_take_frames(void)
 {
     uint64_t frames = atomic_exchange(&window_fade_frames, 0);
     if (!frames) return;
-
-    space_crossfade_take_frames(frames);
 
     for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
         if (!fade->display || !(frames & window_fade_display_bit(fade->display))) continue;
@@ -124,8 +115,9 @@ static void window_fade_remove(struct window_fade_context **slot)
 // Writes the alpha of every window marked in this frame, one write per window:
 // each reports its own error, and a window that failed, closed for instance,
 // ends its fade. A SkyLight transaction would carry them in one message, but
-// its commit returns no status (see space_crossfade_commit), so we could not
-// tell whether it changed other applications' windows.
+// SLSTransactionCommit returns no status (on macOS 27.2 its value is a
+// pointer, never 0), so we could not tell whether it changed other
+// applications' windows.
 static void window_fade_apply(void)
 {
     for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {

@@ -8,9 +8,6 @@
 //        sa_client create <sid>     create a space on the display of <sid>
 //        sa_client destroy <sid>    destroy a space
 //        sa_client move <sid> <dst> move a space after <dst>, on the display of <dst>
-//        sa_client crossfade <sid> <display> <seconds>
-//                                   focus a space with a crossfade of <display>, a
-//                                   CGDirectDisplayID, and print the reply
 //
 // focus, create, destroy and move change the space layout; space ids come from
 // `sa_client spaces` or `yabai -m query --spaces`. move does not switch spaces,
@@ -136,25 +133,6 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    if (strcmp(command, "crossfade") == 0 && argc == 5) {
-        struct __attribute__((packed)) {
-            uint32_t display;
-            uint64_t sid;
-            float duration;
-            float interval;
-        } payload = {
-            (uint32_t) strtoul(argv[3], NULL, 10),
-            strtoull(argv[2], NULL, 10),
-            strtof(argv[4], NULL),
-            1.0f / 60.0f
-        };
-
-        char reply[16];
-        sa_send(SA_OPCODE_SPACE_FOCUS_CROSSFADE, &payload, sizeof(payload), reply, sizeof(reply));
-        printf("reply %s\n", reply[0] ? reply : "(none)");
-        return reply[0] == 'k' ? 0 : 1;
-    }
-
     uint8_t opcode = 0;
     if      (strcmp(command, "focus") == 0)   opcode = SA_OPCODE_SPACE_FOCUS;
     else if (strcmp(command, "create") == 0)  opcode = SA_OPCODE_SPACE_CREATE;
@@ -162,8 +140,7 @@ int main(int argc, char **argv)
     else if (strcmp(command, "move") == 0)    opcode = SA_OPCODE_SPACE_MOVE;
 
     if (!opcode || argc < (opcode == SA_OPCODE_SPACE_MOVE ? 4 : 3)) {
-        fprintf(stderr, "usage: %s handshake | spaces | focus <sid> | create <sid> | destroy <sid> | move <sid> <dst>"
-                        " | crossfade <sid> <display> <seconds>\n", argv[0]);
+        fprintf(stderr, "usage: %s handshake | spaces | focus <sid> | create <sid> | destroy <sid> | move <sid> <dst>\n", argv[0]);
         return 2;
     }
 

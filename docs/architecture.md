@@ -118,7 +118,7 @@ commands can arrive as soon as the message loop starts.
 | Thread | Runs |
 | --- | --- |
 | Payload connection thread | Accepts one daemon connection at a time and handles its message (`handle_connection` in `payload.m`). |
-| Fade worker (fork) | One sleeping worker that writes window-fade and legacy crossfade frames and watches their deadlines (`window_fade_worker.c`). |
+| Fade worker (fork) | One sleeping worker that writes window-fade frames and watches their deadlines (`window_fade_worker.c`). |
 | Dock main thread | Fork display links, one per display, created on Dock's main queue; they wake the worker (`window_fade_display.m`). |
 
 Fork payload state is guarded by `window_fade_lock`; display callbacks only
@@ -226,8 +226,6 @@ Effects:
   `window_fade*.c`): the older per-window fade and the opacity policy.
 - **Display facts** (`effects/display.m`): the refresh interval effects are
   timed with, and Reduce Motion.
-- **Legacy Space crossfade** (payload `space_crossfade*.c`, about 630 lines):
-  kept for protocol compatibility; the daemon no longer calls it.
 
 Diagnostics: signposts in subsystem `com.lcs.yabai`, categories
 `navigation`, `events` and `effects`.
@@ -281,8 +279,9 @@ lands as its own commits.
    Dropping an event instead would leak what it carries or leave a client
    waiting, and with consecutive mouse moves merged the ring grows only with
    what the user does. `pack` refuses a request that does not fit.
-5. **Remove the legacy Space crossfade** from the payload and the protocol
-   (new payload version; needs a scripting-addition reload).
+5. Done. **Remove the legacy Space crossfade** from the payload and the
+   protocol: payload `2.1.31-lcs.13` drops about 630 lines and opcode `0x16`,
+   which stays reserved; loading it needs a scripting-addition reload.
 6. **Upstream files where it pays**: `message.c` by command domain,
    `window_manager.c` by concern (table and rules, focus, frames, animation),
    and the Space-change revalidation that holds the event loop.

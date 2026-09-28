@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <libproc.h>
 #include "../../src/osax/common.h"
 
 #ifndef FADE_DISPLAY_LINK
@@ -32,12 +31,8 @@ static int alpha_calls;
 static int alpha_reads;
 static int thread_calls;
 static int single_writes;
-static int commits;
 static useconds_t alpha_delay;
 static bool fail_get, fail_set, fail_thread, fail_alloc;
-
-// Lets a test start effects without a worker thread, and tick them itself.
-static bool fake_worker;
 
 static int SLSMainConnectionID(void)
 {
@@ -64,265 +59,10 @@ static int SLSSetWindowAlpha(int cid, uint32_t wid, float alpha)
     return fail_set;
 }
 
-// Desktop operations queued in the open transaction, in order. A commit
-// applies them to a model of WindowServer's Desktops and appends them to the
-// log of committed operations.
-enum space_op { SPACE_ALPHA, SPACE_LEVEL, SPACE_SHOW, SPACE_HIDE, SPACE_CURRENT };
-
-struct space_record
-{
-    enum space_op op;
-    uint64_t sid;
-    float value;
-};
-
-static struct space_record space_log[256];
-static int space_log_count;
-static int transactions_created;
-static bool fail_transaction;
-static int fail_transaction_at;
-
-static struct
-{
-    bool shown;
-    float alpha;
-    int level;
-} space_state[16];
-
-static uint64_t current_space;
-
-static CFTypeRef SLSTransactionCreate(int cid)
-{
-    ++transactions_created;
-    if (fail_transaction || transactions_created == fail_transaction_at) return NULL;
-
-    // Each live transaction has its own command buffer, including the
-    // empty settlement reserved across intermediate frame transactions.
-    return CFDataCreateMutable(NULL, 0);
-}
-
-static int space_queue(CFTypeRef transaction, enum space_op op, uint64_t sid, float value)
-{
-    assert(transaction && sid && sid < 16);
-    CFMutableDataRef commands = (CFMutableDataRef) transaction;
-    assert(CFDataGetLength(commands) < 64 * sizeof(struct space_record));
-    struct space_record record = { op, sid, value };
-    CFDataAppendBytes(commands, (const UInt8 *) &record, sizeof(record));
-    return 0;
-}
-
-static int SLSTransactionSetSpaceAlpha(CFTypeRef transaction, uint64_t sid, float alpha)
-{
-    assert(isfinite(alpha) && alpha >= 0.0f && alpha <= 1.0f);
-    return space_queue(transaction, SPACE_ALPHA, sid, alpha);
-}
-
-static int SLSTransactionSetSpaceAbsoluteLevel(CFTypeRef transaction, uint64_t sid, int level)
-{
-    return space_queue(transaction, SPACE_LEVEL, sid, (float) level);
-}
-
-static int SLSTransactionShowSpace(CFTypeRef transaction, uint64_t sid)
-{
-    return space_queue(transaction, SPACE_SHOW, sid, 0.0f);
-}
-
-static int SLSTransactionHideSpace(CFTypeRef transaction, uint64_t sid)
-{
-    return space_queue(transaction, SPACE_HIDE, sid, 0.0f);
-}
-
-static int SLSTransactionSetManagedDisplayCurrentSpace(CFTypeRef transaction, CFStringRef display, uint64_t sid)
-{
-    assert(display);
-    return space_queue(transaction, SPACE_CURRENT, sid, 0.0f);
-}
-
-static void space_apply(struct space_record *record)
-{
-    switch (record->op) {
-    case SPACE_ALPHA: space_state[record->sid].alpha = record->value; break;
-    case SPACE_LEVEL: space_state[record->sid].level = (int) record->value; break;
-    case SPACE_SHOW: space_state[record->sid].shown = true; break;
-    case SPACE_HIDE: space_state[record->sid].shown = false; break;
-    case SPACE_CURRENT: current_space = record->sid; break;
-    }
-
-    assert(space_log_count < 256);
-    space_log[space_log_count++] = *record;
-}
-
-// Like SkyLight's, the commit returns no status: its value is never 0.
-static int SLSTransactionCommit(CFTypeRef transaction, int synchronous)
-{
-    assert(transaction);
-    ++commits;
-    if (alpha_delay) usleep(alpha_delay);
-
-    CFDataRef commands = (CFDataRef) transaction;
-    CFIndex count = CFDataGetLength(commands) / sizeof(struct space_record);
-    for (CFIndex i = 0; i < count; ++i) {
-        struct space_record record;
-        memcpy(&record, CFDataGetBytePtr(commands) + i * sizeof(record), sizeof(record));
-        space_apply(&record);
-    }
-
-    return 0x48;
-}
-
-static float SLSSpaceGetAlpha(int cid, uint64_t sid)
-{
-    assert(sid && sid < 16);
-    return space_state[sid].alpha;
-}
-
-static int SLSSpaceGetAbsoluteLevel(int cid, uint64_t sid)
-{
-    assert(sid && sid < 16);
-    return space_state[sid].level;
-}
-
-// The Desktops SLSCopyManagedDisplaySpaces reports, all on one display, with
-// their types. It reports nothing while managed_space_count is -1.
-static struct
-{
-    uint64_t sid;
-    int type;
-} managed_spaces[16];
-
-static int managed_space_count;
-
-static CFDictionaryRef dictionary_of(CFStringRef key0, CFTypeRef value0, CFStringRef key1, CFTypeRef value1)
-{
-    const void *keys[] = { key0, key1 };
-    const void *values[] = { value0, value1 };
-    return CFDictionaryCreate(NULL, keys, values, key1 ? 2 : 1,
-                              &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-}
-
-static CFArrayRef SLSCopyManagedDisplaySpaces(int cid)
-{
-    if (managed_space_count < 0) return NULL;
-
-    CFMutableArrayRef spaces = CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
-
-    for (int i = 0; i < managed_space_count; ++i) {
-        CFNumberRef sid = CFNumberCreate(NULL, kCFNumberSInt64Type, &managed_spaces[i].sid);
-        CFNumberRef type = CFNumberCreate(NULL, kCFNumberIntType, &managed_spaces[i].type);
-        CFDictionaryRef space = dictionary_of(CFSTR("id64"), sid, CFSTR("type"), type);
-
-        CFArrayAppendValue(spaces, space);
-        CFRelease(space);
-        CFRelease(type);
-        CFRelease(sid);
-    }
-
-    CFDictionaryRef display = dictionary_of(CFSTR("Spaces"), spaces, NULL, NULL);
-    CFArrayRef displays = CFArrayCreate(NULL, (const void **) &display, 1, &kCFTypeArrayCallBacks);
-
-    CFRelease(display);
-    CFRelease(spaces);
-    return displays;
-}
-
-// Windows on the model's Desktops, for SLSCopyWindowsWithOptionsAndTags,
-// SLSGetWindowLevel and SLSGetWindowBounds, on a 1000 x 500 display.
-static struct
-{
-    uint64_t sid;
-    uint32_t wid;
-    int level;
-    CGRect frame;
-} model_windows[16];
-
-static int model_window_count;
-static bool wallpaper_owner_valid = true;
-
-static int SLSGetWindowOwner(int cid, uint32_t wid, int *owner)
-{
-    *owner = 7;
-    return kCGErrorSuccess;
-}
-
-static int SLSConnectionGetPID(int owner, pid_t *pid)
-{
-    *pid = 7;
-    return kCGErrorSuccess;
-}
-
-static int model_proc_pidpath(int pid, void *buffer, uint32_t size)
-{
-    const char *path = wallpaper_owner_valid
-                    ? "/System/Library/CoreServices/WindowManager.app/Contents/MacOS/WindowManager"
-                    : "/Applications/Other.app/Contents/MacOS/Other";
-    assert(strlen(path) + 1 < size);
-    strcpy(buffer, path);
-    return (int) strlen(path);
-}
-
-static int model_window(uint32_t wid)
-{
-    for (int i = 0; i < model_window_count; ++i) {
-        if (model_windows[i].wid == wid) return i;
-    }
-
-    return -1;
-}
-
-static CFArrayRef SLSCopyWindowsWithOptionsAndTags(int cid, uint32_t owner, CFArrayRef spaces, uint32_t options,
-                                                   uint64_t *set_tags, uint64_t *clear_tags)
-{
-    assert(spaces && CFArrayGetCount(spaces) == 1);
-
-    uint64_t sid = 0;
-    CFNumberGetValue(CFArrayGetValueAtIndex(spaces, 0), kCFNumberSInt64Type, &sid);
-
-    CFMutableArrayRef windows = CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
-
-    for (int i = 0; i < model_window_count; ++i) {
-        if (model_windows[i].sid != sid) continue;
-
-        CFNumberRef wid = CFNumberCreate(NULL, kCFNumberSInt32Type, &model_windows[i].wid);
-        CFArrayAppendValue(windows, wid);
-        CFRelease(wid);
-    }
-
-    return windows;
-}
-
-static int SLSGetWindowLevel(int cid, uint32_t wid, int *level)
-{
-    int i = model_window(wid);
-    if (i < 0) return kCGErrorIllegalArgument;
-
-    *level = model_windows[i].level;
-    return kCGErrorSuccess;
-}
-
-static int SLSGetWindowBounds(int cid, uint32_t wid, CGRect *frame)
-{
-    int i = model_window(wid);
-    if (i < 0) return kCGErrorIllegalArgument;
-
-    *frame = model_windows[i].frame;
-    return kCGErrorSuccess;
-}
-
-static CGRect model_display_bounds(uint32_t display)
-{
-    return CGRectMake(0, 0, 1000, 500);
-}
-
-static int model_window_level_for_key(CGWindowLevelKey key)
-{
-    return key == kCGDesktopWindowLevelKey ? -2147483623 : 0;
-}
-
 static int create_worker(pthread_t *thread, const pthread_attr_t *attributes,
                          void *(*entry)(void *), void *context)
 {
     ++thread_calls;
-    if (fake_worker) return 0;
     return fail_thread ? EAGAIN : pthread_create(thread, attributes, entry, context);
 }
 
@@ -333,20 +73,13 @@ static void *allocate_fade(size_t count, size_t size)
 
 #define pthread_create create_worker
 #define calloc allocate_fade
-#define CGDisplayBounds model_display_bounds
-#define CGWindowLevelForKey model_window_level_for_key
-#define proc_pidpath model_proc_pidpath
 #include "../../src/osax/window_fade.c"
 #ifdef FADE_DISPLAY_LINK
 #include "../../src/osax/window_fade_display.m"
 #endif
 #include "../../src/osax/window_fade_navigation.c"
-#include "../../src/osax/space_crossfade.c"
 #undef pthread_create
 #undef calloc
-#undef CGDisplayBounds
-#undef CGWindowLevelForKey
-#undef proc_pidpath
 
 static struct window_fade_context *add_fade(uint32_t wid)
 {

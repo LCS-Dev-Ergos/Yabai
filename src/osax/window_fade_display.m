@@ -27,7 +27,7 @@ static NSMutableDictionary *window_fade_displays;
     // makes this callback wait; the next frame checks again.
     if (pthread_mutex_trylock(&window_fade_lock) != 0) return;
 
-    bool active = space_crossfade_active(self.display);
+    bool active = false;
     for (struct window_fade_context *fade = window_fades; fade && !active; fade = fade->next) {
         active = fade->display == self.display;
     }
@@ -58,7 +58,7 @@ static void window_fade_display_stop(uint32_t display)
                 return;
             }
 
-            bool active = space_crossfade_active(display);
+            bool active = false;
             for (struct window_fade_context *fade = window_fades; fade; fade = fade->next) {
                 if (fade->display == display) active = true;
             }

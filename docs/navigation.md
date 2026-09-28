@@ -178,9 +178,8 @@ exec "$yabai" -m space --navigate "$action" "$selector" "$effect" "$duration"
 Update the package and script together. The current `crossfade` renderer runs
 in the daemon and uses the ordinary payload Space-focus operation. It requires
 macOS 15.2+ and existing Screen Recording permission; unavailable capture falls
-back to an ordinary switch. Payload `2.1.31-lcs.12` is retained in lcs.23.
-The legacy Space-alpha crossfade opcode is no longer used by the daemon
-(see [effects](effects.md#desktop-crossfade)).
+back to an ordinary switch. The payload's own Space-alpha crossfade was removed
+in `2.1.31-lcs.13` (see [effects](effects.md#space-alpha-crossfade-removed)).
 
 ## Verification boundaries
 

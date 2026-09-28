@@ -53,7 +53,6 @@ static bool visible, fullscreen, mission_control, animating, focus_success, sing
 static bool other_window_tiled;
 static int focus_calls, opacity_calls, window_focus_calls, raise_calls, move_calls, display_calls;
 static int click_raise_calls;
-static int crossfade_calls;
 static bool crossfade_success;
 static float last_crossfade_duration;
 static int snapshot_prepares, snapshot_starts, snapshot_cancels;
@@ -128,7 +127,6 @@ static void reset(void)
 
     focus_calls = opacity_calls = window_focus_calls = raise_calls = move_calls = display_calls = 0;
     click_raise_calls = 0;
-    crossfade_calls = 0;
     crossfade_success = true;
     last_crossfade_duration = 0.0f;
     snapshot_prepares = snapshot_starts = snapshot_cancels = 0;

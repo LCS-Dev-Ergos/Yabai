@@ -135,12 +135,13 @@ static void test_captured_steps(void)
 }
 
 // A crossfade captures the source, asks Dock for an ordinary switch, then
-// fades only yabai's snapshot. No path may mutate Space alpha or levels.
+// fades only yabai's snapshot; the daemon has no request that changes Space
+// alpha or levels.
 static void test_steps(void)
 {
     reset();
     assert(run_step(2, true, true));
-    assert(crossfade_calls == 0 && snapshot_prepares == 1 && snapshot_starts == 1);
+    assert(snapshot_prepares == 1 && snapshot_starts == 1);
     assert(last_crossfade_duration == .2f);
     assert(switched_duration == .2f);
     assert(focus_calls == 1 && batch_calls == 0 && opacity_calls == 0);
@@ -150,7 +151,7 @@ static void test_steps(void)
     reset();
     crossfade_success = false;
     assert(run_step(2, true, true));
-    assert(crossfade_calls == 0 && snapshot_prepares == 1 && snapshot_starts == 0);
+    assert(snapshot_prepares == 1 && snapshot_starts == 0);
     assert(focus_calls == 1 && active_space == 2 && window_focus_calls == 1);
     assert(switched_duration == 0.0f);
 
@@ -178,12 +179,12 @@ static void test_steps(void)
     reset();
     visible = true;
     assert(run_step(3, true, true));
-    assert(crossfade_calls == 0 && snapshot_prepares == 0 && focus_calls == 1);
+    assert(snapshot_prepares == 0 && focus_calls == 1);
 
     reset();
     fullscreen = true;
     assert(run_step(2, true, true));
-    assert(crossfade_calls == 0 && snapshot_prepares == 0 && focus_calls == 1);
+    assert(snapshot_prepares == 0 && focus_calls == 1);
 
     // Reduce Motion keeps the crossfade: its own Desktop transition is one.
     reset();
