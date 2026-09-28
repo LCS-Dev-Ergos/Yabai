@@ -12,7 +12,6 @@
 // not know, or a reply it cannot read, falls back to asking WindowServer.
 
 #define SPACE_NAVIGATION_SPACES_MAX 128
-#define SPACE_NAVIGATION_DISPLAYS_MAX 16
 
 static struct
 {
@@ -137,8 +136,6 @@ static bool space_navigation_space_fullscreen(uint64_t sid)
 }
 
 // What the other displays show, for the cross-display raise check.
-
-#define SPACE_NAVIGATION_WINDOWS_MAX 256
 
 // The current Desktops of the displays other than `did`, at most
 // SPACE_NAVIGATION_DISPLAYS_MAX of them.

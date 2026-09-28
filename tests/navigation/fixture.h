@@ -77,6 +77,8 @@ static struct
 #define SPACE_NAVIGATION_DISPLAYS_MAX 16
 #define SPACE_NAVIGATION_WINDOWS_MAX 256
 
+#include "../../src/navigation/step.h"
+#include "../../src/effects/window_fade.h"
 #include "stubs.h"
 #include "../../src/navigation/step.c"
 

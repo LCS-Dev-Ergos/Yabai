@@ -610,9 +610,6 @@ static EVENT_HANDLER(WINDOW_DESTROYED)
     }
 }
 
-// Fork: queued navigation waits for the window its last step activated.
-static void space_navigation_schedule_focused(uint32_t window_id);
-
 static EVENT_HANDLER(WINDOW_FOCUSED)
 {
     __atomic_store_n(&__pending_window_focus, false, __ATOMIC_RELEASE);
@@ -1666,16 +1663,12 @@ static EVENT_HANDLER(DAEMON_MESSAGE)
 
 // Fork: the second half of a navigation's focus change between two windows of
 // one application, see navigation/activation.c.
-static void space_navigation_focus_resume(int generation);
-
 static EVENT_HANDLER(SPACE_NAVIGATION_FOCUS)
 {
     space_navigation_focus_resume(param1);
 }
 
 // Fork: the next step of queued navigation, see navigation/schedule.c.
-static void space_navigation_schedule_timer(void);
-
 static EVENT_HANDLER(SPACE_NAVIGATION_DISPATCH)
 {
     space_navigation_schedule_timer();

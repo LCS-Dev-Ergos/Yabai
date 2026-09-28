@@ -22,9 +22,6 @@ static struct
     uint32_t window_id;
 } g_space_navigation_focus;
 
-static void window_manager_make_key_window(ProcessSerialNumber *window_psn, uint32_t window_id);
-static void space_navigation_focus_schedule(int generation, uint64_t delay_ns);
-
 static void space_navigation_focus_post(ProcessSerialNumber *psn, uint32_t window_id, uint8_t kind)
 {
     uint8_t bytes[0xf8] = { 0 };

@@ -120,26 +120,6 @@ static bool space_navigation_needs_raise(struct window *window, uint32_t display
 
 #include "../effects/window_fade.c"
 
-// One Desktop switch of a navigation. Its effect is either the fade of the
-// destination's windows from `alpha`, or a crossfade of the whole display. A
-// step that does not activate only switches and shows its effect: another
-// step queued after it will. That step can find its Desktop current already,
-// a jump over a whole lap of Desktops or the number of the Desktop reached;
-// `settle` then still gives the Desktop's window focus.
-struct space_navigation_step
-{
-    uint64_t sid;
-    bool move;
-    bool crossfade;
-    float alpha;
-    float duration;
-    bool activate;
-    bool settle;
-};
-
-static void space_navigation_schedule_activated(uint32_t window_id);
-static void space_navigation_schedule_switched(float duration);
-
 // The window navigation activates on a Desktop: its frontmost eligible one.
 static struct window *space_navigation_candidate(uint32_t *ids, int count)
 {

@@ -31,8 +31,9 @@ The two sockets:
 ## Build structure
 
 The daemon is one translation unit. `src/manifest.m` includes every header,
-then every source file in a fixed order; several sources include further
-sources:
+the core's first and then those of navigation and effects (`effects/*.h`,
+`navigation/*.h` and `hooks.h`), then every source file in a fixed order;
+several sources include further sources:
 
 ```
 manifest.m
@@ -55,14 +56,19 @@ manifest.m
 Consequences:
 
 - Every function and global is visible to everything included after it.
-  Static functions of one file are called from others, and forward
-  declarations stand in for headers (for example `event_loop.c` declares
-  `space_navigation_schedule_focused`). Nothing enforces a module boundary.
-- The include order is a dependency order: the snapshot must precede
-  `event_loop.c`, whose handlers call it, and the navigation code sits in the
-  middle of `message.c`.
-- Tests include a source file directly and replace its dependencies with
-  macros and stubs (`tests/navigation/*.c`).
+  The core's files call each other's file-static functions by include order.
+  Nothing enforces a module boundary.
+- Each navigation and effects module declares what other files use in its
+  header, which also states its threads, the state it owns, its callers and
+  what it calls. `hooks.h` declares every module function the core calls,
+  grouped by the calling file and handler, and the core's file-static
+  functions the modules call.
+- The include order still carries dependencies the headers do not: the
+  navigation sources sit in the middle of `message.c`, after the token and
+  selector parser they use, and command reads the state of admission and
+  topology directly.
+- Tests include a module's header and source directly and replace its
+  dependencies with macros and stubs (`tests/navigation/*.c`).
 
 The payload is built separately for x86_64 and arm64
 (`src/osax/{x64,arm64}_payload.m`), then embedded in the daemon as
@@ -246,7 +252,7 @@ its header, and seams for tests that do not depend on include order. Each step
 keeps behaviour, passes the existing tests and the live burst checks, and
 lands as its own commits.
 
-1. **Headers for the fork's modules**, keeping the unity build:
+1. Done. **Headers for the fork's modules**, keeping the unity build:
    `navigation/admission`, `navigation/schedule`, `navigation/step`,
    `navigation/activation`, `navigation/topology`, `effects/snapshot`
    (capture and overlay separately), `effects/window_fade`. Each header
@@ -256,8 +262,8 @@ lands as its own commits.
    asynchronous capture needs: plan and capture start, the capture callback
    posts an event, and switch and activation run from it, so the event loop no
    longer waits for ScreenCaptureKit.
-3. **One header for private SkyLight and AX declarations**, now scattered as
-   `extern` lines across files.
+3. Done. **One header for private SkyLight and AX declarations**: the daemon's
+   are in `misc/extern.h`; the payload keeps its own in `osax/payload.m`.
 4. **Fix risks 2 and 3**: a bounded event queue that reports overflow and
    coalesces mouse moves; bounds checks in `pack`.
 5. **Remove the legacy Space crossfade** from the payload and the protocol

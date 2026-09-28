@@ -23,6 +23,13 @@ static double space_navigation_seconds_since_click(void)
 
 #define debug(...)
 
+#include "../../src/navigation/schedule.h"
+
+// The schedule's host, defined below: the step that runs and the wake it asks for.
+static bool space_navigation_execute(struct space_navigation_request *request, int steps,
+                                     bool activate, bool settle, float duration);
+static void space_navigation_schedule_after(uint64_t delay_ns);
+
 #include "../../src/navigation/schedule.c"
 
 static struct

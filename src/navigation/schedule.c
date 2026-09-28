@@ -33,19 +33,6 @@
 #define SPACE_NAVIGATION_BURST_S       0.125f
 #define SPACE_NAVIGATION_QUEUE_STEPS   10
 
-struct space_navigation_request
-{
-    bool move;
-    int steps;          // Desktops forward (positive) or back; 0 for `sid`.
-    bool jump;          // Moves all its steps in one switch, from `sid` if set.
-    bool repeat;        // Queued by a held key.
-    uint64_t sid;
-    bool crossfade;
-    float alpha;
-    float duration;
-    uint64_t time;      // When it was queued.
-};
-
 static struct
 {
     bool pacing;
@@ -63,10 +50,6 @@ static struct
     // When the earliest wake requested is due, 0 when none is.
     uint64_t timer;
 } g_space_navigation_schedule = { .pacing = true };
-
-static bool space_navigation_execute(struct space_navigation_request *request, int steps,
-                                     bool activate, bool settle, float duration);
-static void space_navigation_schedule_after(uint64_t delay_ns);
 
 // Signposts for Instruments, subsystem com.lcs.yabai: requests, steps,
 // activations and the focus that confirms them, on the timeline of

@@ -1,10 +1,3 @@
-struct space_navigation_effect
-{
-    struct sa_window_opacity windows[SA_OPACITY_BATCH_MAX];
-    uint32_t count;
-    float interval;
-};
-
 // When the last effect started on each display may still run. Only navigation
 // starts display effects, so a preparation with nothing to dim, which would
 // only cancel them, can skip its Dock round trip once they have ended. The

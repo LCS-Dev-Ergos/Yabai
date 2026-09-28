@@ -77,6 +77,17 @@
 #include "window_manager.h"
 #include "mouse_handler.h"
 
+#include "effects/display.h"
+#include "effects/window_fade.h"
+#include "effects/snapshot.h"
+#include "navigation/topology.h"
+#include "navigation/admission.h"
+#include "navigation/schedule.h"
+#include "navigation/step.h"
+#include "navigation/activation.h"
+#include "navigation/command.h"
+#include "hooks.h"
+
 #include "sa.m"
 #include "mission_control.c"
 #include "effects/snapshot.m"
