@@ -431,7 +431,7 @@ int main(void)
         // image; the deadline reports too and finds nothing left.
         assert(capture(5));
         expect_reports(1);
-        assert(captured_token == 5);
+        assert(__atomic_load_n(&captured_token, __ATOMIC_SEQ_CST) == 5);
         assert(space_navigation_snapshot_present(5) == SPACE_SNAPSHOT_READY);
         assert(space_navigation_snapshot_start(.03f, true));
         expect_released();
