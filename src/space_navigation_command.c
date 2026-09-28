@@ -72,10 +72,11 @@ static bool space_navigation_accept(int sockfd)
     return true;
 }
 
-// Runs one step of a queued request: `direction` Desktops from where
-// navigation stands, or the request's own Desktop when 0. A request handled
-// at once reuses its snapshot of the Desktops; a later one takes its own.
-static bool space_navigation_execute(struct space_navigation_request *request, int direction,
+// Runs one switch of a queued request: `steps` Desktops from where navigation
+// stands, one except for a jump, or the request's own Desktop when 0. A
+// request handled at once reuses its snapshot of the Desktops; a later one
+// takes its own.
+static bool space_navigation_execute(struct space_navigation_request *request, int steps,
                                      bool activate, float duration)
 {
     bool loaded = g_space_navigation_spaces.loaded;
@@ -87,7 +88,7 @@ static bool space_navigation_execute(struct space_navigation_request *request, i
     }
 
     uint64_t current = space_navigation_active_space();
-    uint64_t sid = direction ? space_navigation_step(current, direction) : request->sid;
+    uint64_t sid = steps ? space_navigation_step(current, steps) : request->sid;
 
     struct space_navigation_step step = {
         .sid = sid,

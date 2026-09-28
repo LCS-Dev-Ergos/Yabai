@@ -10,10 +10,16 @@
 // the user had moved on brought its Desktop back into view.
 //
 // Only the last queued step activates an application; the steps before it
-// switch and show their effect. The next step waits for the crossfade's
-// requested duration, measured from Dock's acknowledgement, so rapid input
-// cannot continuously restart an unfinished blend. A click after a request,
-// or any other command, empties the queue.
+// switch and show their effect. The next step waits for the effect's duration,
+// measured from Dock's acknowledgement, so a blend always finishes before the
+// next one starts. Each step keeps the requested duration. A click after a
+// request, or any other command, empties the queue.
+//
+// At most SPACE_NAVIGATION_QUEUE_STEPS switches wait, which bounds how long
+// navigation goes on after the last press. No press is dropped for that:
+// relative steps beyond the bound join a jump at the end of the queue, one
+// switch over several Desktops, and a Desktop number replaces the last focus
+// request. Navigation still ends where the presses asked.
 
 #include <os/signpost.h>
 
@@ -25,6 +31,7 @@ struct space_navigation_request
 {
     bool move;
     int steps;          // Desktops forward (positive) or back; 0 for `sid`.
+    bool jump;          // Moves all its steps in one switch.
     uint64_t sid;
     bool crossfade;
     float alpha;
@@ -49,7 +56,7 @@ static struct
     uint64_t timer;
 } g_space_navigation_schedule = { .pacing = true };
 
-static bool space_navigation_execute(struct space_navigation_request *request, int direction,
+static bool space_navigation_execute(struct space_navigation_request *request, int steps,
                                      bool activate, float duration);
 static void space_navigation_schedule_after(uint64_t delay_ns);
 
@@ -74,9 +81,10 @@ static void space_navigation_schedule_set_pacing(bool pacing)
     g_space_navigation_schedule.count = 0;
 }
 
+// The switches a queued request still makes: one for a Desktop number or a jump.
 static int space_navigation_schedule_size(struct space_navigation_request *request)
 {
-    return request->steps ? abs(request->steps) : 1;
+    return request->steps && !request->jump ? abs(request->steps) : 1;
 }
 
 static int space_navigation_schedule_steps(void)
@@ -96,44 +104,92 @@ static bool space_navigation_schedule_same_effect(struct space_navigation_reques
         && a->alpha == b->alpha && a->duration == b->duration;
 }
 
+// Appends a request as at most `budget` switches, budget >= 1. A relative
+// request with more steps makes budget - 1 of them one at a time and the rest
+// in a final jump. There is room for both: every queued request makes at
+// least one switch, so at most SPACE_NAVIGATION_QUEUE_STEPS - budget are queued.
+static void space_navigation_schedule_append(struct space_navigation_request *request, int budget)
+{
+    struct space_navigation_request *queue = g_space_navigation_schedule.queue;
+
+    if (space_navigation_schedule_size(request) <= budget) {
+        queue[g_space_navigation_schedule.count++] = *request;
+        return;
+    }
+
+    int direction = request->steps > 0 ? 1 : -1;
+    int single = budget - 1;
+
+    if (single) {
+        queue[g_space_navigation_schedule.count] = *request;
+        queue[g_space_navigation_schedule.count].steps = direction * single;
+        ++g_space_navigation_schedule.count;
+    }
+
+    queue[g_space_navigation_schedule.count] = *request;
+    queue[g_space_navigation_schedule.count].steps = request->steps - direction * single;
+    queue[g_space_navigation_schedule.count].jump = true;
+    ++g_space_navigation_schedule.count;
+}
+
 // Queues a request. A key repeat only keeps one step pending in its
 // direction; an opposite step takes back one that has not run. Returns false
-// when the queue has no room for it.
+// only when the queue is full and the request can join nothing: a `move`,
+// or a different effect.
 static bool space_navigation_schedule_add(struct space_navigation_request *request, bool repeat)
 {
     os_signpost_event_emit(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "request",
                            "steps %d sid %llu repeat %d queued %d", request->steps, request->sid, repeat,
                            g_space_navigation_schedule.count);
 
+    struct space_navigation_request entry = *request;
+    entry.jump = false;
+    entry.time = read_os_timer();
+
     int count = g_space_navigation_schedule.count;
     struct space_navigation_request *tail = count ? &g_space_navigation_schedule.queue[count - 1] : NULL;
-    bool same = tail && space_navigation_schedule_same_effect(tail, request);
+    bool same = tail && space_navigation_schedule_same_effect(tail, &entry);
 
-    if (request->steps && same && tail->steps) {
-        if (repeat && tail->steps * request->steps > 0) return true;
+    // Relative steps add up with those of the last request, which is taken
+    // out and queued again with their sum.
+    if (entry.steps && same && tail->steps) {
+        if (repeat && tail->steps * entry.steps > 0) return true;
 
-        int size = abs(tail->steps + request->steps) - abs(tail->steps);
-        if (space_navigation_schedule_steps() + size > SPACE_NAVIGATION_QUEUE_STEPS) return false;
+        struct space_navigation_request joined = *tail;
+        joined.steps += entry.steps;
+        --g_space_navigation_schedule.count;
 
-        tail->steps += request->steps;
-        if (!tail->steps) --g_space_navigation_schedule.count;
+        if (joined.steps) {
+            int budget = SPACE_NAVIGATION_QUEUE_STEPS - space_navigation_schedule_steps();
+            space_navigation_schedule_append(&joined, budget);
+        }
 
         return true;
     }
 
-    if (!request->steps && same && !tail->steps && tail->sid == request->sid) return true;
+    // The same Desktop number twice queues once.
+    if (!entry.steps && same && !tail->steps && tail->sid == entry.sid) return true;
 
-    int size = space_navigation_schedule_size(request);
-    if (count == SPACE_NAVIGATION_QUEUE_STEPS
-        || space_navigation_schedule_steps() + size > SPACE_NAVIGATION_QUEUE_STEPS) {
-        return false;
+    int budget = SPACE_NAVIGATION_QUEUE_STEPS - space_navigation_schedule_steps();
+    if (budget > 0) {
+        space_navigation_schedule_append(&entry, budget);
+        return true;
     }
 
-    g_space_navigation_schedule.queue[count] = *request;
-    g_space_navigation_schedule.queue[count].time = read_os_timer();
-    ++g_space_navigation_schedule.count;
+    // The queue is full. A Desktop number takes the place of the last switch
+    // of a focus request, which navigation would have left at once anyway.
+    if (tail && !entry.steps && !entry.move && !tail->move) {
+        if (space_navigation_schedule_size(tail) > 1) {
+            tail->steps -= tail->steps > 0 ? 1 : -1;
+            g_space_navigation_schedule.queue[g_space_navigation_schedule.count++] = entry;
+        } else {
+            *tail = entry;
+        }
 
-    return true;
+        return true;
+    }
+
+    return false;
 }
 
 // A confirmed activation can make the next step due before the wake already
@@ -182,8 +238,9 @@ static void space_navigation_schedule_pump(void)
 
     struct space_navigation_request request = *head;
     int direction = request.steps > 0 ? 1 : request.steps < 0 ? -1 : 0;
+    int steps = request.jump ? request.steps : direction;
 
-    if (direction && request.steps != direction) {
+    if (!request.jump && direction && request.steps != direction) {
         head->steps -= direction;
     } else {
         --g_space_navigation_schedule.count;
@@ -199,10 +256,10 @@ static void space_navigation_schedule_pump(void)
 
     bool activate = g_space_navigation_schedule.count == 0;
     os_signpost_interval_begin(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "step",
-                               "direction %d sid %llu activate %d duration %.3f late %.1f ms",
-                               direction, request.sid, activate, duration, late);
+                               "steps %d sid %llu activate %d duration %.3f late %.1f ms",
+                               steps, request.sid, activate, duration, late);
 
-    bool success = space_navigation_execute(&request, direction, activate, duration);
+    bool success = space_navigation_execute(&request, steps, activate, duration);
     // A slow WindowServer query or AX raise can consume the whole rhythm.
     // Admission of the next request must obey the same pause as our timer,
     // rather than immediately executing another step to catch up.

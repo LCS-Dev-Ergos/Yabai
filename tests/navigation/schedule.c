@@ -27,7 +27,7 @@ static double space_navigation_seconds_since_click(void)
 
 static struct
 {
-    int direction;
+    int steps;
     uint64_t sid;
     bool activate;
     float duration;
@@ -40,11 +40,11 @@ static uint32_t activate_window;
 static uint64_t execute_delay;
 
 // The window each activating step activates, if any, as navigation reports it.
-static bool space_navigation_execute(struct space_navigation_request *request, int direction,
+static bool space_navigation_execute(struct space_navigation_request *request, int steps,
                                      bool activate, float duration)
 {
     assert(executed_count < 64);
-    executed[executed_count++] = (typeof(executed[0])) { direction, request->sid, activate, duration, now };
+    executed[executed_count++] = (typeof(executed[0])) { steps, request->sid, activate, duration, now };
     now += execute_delay;
 
     if (execute_success) space_navigation_schedule_switched(request->crossfade ? duration : 0.0f);
@@ -107,14 +107,30 @@ static void reset(void)
     click_seconds = 1000.0;
 }
 
-static void press(int steps, bool repeat, bool crossfade)
+static struct space_navigation_request relative(int steps, bool crossfade)
 {
-    struct space_navigation_request request = {
+    return (struct space_navigation_request) {
         .steps = steps,
         .crossfade = crossfade,
         .alpha = crossfade ? 1.0f : 0.7f,
         .duration = 0.25f
     };
+}
+
+static struct space_navigation_request number(uint64_t sid, bool move)
+{
+    return (struct space_navigation_request) {
+        .move = move,
+        .sid = sid,
+        .crossfade = true,
+        .alpha = 1.0f,
+        .duration = 0.25f
+    };
+}
+
+static void press(int steps, bool repeat, bool crossfade)
+{
+    struct space_navigation_request request = relative(steps, crossfade);
 
     assert(space_navigation_schedule_add(&request, repeat));
     space_navigation_schedule_pump();
@@ -122,9 +138,17 @@ static void press(int steps, bool repeat, bool crossfade)
 
 static void go_to(uint64_t sid)
 {
-    struct space_navigation_request request = { .sid = sid, .crossfade = true, .alpha = 1.0f, .duration = 0.25f };
+    struct space_navigation_request request = number(sid, false);
+
     assert(space_navigation_schedule_add(&request, false));
     space_navigation_schedule_pump();
+}
+
+static int executed_steps(void)
+{
+    int steps = 0;
+    for (int i = 0; i < executed_count; ++i) steps += executed[i].steps;
+    return steps;
 }
 
 static void test_isolated_and_burst(void)
@@ -135,7 +159,7 @@ static void test_isolated_and_burst(void)
     uint64_t start = now;
     activate_window = 7;
     press(1, false, true);
-    assert(executed_count == 1 && executed[0].direction == 1 && executed[0].activate);
+    assert(executed_count == 1 && executed[0].steps == 1 && executed[0].activate);
     assert(executed[0].time == start && executed[0].duration == 0.25f);
 
     // Every crossfade keeps its requested duration. Further presses wait
@@ -156,7 +180,7 @@ static void test_isolated_and_burst(void)
     assert(executed[3].time == start + 750 * MS && executed[3].activate);
 
     for (int i = 1; i < 4; ++i) {
-        assert(executed[i].direction == 1 && executed[i].duration == 0.25f);
+        assert(executed[i].steps == 1 && executed[i].duration == 0.25f);
     }
 
     // The window fade keeps its own duration.
@@ -165,7 +189,7 @@ static void test_isolated_and_burst(void)
     advance(20 * MS);
     press(-1, false, false);
     advance(1000 * MS);
-    assert(executed_count == 2 && executed[1].direction == -1 && executed[1].duration == 0.25f);
+    assert(executed_count == 2 && executed[1].steps == -1 && executed[1].duration == 0.25f);
 
     // A pause between taps does not change their effect duration.
     reset();
@@ -178,6 +202,7 @@ static void test_isolated_and_burst(void)
     assert(executed[0].duration == 0.25f);
     assert(executed[1].duration == 0.25f);
     assert(executed[2].duration == 0.25f);
+
 }
 
 static void test_activation(void)
@@ -296,7 +321,7 @@ static void test_absolute(void)
     advance(1000 * MS);
     assert(executed_count == 3);
     assert(executed[0].sid == 3 && executed[1].sid == 5 && executed[2].sid == 2);
-    assert(executed[0].direction == 0 && !executed[1].activate && executed[2].activate);
+    assert(executed[0].steps == 0 && !executed[1].activate && executed[2].activate);
 
     // Relative steps after a number run after it.
     reset();
@@ -305,30 +330,123 @@ static void test_absolute(void)
     go_to(6);
     press(1, false, true);
     advance(1000 * MS);
-    assert(executed_count == 3 && executed[1].sid == 6 && executed[2].direction == 1);
+    assert(executed_count == 3 && executed[1].sid == 6 && executed[2].steps == 1);
 }
 
-static void test_limits(void)
+static void test_overflow(void)
 {
-    // At most ten steps wait; a request that does not fit is refused whole.
+    // At most ten switches wait. Steps beyond them join a jump at the end:
+    // every press still counts, and navigation still ends in time.
     reset();
     press(1, false, true);
 
-    struct space_navigation_request nine = { .steps = 9, .crossfade = true, .alpha = 1.0f, .duration = 0.25f };
+    struct space_navigation_request nine = relative(9, true);
+    struct space_navigation_request one = relative(1, true);
+    struct space_navigation_request back = relative(-1, true);
+
     assert(space_navigation_schedule_add(&nine, false));
-
-    struct space_navigation_request one = { .steps = 1, .crossfade = true, .alpha = 1.0f, .duration = 0.25f };
     assert(space_navigation_schedule_add(&one, false));
-    assert(!space_navigation_schedule_add(&one, false));
+    assert(space_navigation_schedule_steps() == 10 && g_space_navigation_schedule.count == 1);
 
-    struct space_navigation_request number = { .sid = 4, .crossfade = true, .alpha = 1.0f, .duration = 0.25f };
-    assert(!space_navigation_schedule_add(&number, false));
-    assert(space_navigation_schedule_steps() == 10);
+    assert(space_navigation_schedule_add(&one, false));
+    assert(space_navigation_schedule_steps() == 10 && g_space_navigation_schedule.count == 2);
+    assert(g_space_navigation_schedule.queue[0].steps == 9 && !g_space_navigation_schedule.queue[0].jump);
+    assert(g_space_navigation_schedule.queue[1].steps == 2 && g_space_navigation_schedule.queue[1].jump);
+
+    assert(space_navigation_schedule_add(&one, false));
+    assert(space_navigation_schedule_add(&one, false));
+    assert(g_space_navigation_schedule.queue[1].steps == 4 && space_navigation_schedule_steps() == 10);
+
+    // A held key still keeps one step pending, and the other direction
+    // takes one back from the jump.
+    assert(space_navigation_schedule_add(&one, true));
+    assert(g_space_navigation_schedule.queue[1].steps == 4);
+    assert(space_navigation_schedule_add(&back, false));
+    assert(g_space_navigation_schedule.queue[1].steps == 3);
 
     space_navigation_schedule_pump();
     advance(5000 * MS);
-    assert(executed_count == 11);
+    assert(executed_count == 11 && executed_steps() == 13);
+    assert(executed[10].steps == 3 && executed[10].activate && executed[10].duration == 0.25f);
+    for (int i = 1; i < 10; ++i) {
+        assert(executed[i].steps == 1 && !executed[i].activate);
+    }
 
+    // Presses merged into one request split the same way.
+    reset();
+    struct space_navigation_request fourteen = relative(14, true);
+    assert(space_navigation_schedule_add(&fourteen, false));
+    assert(g_space_navigation_schedule.count == 2 && space_navigation_schedule_steps() == 10);
+    space_navigation_schedule_pump();
+    advance(5000 * MS);
+    assert(executed_count == 10 && executed_steps() == 14 && executed[9].steps == 5);
+
+    // A different effect makes a jump of its own when one switch is left.
+    reset();
+    press(1, false, true);
+    assert(space_navigation_schedule_add(&nine, false));
+    struct space_navigation_request fade = relative(3, false);
+    assert(space_navigation_schedule_add(&fade, false));
+    assert(g_space_navigation_schedule.count == 2 && g_space_navigation_schedule.queue[1].jump);
+    assert(g_space_navigation_schedule.queue[1].steps == 3 && space_navigation_schedule_steps() == 10);
+    fade.steps = 1;
+    assert(space_navigation_schedule_add(&fade, false));
+    assert(g_space_navigation_schedule.queue[1].steps == 4);
+
+    // The other direction can empty a jump, and then reach the steps before it.
+    reset();
+    struct space_navigation_request eleven = relative(11, true);
+    assert(space_navigation_schedule_add(&eleven, false));
+    for (int i = 0; i < 3; ++i) assert(space_navigation_schedule_add(&back, false));
+    assert(g_space_navigation_schedule.count == 1 && g_space_navigation_schedule.queue[0].steps == 8);
+    assert(!g_space_navigation_schedule.queue[0].jump);
+}
+
+static void test_full_queue(void)
+{
+    // A Desktop number takes the place of the last switch of a full queue:
+    // navigation ends where the latest press asked.
+    reset();
+    press(1, false, true);
+
+    struct space_navigation_request ten = relative(10, true);
+    assert(space_navigation_schedule_add(&ten, false));
+
+    struct space_navigation_request four = number(4, false);
+    assert(space_navigation_schedule_add(&four, false));
+    assert(g_space_navigation_schedule.count == 2 && space_navigation_schedule_steps() == 10);
+    assert(g_space_navigation_schedule.queue[0].steps == 9 && g_space_navigation_schedule.queue[1].sid == 4);
+
+    struct space_navigation_request six = number(6, false);
+    assert(space_navigation_schedule_add(&six, false));
+    assert(g_space_navigation_schedule.count == 2 && g_space_navigation_schedule.queue[1].sid == 6);
+
+    // A window move is never dropped in favour of another request, and a
+    // request that can join nothing is refused.
+    struct space_navigation_request move = number(5, true);
+    assert(!space_navigation_schedule_add(&move, false));
+
+    struct space_navigation_request fade = relative(1, false);
+    assert(!space_navigation_schedule_add(&fade, false));
+    assert(g_space_navigation_schedule.queue[1].sid == 6);
+
+    space_navigation_schedule_pump();
+    advance(5000 * MS);
+    assert(executed_count == 11 && executed[10].sid == 6 && executed[10].activate);
+
+    // A queued move is not replaced either.
+    reset();
+    press(1, false, true);
+    struct space_navigation_request nine = relative(9, true);
+    assert(space_navigation_schedule_add(&nine, false));
+    struct space_navigation_request moved = number(3, true);
+    assert(space_navigation_schedule_add(&moved, false));
+    assert(space_navigation_schedule_steps() == 10);
+    assert(!space_navigation_schedule_add(&four, false));
+}
+
+static void test_cancellation(void)
+{
     // A click after a request drops the queue.
     reset();
     press(1, false, true);
@@ -386,8 +504,10 @@ int main(void)
     test_focus_confirmation_defers_navigation();
     test_repeats_and_reversal();
     test_absolute();
-    test_limits();
+    test_overflow();
+    test_full_queue();
+    test_cancellation();
 
-    puts("navigation schedule: rhythm, activation wait, repeats, order, limits and cancellation checks passed");
+    puts("navigation schedule: rhythm, activation wait, repeats, order, overflow and cancellation checks passed");
     return 0;
 }
