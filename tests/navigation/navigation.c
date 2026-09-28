@@ -184,18 +184,9 @@ int main(void)
     visible_space = 2;
     assert(space_navigation_current_space(3) == 3); // Failed switches set none.
 
-    // Steps wrap in both directions and across several laps.
-    assert(space_navigation_step_index(1, 11, 1) == 2);
-    assert(space_navigation_step_index(11, 11, 1) == 1);
-    assert(space_navigation_step_index(1, 11, -1) == 11);
-    assert(space_navigation_step_index(7, 11, 0) == 7);
-    assert(space_navigation_step_index(3, 11, -25) == 11);
-    assert(space_navigation_step_index(3, 11, 30) == 11);
-    assert(space_navigation_step_index(1, 1, -1) == 1);
-
     test_steps();
 
-    puts("navigation: burst, restoration, custom opacity, display, move, crossfade and step checks passed");
+    puts("navigation: burst, restoration, custom opacity, display, move and crossfade checks passed");
 
     return 0;
 }

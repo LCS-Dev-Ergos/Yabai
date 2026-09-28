@@ -63,10 +63,9 @@ Consequences:
   what it calls. `hooks.h` declares every module function the core calls,
   grouped by the calling file and handler, and the core's file-static
   functions the modules call.
-- The include order still carries dependencies the headers do not: the
+- The include order still carries a dependency the headers do not: the
   navigation sources sit in the middle of `message.c`, after the token and
-  selector parser they use, and command reads the state of admission and
-  topology directly.
+  selector parser command uses.
 - Tests include a module's header and source directly and replace its
   dependencies with macros and stubs (`tests/navigation/*.c`).
 

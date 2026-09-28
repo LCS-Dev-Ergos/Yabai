@@ -36,7 +36,6 @@ struct space_navigation_step
 static void space_navigation_forget(void);
 static double space_navigation_seconds_since_click(void);
 static uint64_t space_navigation_current_space(uint64_t active_sid);
-static int space_navigation_step_index(int index, int count, int steps);
 static bool space_navigation_window(struct window *window);
 static float space_navigation_opacity(struct window *window, uint32_t focused_id);
 static bool space_navigation_run_step(uint64_t current, struct space_navigation_step *step);

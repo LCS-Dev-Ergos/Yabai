@@ -6,18 +6,23 @@
 //
 // Thread: event loop.
 // State: g_space_navigation_spaces, every Desktop's order, display and type
-// and each display's current Desktop. Command loads it for each request and
-// each queued step it runs, and clears `loaded` afterwards; unloaded, every
-// query asks WindowServer.
-// Callers: command (load, order, index), step (display, visibility, type and
-// the other displays' Desktops and windows for the raise check).
+// and each display's current Desktop. Command reads it for each request and
+// each queued step it runs, and unloads it afterwards; unloaded, every query
+// asks WindowServer.
+// Callers: command (reading, order and offsets), step (display, visibility,
+// type and the other displays' Desktops and windows for the raise check).
 
 #define SPACE_NAVIGATION_DISPLAYS_MAX 16
 #define SPACE_NAVIGATION_WINDOWS_MAX 256
 
 static void space_navigation_spaces_load(CFArrayRef displays);
+static void space_navigation_spaces_read(void);
+static bool space_navigation_spaces_loaded(void);
+static void space_navigation_spaces_unload(void);
 static int space_navigation_spaces_index(uint64_t sid);
 static uint64_t space_navigation_spaces_at(int index);
+static int space_navigation_step_index(int index, int count, int steps);
+static uint64_t space_navigation_spaces_offset(uint64_t sid, int steps);
 static uint32_t space_navigation_space_display(uint64_t sid);
 static uint64_t space_navigation_display_space(uint32_t did);
 static bool space_navigation_space_visible(uint64_t sid);

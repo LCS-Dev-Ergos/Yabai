@@ -84,6 +84,25 @@ static void space_navigation_spaces_load(CFArrayRef displays)
     g_space_navigation_spaces.loaded = true;
 }
 
+// Takes the snapshot for one request or queued step.
+static void space_navigation_spaces_read(void)
+{
+    CFArrayRef displays = SLSCopyManagedDisplaySpaces(g_connection);
+    space_navigation_spaces_load(displays);
+    if (displays) CFRelease(displays);
+}
+
+static bool space_navigation_spaces_loaded(void)
+{
+    return g_space_navigation_spaces.loaded;
+}
+
+// Ends the request's snapshot; later lookups ask WindowServer.
+static void space_navigation_spaces_unload(void)
+{
+    g_space_navigation_spaces.loaded = false;
+}
+
 // The 1-based mission-control index of sid, or 0.
 static int space_navigation_spaces_index(uint64_t sid)
 {
@@ -100,6 +119,27 @@ static uint64_t space_navigation_spaces_at(int index)
     if (index < 1 || index > g_space_navigation_spaces.count) return 0;
 
     return g_space_navigation_spaces.sid[index - 1];
+}
+
+// The space `steps` places after the space at `index` (1-based) of `count`,
+// wrapping around at both ends.
+static int space_navigation_step_index(int index, int count, int steps)
+{
+    int result = (index - 1 + steps) % count;
+    if (result < 0) result += count;
+
+    return result + 1;
+}
+
+// The Desktop `steps` places after sid in mission-control order, wrapping,
+// or 0 when the snapshot does not know sid.
+static uint64_t space_navigation_spaces_offset(uint64_t sid, int steps)
+{
+    int index = space_navigation_spaces_index(sid);
+    if (!index) return 0;
+
+    int count = g_space_navigation_spaces.count;
+    return space_navigation_spaces_at(space_navigation_step_index(index, count, steps));
 }
 
 static uint32_t space_navigation_space_display(uint64_t sid)

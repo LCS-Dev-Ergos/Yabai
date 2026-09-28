@@ -25,16 +25,6 @@ static uint64_t space_navigation_active_space(void)
     return space_navigation_current_space(space_navigation_display_space(display_manager_active_display_id()));
 }
 
-// The space `steps` places after sid in mission-control order, wrapping.
-static uint64_t space_navigation_step(uint64_t sid, int steps)
-{
-    int index = space_navigation_spaces_index(sid);
-    if (!index) return 0;
-
-    int count = g_space_navigation_spaces.count;
-    return space_navigation_spaces_at(space_navigation_step_index(index, count, steps));
-}
-
 // A command that can change focus ends the anchor: relative navigation then
 // starts from where that command left the user. It also wins over a deferred
 // navigation focus and over the navigation still queued.
@@ -78,17 +68,12 @@ static bool space_navigation_accept(int sockfd)
 static bool space_navigation_execute(struct space_navigation_request *request, int steps,
                                      bool activate, bool settle, float duration)
 {
-    bool loaded = g_space_navigation_spaces.loaded;
-
-    if (!loaded) {
-        CFArrayRef displays = SLSCopyManagedDisplaySpaces(g_connection);
-        space_navigation_spaces_load(displays);
-        if (displays) CFRelease(displays);
-    }
+    bool loaded = space_navigation_spaces_loaded();
+    if (!loaded) space_navigation_spaces_read();
 
     uint64_t current = space_navigation_active_space();
     uint64_t from = request->sid ? request->sid : current;
-    uint64_t sid = steps ? space_navigation_step(from, steps) : request->sid;
+    uint64_t sid = steps ? space_navigation_spaces_offset(from, steps) : request->sid;
 
     struct space_navigation_step step = {
         .sid = sid,
@@ -102,7 +87,7 @@ static bool space_navigation_execute(struct space_navigation_request *request, i
 
     bool success = current && sid && space_navigation_run_step(current, &step);
 
-    if (!loaded) g_space_navigation_spaces.loaded = false;
+    if (!loaded) space_navigation_spaces_unload();
     return success;
 }
 
@@ -132,7 +117,7 @@ static struct selector space_navigation_selector(char **message, uint64_t curren
 
     // Requests that joined this one while it waited move it further.
     if (!move && claim.active && current) {
-        uint64_t sid = claim.steps ? space_navigation_step(current, claim.steps) : current;
+        uint64_t sid = claim.steps ? space_navigation_spaces_offset(current, claim.steps) : current;
 
         return (struct selector) { .token = token, .did_parse = true, .sid = sid };
     }
@@ -243,11 +228,7 @@ static void space_navigation_request(FILE *rsp, char **message)
 
 static void space_navigation_command(FILE *rsp, char **message)
 {
-    CFArrayRef displays = SLSCopyManagedDisplaySpaces(g_connection);
-    space_navigation_spaces_load(displays);
-    if (displays) CFRelease(displays);
-
+    space_navigation_spaces_read();
     space_navigation_request(rsp, message);
-
-    g_space_navigation_spaces.loaded = false;
+    space_navigation_spaces_unload();
 }

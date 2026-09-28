@@ -7,8 +7,8 @@
 //
 // Threads: event loop, except space_navigation_accept on the accept thread.
 // The timers below post their events from a global queue.
-// State: none of its own. It loads the topology snapshot for each request and
-// each queued step, and asks admission for the claimed steps.
+// State: none of its own. It has topology read its snapshot for each request
+// and each queued step, and asks admission for the claimed steps.
 // Callers: the schedule runs steps and requests wakes; activation requests
 // its delay. The command handler and the accept thread call its entry points,
 // see hooks.h.

@@ -61,6 +61,15 @@ static CFArrayRef SLSCopyWindowsWithOptionsAndTags(int cid, uint32_t owner, CFAr
     return window_reply ? CFRetain(window_reply) : NULL;
 }
 
+// The reply the snapshot reads its Desktops from.
+static CFArrayRef managed_reply;
+
+static CFArrayRef SLSCopyManagedDisplaySpaces(int cid)
+{
+    assert(cid == g_connection);
+    return managed_reply ? CFRetain(managed_reply) : NULL;
+}
+
 #include "../../src/navigation/topology.h"
 #include "../../src/navigation/topology.c"
 
@@ -119,6 +128,29 @@ int main(void)
     assert(space_navigation_spaces_visible_elsewhere(2, list) == 1 && list[0] == 13);
     assert(fallbacks == 0);
 
+    // Offsets wrap across displays in both directions.
+    assert(space_navigation_spaces_offset(13, 1) == 21 && space_navigation_spaces_offset(21, 1) == 11);
+    assert(space_navigation_spaces_offset(11, -1) == 21 && space_navigation_spaces_offset(12, -5) == 11);
+    assert(space_navigation_spaces_offset(99, 1) == 0);
+
+    // A request's snapshot ends with it, and the next one reads WindowServer again.
+    space_navigation_spaces_unload();
+    assert(!space_navigation_spaces_loaded() && space_navigation_spaces_offset(13, 1) == 0);
+    managed_reply = reply;
+    space_navigation_spaces_read();
+    managed_reply = NULL;
+    assert(space_navigation_spaces_loaded() && space_navigation_spaces_offset(13, 1) == 21);
+    assert(fallbacks == 0);
+
+    // Steps wrap in both directions and across several laps.
+    assert(space_navigation_step_index(1, 11, 1) == 2);
+    assert(space_navigation_step_index(11, 11, 1) == 1);
+    assert(space_navigation_step_index(1, 11, -1) == 11);
+    assert(space_navigation_step_index(7, 11, 0) == 7);
+    assert(space_navigation_step_index(3, 11, -25) == 11);
+    assert(space_navigation_step_index(3, 11, 30) == 11);
+    assert(space_navigation_step_index(1, 1, -1) == 1);
+
     // A Desktop created after the snapshot is asked about as before.
     assert(space_navigation_space_display(99) == 2 && space_navigation_space_fullscreen(99));
     assert(fallbacks == 2);
@@ -169,7 +201,7 @@ int main(void)
     CFRelease(displays[0]);
     CFRelease(displays[1]);
 
-    puts("navigation spaces: snapshot order, displays, visibility, type, fallback and window query checks passed");
+    puts("navigation spaces: snapshot order, offsets, displays, visibility, type, fallback and window query checks passed");
 
     return 0;
 }
