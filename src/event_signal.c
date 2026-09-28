@@ -87,6 +87,14 @@ void event_signal_push(enum signal_type type, void *context)
     uint64_t arg_size = 128;
     uint64_t size = sizeof(struct event_signal);
 
+    // Signals wait in the storage until the event that raised them has been
+    // handled, see event_signal_flush. Only the event loop pushes, and a
+    // signal that no longer fits is dropped rather than written past it.
+    if (g_signal_storage.used + size > g_signal_storage.size) {
+        warn("%s: too many signals for one event, %s dropped\n", __FUNCTION__, signal_type_str[type]);
+        return;
+    }
+
     uint64_t used = __sync_fetch_and_add(&g_signal_storage.used, size);
     struct event_signal *es = g_signal_storage.memory + used;
 

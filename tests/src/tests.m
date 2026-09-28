@@ -24,6 +24,7 @@ typedef TEST_SIG(function);
     TEST_ENTRY(opacity_policy)                                 \
     TEST_ENTRY(string_escape)                                  \
     TEST_ENTRY(signal_socket_lifetime)                         \
+    TEST_ENTRY(signal_storage_bound)                           \
     TEST_ENTRY(sa_request_bounds)                              \
     TEST_ENTRY(signal_environment)                             \
     TEST_ENTRY(signal_standard_output)                         \

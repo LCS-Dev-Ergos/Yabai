@@ -62,3 +62,32 @@ static TEST_SIG(signal_socket_lifetime)
     unlink(path);
     return result;
 }
+
+// A signal that no longer fits the storage is dropped, not written past it.
+static TEST_SIG(signal_storage_bound)
+{
+    char *test_name = "signal_storage_bound";
+    bool result = true;
+
+    struct event_signal storage[2] = { 0 };
+    struct signal subscriber = { .command = "true" };
+    struct memory_pool saved_storage = g_signal_storage;
+    struct signal *saved_signals = g_signal_event[SIGNAL_SYSTEM_WOKE];
+
+    g_signal_event[SIGNAL_SYSTEM_WOKE] = NULL;
+    buf_push(g_signal_event[SIGNAL_SYSTEM_WOKE], subscriber);
+    g_signal_storage = (struct memory_pool) { .memory = storage, .size = sizeof(storage[0]) };
+
+    event_signal_push(SIGNAL_SYSTEM_WOKE, NULL);
+    TEST_CHECK(g_signal_storage.used == sizeof(storage[0]), true);
+    TEST_CHECK(storage[0].type == SIGNAL_SYSTEM_WOKE, true);
+
+    event_signal_push(SIGNAL_SYSTEM_WOKE, NULL);
+    TEST_CHECK(g_signal_storage.used == sizeof(storage[0]), true);
+    TEST_CHECK(storage[1].type == SIGNAL_TYPE_UNKNOWN, true);
+
+    buf_free(g_signal_event[SIGNAL_SYSTEM_WOKE]);
+    g_signal_event[SIGNAL_SYSTEM_WOKE] = saved_signals;
+    g_signal_storage = saved_storage;
+    return result;
+}
