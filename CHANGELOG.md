@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Fork navigation no longer holds the daemon while it captures a crossfade's snapshot: a paced step asks for the capture and returns, and switches Desktop when the image or its 150 ms deadline arrives; a click, Mission Control, a display animation or another command during the capture stops the step, and a missing or late image gives an ordinary switch
 - Fork navigation counts a relative request arriving less than 75 ms after the previous one as a key repeat, instead of 50 ms: repeats delayed on their way through skhd and the client counted as presses, and a held key went on for two Desktops after its release
 - Fork navigation keeps `next` and `prev` pressed after a Desktop number when ten switches already wait, as a jump from that Desktop, instead of refusing them
 - Fork navigation gives the destination window focus when a burst's last step finds its Desktop current already, as a jump over a whole lap of Desktops does; focus stayed on a window of a Desktop left behind
