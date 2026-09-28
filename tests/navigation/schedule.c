@@ -375,27 +375,29 @@ static void test_absolute(void)
 
 static void test_overflow(void)
 {
-    // At most ten switches wait. Steps beyond them join a jump at the end:
-    // every press still counts, and navigation still ends in time.
+    // At most SPACE_NAVIGATION_QUEUE_STEPS switches wait. Steps beyond them
+    // join a jump at the end: every press still counts, and navigation still
+    // ends in time.
+    enum { Q = SPACE_NAVIGATION_QUEUE_STEPS };
     reset();
     press(1, false, true);
 
-    struct space_navigation_request nine = relative(9, true);
+    struct space_navigation_request fill = relative(Q - 1, true);
     struct space_navigation_request one = relative(1, true);
     struct space_navigation_request back = relative(-1, true);
 
-    assert(space_navigation_schedule_add(&nine, false));
+    assert(space_navigation_schedule_add(&fill, false));
     assert(space_navigation_schedule_add(&one, false));
-    assert(space_navigation_schedule_steps() == 10 && g_space_navigation_schedule.count == 1);
+    assert(space_navigation_schedule_steps() == Q && g_space_navigation_schedule.count == 1);
 
     assert(space_navigation_schedule_add(&one, false));
-    assert(space_navigation_schedule_steps() == 10 && g_space_navigation_schedule.count == 2);
-    assert(g_space_navigation_schedule.queue[0].steps == 9 && !g_space_navigation_schedule.queue[0].jump);
+    assert(space_navigation_schedule_steps() == Q && g_space_navigation_schedule.count == 2);
+    assert(g_space_navigation_schedule.queue[0].steps == Q - 1 && !g_space_navigation_schedule.queue[0].jump);
     assert(g_space_navigation_schedule.queue[1].steps == 2 && g_space_navigation_schedule.queue[1].jump);
 
     assert(space_navigation_schedule_add(&one, false));
     assert(space_navigation_schedule_add(&one, false));
-    assert(g_space_navigation_schedule.queue[1].steps == 4 && space_navigation_schedule_steps() == 10);
+    assert(g_space_navigation_schedule.queue[1].steps == 4 && space_navigation_schedule_steps() == Q);
 
     // A held key still keeps one step pending, and the other direction
     // takes one back from the jump.
@@ -406,42 +408,42 @@ static void test_overflow(void)
 
     space_navigation_schedule_pump();
     advance(5000 * MS);
-    assert(executed_count == 11 && executed_steps() == 13);
-    assert(executed[10].steps == 3 && executed[10].activate && executed[10].duration == 0.25f);
-    for (int i = 1; i < 10; ++i) {
+    assert(executed_count == Q + 1 && executed_steps() == Q + 3);
+    assert(executed[Q].steps == 3 && executed[Q].activate && executed[Q].duration == 0.25f);
+    for (int i = 1; i < Q; ++i) {
         assert(executed[i].steps == 1 && !executed[i].activate);
     }
 
     // Presses merged into one request split the same way.
     reset();
-    struct space_navigation_request fourteen = relative(14, true);
-    assert(space_navigation_schedule_add(&fourteen, false));
-    assert(g_space_navigation_schedule.count == 2 && space_navigation_schedule_steps() == 10);
+    struct space_navigation_request many = relative(Q + 4, true);
+    assert(space_navigation_schedule_add(&many, false));
+    assert(g_space_navigation_schedule.count == 2 && space_navigation_schedule_steps() == Q);
     space_navigation_schedule_pump();
     advance(5000 * MS);
-    assert(executed_count == 10 && executed_steps() == 14 && executed[9].steps == 5);
+    assert(executed_count == Q && executed_steps() == Q + 4 && executed[Q - 1].steps == 5);
 
     // A different effect makes a jump of its own when one switch is left.
     reset();
     press(1, false, true);
-    assert(space_navigation_schedule_add(&nine, false));
+    assert(space_navigation_schedule_add(&fill, false));
     struct space_navigation_request fade = relative(3, false);
     assert(space_navigation_schedule_add(&fade, false));
     assert(g_space_navigation_schedule.count == 2 && g_space_navigation_schedule.queue[1].jump);
-    assert(g_space_navigation_schedule.queue[1].steps == 3 && space_navigation_schedule_steps() == 10);
+    assert(g_space_navigation_schedule.queue[1].steps == 3 && space_navigation_schedule_steps() == Q);
     fade.steps = 1;
     assert(space_navigation_schedule_add(&fade, false));
     assert(g_space_navigation_schedule.queue[1].steps == 4);
 
     // The other direction can empty a jump, and then reach the steps before it.
     reset();
-    struct space_navigation_request eleven = relative(11, true);
-    assert(space_navigation_schedule_add(&eleven, false));
+    struct space_navigation_request over = relative(Q + 1, true);
+    assert(space_navigation_schedule_add(&over, false));
     for (int i = 0; i < 3; ++i) {
         assert(space_navigation_schedule_add(&back, false));
     }
 
-    assert(g_space_navigation_schedule.count == 1 && g_space_navigation_schedule.queue[0].steps == 8);
+    assert(g_space_navigation_schedule.count == 1 && g_space_navigation_schedule.queue[0].steps == Q - 2);
     assert(!g_space_navigation_schedule.queue[0].jump);
 }
 
@@ -449,16 +451,17 @@ static void test_full_queue(void)
 {
     // A Desktop number takes the place of the last switch of a full queue:
     // navigation ends where the latest press asked.
+    enum { Q = SPACE_NAVIGATION_QUEUE_STEPS };
     reset();
     press(1, false, true);
 
-    struct space_navigation_request ten = relative(10, true);
-    assert(space_navigation_schedule_add(&ten, false));
+    struct space_navigation_request full = relative(Q, true);
+    assert(space_navigation_schedule_add(&full, false));
 
     struct space_navigation_request four = number(4, false);
     assert(space_navigation_schedule_add(&four, false));
-    assert(g_space_navigation_schedule.count == 2 && space_navigation_schedule_steps() == 10);
-    assert(g_space_navigation_schedule.queue[0].steps == 9 && g_space_navigation_schedule.queue[1].sid == 4);
+    assert(g_space_navigation_schedule.count == 2 && space_navigation_schedule_steps() == Q);
+    assert(g_space_navigation_schedule.queue[0].steps == Q - 1 && g_space_navigation_schedule.queue[1].sid == 4);
 
     struct space_navigation_request six = number(6, false);
     assert(space_navigation_schedule_add(&six, false));
@@ -479,7 +482,7 @@ static void test_full_queue(void)
     struct space_navigation_request back = relative(-1, true);
     assert(space_navigation_schedule_add(&one, false));
     assert(g_space_navigation_schedule.queue[1].sid == 6 && g_space_navigation_schedule.queue[1].steps == 1);
-    assert(g_space_navigation_schedule.queue[1].jump && space_navigation_schedule_steps() == 10);
+    assert(g_space_navigation_schedule.queue[1].jump && space_navigation_schedule_steps() == Q);
     assert(space_navigation_schedule_add(&back, false));
     assert(g_space_navigation_schedule.queue[1].sid == 6 && g_space_navigation_schedule.queue[1].steps == 0);
     assert(!g_space_navigation_schedule.queue[1].jump && g_space_navigation_schedule.count == 2);
@@ -489,27 +492,27 @@ static void test_full_queue(void)
 
     space_navigation_schedule_pump();
     advance(5000 * MS);
-    assert(executed_count == 11 && executed[10].sid == 6 && executed[10].steps == -2);
-    assert(executed[10].activate && executed[10].settle);
+    assert(executed_count == Q + 1 && executed[Q].sid == 6 && executed[Q].steps == -2);
+    assert(executed[Q].activate && executed[Q].settle);
 
     // A Desktop number after it takes its place again.
     reset();
     press(1, false, true);
-    assert(space_navigation_schedule_add(&ten, false));
+    assert(space_navigation_schedule_add(&full, false));
     assert(space_navigation_schedule_add(&six, false));
     assert(space_navigation_schedule_add(&one, false));
     assert(space_navigation_schedule_add(&four, false));
     assert(g_space_navigation_schedule.queue[1].sid == 4 && !g_space_navigation_schedule.queue[1].steps);
-    assert(!g_space_navigation_schedule.queue[1].jump && space_navigation_schedule_steps() == 10);
+    assert(!g_space_navigation_schedule.queue[1].jump && space_navigation_schedule_steps() == Q);
 
     // A queued move is not replaced either.
     reset();
     press(1, false, true);
-    struct space_navigation_request nine = relative(9, true);
-    assert(space_navigation_schedule_add(&nine, false));
+    struct space_navigation_request fill = relative(Q - 1, true);
+    assert(space_navigation_schedule_add(&fill, false));
     struct space_navigation_request moved = number(3, true);
     assert(space_navigation_schedule_add(&moved, false));
-    assert(space_navigation_schedule_steps() == 10);
+    assert(space_navigation_schedule_steps() == Q);
     assert(!space_navigation_schedule_add(&four, false));
 }
 

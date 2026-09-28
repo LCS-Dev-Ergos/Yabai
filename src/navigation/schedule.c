@@ -25,18 +25,19 @@
 // down. A click after a request, or any other command, empties the queue.
 //
 // At most SPACE_NAVIGATION_QUEUE_STEPS switches wait, which bounds how long
-// navigation goes on after the last press. No press is dropped for that:
-// relative steps beyond the bound join a jump at the end of the queue, one
-// switch over several Desktops, a Desktop number takes the place of the last
-// switch, and relative steps after a Desktop number jump on from it.
-// Navigation still ends where the presses asked.
+// navigation goes on after the last press: four keep it within about 1.5 s on
+// two 4K displays, where crossfade steps run 300-460 ms apart. No press is
+// dropped for that: relative steps beyond the bound join a jump at the end of
+// the queue, one switch over several Desktops, a Desktop number takes the
+// place of the last switch, and relative steps after a Desktop number jump on
+// from it. Navigation still ends where the presses asked.
 
 #include <os/signpost.h>
 
 #define SPACE_NAVIGATION_RHYTHM_NS     100000000ULL
 #define SPACE_NAVIGATION_ACTIVATION_NS 150000000ULL
 #define SPACE_NAVIGATION_BURST_S       0.125f
-#define SPACE_NAVIGATION_QUEUE_STEPS   10
+#define SPACE_NAVIGATION_QUEUE_STEPS   4
 #define SPACE_NAVIGATION_SETTLE_NS     150000000ULL
 
 static struct

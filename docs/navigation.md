@@ -81,17 +81,18 @@ Desktop from a bounded queue, in the order requested:
   The first step of a burst keeps it too: it starts before the next press is
   known, and a running blend is never shortened. Each crossfade step first
   spends about 75 ms capturing and preparing the outgoing image (see
-  [effects](effects.md#desktop-crossfade)), so a burst is expected to run
-  about one step every 200 ms, against 380 ms measured on lcs.24, and a held
-  key one every 200 to 300 ms, depending on how soon each application reports
-  focus; see [performance](performance.md) for what has been measured.
-- At most ten switches wait, which bounds how long navigation goes on after
-  the last press. No press is dropped for that: `next` or `prev` steps beyond
-  the ten join a jump at the end of the queue, one switch over several
-  Desktops, a Desktop number takes the place of the last switch, and `next`
-  or `prev` after a Desktop number jump on from that Desktop. Only a `move`,
-  or a request with another effect, can still be refused when the queue is
-  full.
+  [effects](effects.md#desktop-crossfade)). On the MacBook display a burst
+  ran one step every 380 ms on lcs.24. On two 4K displays steps ran 300–460
+  ms apart on lcs.29: capturing and preparing the 20-million-pixel image took
+  about 110 ms of each, Dock's switch and the activation about 100 ms, and the
+  blend of the step before the rest; see [performance](performance.md).
+- At most four switches wait, which keeps navigation within about 1.5 s of
+  the last press on two 4K displays. No press is dropped for that: `next` or
+  `prev` steps beyond the four join a jump at the end of the queue, one
+  switch over several Desktops, a Desktop number takes the place of the last
+  switch, and `next` or `prev` after a Desktop number jump on from that
+  Desktop. Only a `move`, or a request with another effect, can still be
+  refused when the queue is full.
 - A click after a request, or any other command except queries, empties the
   queue. A failed step drops the rest.
 
