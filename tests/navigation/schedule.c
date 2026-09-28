@@ -147,7 +147,11 @@ static void go_to(uint64_t sid)
 static int executed_steps(void)
 {
     int steps = 0;
-    for (int i = 0; i < executed_count; ++i) steps += executed[i].steps;
+
+    for (int i = 0; i < executed_count; ++i) {
+        steps += executed[i].steps;
+    }
+
     return steps;
 }
 
@@ -414,7 +418,10 @@ static void test_overflow(void)
     reset();
     struct space_navigation_request eleven = relative(11, true);
     assert(space_navigation_schedule_add(&eleven, false));
-    for (int i = 0; i < 3; ++i) assert(space_navigation_schedule_add(&back, false));
+    for (int i = 0; i < 3; ++i) {
+        assert(space_navigation_schedule_add(&back, false));
+    }
+
     assert(g_space_navigation_schedule.count == 1 && g_space_navigation_schedule.queue[0].steps == 8);
     assert(!g_space_navigation_schedule.queue[0].jump);
 }
