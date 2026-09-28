@@ -15,8 +15,9 @@ editor's root `compile_commands.json` symlink.
 
 ## CTest and sanitizers
 
-- `yabai_tests` runs the upstream unit tests against the unity build, plus
-  navigation argument, opacity-policy protocol and signal dispatch regressions. The signal tests launch
+- `yabai_tests` runs the core's unit tests against the unity build, plus
+  navigation argument, opacity-policy protocol, signal dispatch and query
+  string escaping regressions. The signal tests launch
   harmless local shell actions and check socket lifetime, isolated event
   variables and retained standard output/error. They do not run the daemon.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
