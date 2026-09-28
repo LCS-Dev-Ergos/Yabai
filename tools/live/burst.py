@@ -5,6 +5,8 @@ Scenarios, all `space --navigate focus next|prev crossfade DURATION`:
   taps N GAP     N separate presses GAP ms apart (not key repeats).
   held MS        a held key: a request every 30 ms for MS milliseconds.
   reverse N GAP  N next, then N prev, GAP ms apart; ends where it started.
+  back N M GAP   N next, then M prev, GAP ms apart: the prev presses take
+                 back steps still queued behind one that reached its Desktop.
 
 Each scenario starts on Desktop START and prints one JSON line: when each
 request was sent, every change of the active Space (space_poll), the replies,
@@ -63,6 +65,12 @@ def plan_of(name, params, start, topology):
             ("prev", (n + i) * gap) for i in range(n)
         ]
         return plan, start
+    if name == "back":
+        n, m, gap = int(params[0]), int(params[1]), params[2]
+        plan = [("next", i * gap) for i in range(n)] + [
+            ("prev", (n + i) * gap) for i in range(m)
+        ]
+        return plan, topology.wrap(start + n - m)
     raise SystemExit(f"unknown scenario {name}")
 
 
@@ -80,10 +88,18 @@ def run(name, params, start, duration, topology):
     time.sleep(0.1)
     t0 = now_ms()
     handles = []
+    previous = None
     for direction, at in plan:
-        delay = t0 + at - now_ms()
+        # Separate presses stay apart even when one was sent late: the daemon
+        # takes requests without a key release less than 75 ms apart for a
+        # held key's repeats.
+        due = t0 + at
+        if previous is not None and at - previous[0] >= 100:
+            due = max(due, previous[1] + 90)
+        delay = due - now_ms()
         if delay > 0:
             time.sleep(delay / 1e3)
+        previous = (at, now_ms())
         handles.append(
             (
                 now_ms() - t0,

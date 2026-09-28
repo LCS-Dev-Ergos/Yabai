@@ -55,10 +55,17 @@ def main():
             offset = os.path.getsize(LOG) if os.path.exists(LOG) else 0
             t0 = now_ms()
             handles = []
+            sent = None
             for i, direction in enumerate(["next"] * 3 + ["prev"] * 3):
-                delay = t0 + i * gap - now_ms()
+                # A late send must not bring two presses within the 75 ms the
+                # daemon takes for a held key's repeats.
+                due = t0 + i * gap
+                if sent is not None and gap >= 100:
+                    due = max(due, sent + 90)
+                delay = due - now_ms()
                 if delay > 0:
                     time.sleep(delay / 1e3)
+                sent = now_ms()
                 handles.append(
                     request(
                         "space", "--navigate", "focus", direction, "crossfade", "0.25"

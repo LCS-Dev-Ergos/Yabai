@@ -119,7 +119,7 @@ restores the Desktop and window it started from. Its helpers `space_poll` and
 (`YABAI_TOOLS` overrides the directory).
 
 ```sh
-python3 tools/live/burst.py 2 0.25 taps 5 100 -- held 1500 -- reverse 3 100
+python3 tools/live/burst.py 2 0.25 taps 5 100 -- held 1500 -- reverse 3 100 -- back 4 2 100
 python3 tools/live/focus_reverse.py 10 100 2
 ```
 
@@ -129,6 +129,8 @@ should have, and whether the focused window belongs there. `next` and `prev`
 cycle through the Desktops of every display. A scenario whose start Desktop
 never became active reports `setup_ok: false`: an application that makes its
 window on another display key, as Chromium does, can keep that display active.
+`back` overshoots and takes steps back while they are still queued, which
+leaves the Desktop reached to take focus once the presses stop.
 `focus_reverse.py` repeats three `next` and three `prev` and checks the Desktop
 and focus they end on.
 
