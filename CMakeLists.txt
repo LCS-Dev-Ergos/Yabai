@@ -203,7 +203,14 @@ if(YABAI_BUILD_TOOLS AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
     add_executable(window_sub_level tools/skylight/window_sub_level.c)
     target_link_libraries(window_sub_level PRIVATE "-framework CoreFoundation" "-framework CoreGraphics" "-framework SkyLight")
 
-    foreach(tool pattern_check sa_client window_sub_level)
+    # Helpers of the live navigation tests in tools/live.
+    add_executable(space_poll tools/live/space_poll.c)
+    target_link_libraries(space_poll PRIVATE "-framework CoreFoundation" "-framework SkyLight")
+
+    add_executable(ax_focused tools/live/ax_focused.c)
+    target_link_libraries(ax_focused PRIVATE "-framework ApplicationServices")
+
+    foreach(tool pattern_check sa_client window_sub_level space_poll ax_focused)
         set_target_properties(${tool} PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools
             OSX_ARCHITECTURES arm64)

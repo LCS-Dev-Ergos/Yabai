@@ -109,6 +109,29 @@ else it records, so they can be read shortly afterwards:
 
 In zsh, a bare `log` is a builtin, hence the full path.
 
+## Live navigation tests
+
+`tools/live` drives the installed daemon through its socket, as skhd does, so
+it changes the Desktop and focus on screen: announce a run first. Each tool
+waits for five seconds without keys or clicks, stops at the next one, and
+restores the Desktop and window it started from. Its helpers `space_poll` and
+`ax_focused` are built with the other tools into `build/<preset>/tools`
+(`YABAI_TOOLS` overrides the directory).
+
+```sh
+python3 tools/live/burst.py 2 0.25 taps 5 100 -- held 1500 -- reverse 3 100
+python3 tools/live/focus_reverse.py 10 100 2
+```
+
+`burst.py` prints one JSON line per scenario: when each request was sent,
+every change of the active Space, where navigation ended against where it
+should have, and whether the focused window belongs there. `next` and `prev`
+cycle through the Desktops of every display. A scenario whose start Desktop
+never became active reports `setup_ok: false`: an application that makes its
+window on another display key, as Chromium does, can keep that display active.
+`focus_reverse.py` repeats three `next` and three `prev` and checks the Desktop
+and focus they end on.
+
 ## Presented bar frames
 
 The opt-in probe records the display's presented frames with existing Screen
