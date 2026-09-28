@@ -262,6 +262,18 @@ static CFUUIDRef fake_uuid(uint32_t display)
     return CFUUIDCreate(NULL);
 }
 
+// The timer's cancel handler frees the snapshot on a queue thread as soon as
+// cancellation lets it run. Give it that chance before cancel returns, so a
+// read of the snapshot afterwards touches freed memory. A handler that cancels
+// its own timer delays its cancel handler until it returns, so waiting there
+// proves nothing.
+static void cancel_and_let_handler_run(dispatch_source_t source)
+{
+    dispatch_source_cancel(source);
+    if (pthread_main_np()) usleep(20000);
+}
+
+#define dispatch_source_cancel cancel_and_let_handler_run
 #define SCScreenshotManager SnapshotCaptureMock
 #define CGPreflightScreenCaptureAccess fake_access
 #define CGDisplayIsActive fake_active

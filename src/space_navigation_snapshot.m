@@ -184,7 +184,10 @@ static bool space_navigation_snapshot_owns_space(uint64_t sid)
 #include "space_navigation_snapshot_surface.m"
 
 // Lock held. Timer cancellation keeps its captured pointer alive until all
-// queued handlers have returned; its cancel handler owns the final free.
+// queued handlers have returned; its cancel handler owns the final free. That
+// handler runs on a queue thread, without the lock, as soon as cancellation
+// lets it: from dispatch_source_cancel on, the snapshot may already be freed,
+// so we release the timer through a local copy.
 static void space_snapshot_cancel_locked(void)
 {
     struct space_snapshot *snapshot = space_snapshot_active;
@@ -194,8 +197,10 @@ static void space_snapshot_cancel_locked(void)
     if (snapshot->window) SLSReleaseWindow(SLSMainConnectionID(), snapshot->window);
     if (snapshot->overlay_space) SLSSpaceDestroy(SLSMainConnectionID(), snapshot->overlay_space);
     if (snapshot->uuid) CFRelease(snapshot->uuid);
-    dispatch_source_cancel(snapshot->timer);
-    dispatch_release(snapshot->timer);
+
+    dispatch_source_t timer = snapshot->timer;
+    dispatch_source_cancel(timer);
+    dispatch_release(timer);
 }
 
 static void space_navigation_snapshot_cancel(void)
