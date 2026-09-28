@@ -90,12 +90,24 @@
 
 #include "sa.m"
 #include "mission_control.c"
-#include "effects/snapshot.m"
 #include "event_loop.c"
 #include "event_signal.c"
 #include "workspace.m"
 #include "rule.c"
 #include "message.c"
+
+// Navigation and effects. command.c uses message.c's token and selector
+// parser, so it follows message.c.
+#include "navigation/admission.c"
+#include "navigation/topology.c"
+#include "navigation/activation.c"
+#include "effects/display.m"
+#include "effects/window_fade.c"
+#include "effects/snapshot.m"
+#include "navigation/step.c"
+#include "navigation/schedule.c"
+#include "navigation/command.c"
+
 #include "display.c"
 #include "space.c"
 #include "view.c"

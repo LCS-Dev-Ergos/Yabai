@@ -80,6 +80,7 @@ static struct
 #include "../../src/navigation/step.h"
 #include "../../src/effects/window_fade.h"
 #include "stubs.h"
+#include "../../src/effects/window_fade.c"
 #include "../../src/navigation/step.c"
 
 // A single activating step with the window fade, as before the schedule.

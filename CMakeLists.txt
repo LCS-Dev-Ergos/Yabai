@@ -247,9 +247,11 @@ if(YABAI_LINK_COMPILE_COMMANDS AND NOT CMAKE_BINARY_DIR STREQUAL CMAKE_CURRENT_S
         ${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json SYMBOLIC)
 endif()
 
+# A source compiled alone sees the static prototypes of functions defined in
+# later sources, which the unity build defines.
 add_library(yabai_unity OBJECT EXCLUDE_FROM_ALL)
 target_include_directories(yabai_unity PRIVATE ${SRC} ${OSAX_OUT})
-target_compile_options(yabai_unity PRIVATE -std=c11 -fno-objc-arc)
+target_compile_options(yabai_unity PRIVATE -std=c11 -fno-objc-arc -Wno-undefined-internal)
 yabai_unity_sources(${SRC}/manifest.m yabai_unity)
 yabai_unity_sources(${SRC}/osax/payload.m yabai_unity)
 set_property(SOURCE ${SRC}/osax/x64_payload.m APPEND PROPERTY COMPILE_OPTIONS -arch x86_64)

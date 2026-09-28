@@ -108,8 +108,6 @@ static bool space_navigation_needs_raise(struct window *window, uint32_t display
     return false;
 }
 
-#include "../effects/window_fade.c"
-
 // The window navigation activates on a Desktop: its frontmost eligible one.
 static struct window *space_navigation_candidate(uint32_t *ids, int count)
 {

@@ -72,7 +72,6 @@ static void window_did_receive_focus(struct window_manager *wm, struct mouse_sta
 }
 
 #include "window_focus_events.c"
-#include "navigation/admission.c"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"

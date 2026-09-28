@@ -39,15 +39,12 @@ several sources include further sources:
 manifest.m
 ├── sa.m ─ sa_opacity.c
 ├── mission_control.c
-├── effects/snapshot.m ─ snapshot_capture.m, snapshot_surface.m
-├── event_loop.c ─ window_focus_events.c, navigation/admission.c, event_loop_trace.c
+├── event_loop.c ─ window_focus_events.c, event_loop_trace.c
 ├── event_signal.c ─ event_signal_process.c
-├── workspace.m, rule.c
-├── message.c ─ navigation/command.c
-│                ├── effects/display.m, navigation/topology.c
-│                ├── navigation/activation.c
-│                ├── navigation/step.c ─ effects/window_fade.c
-│                └── navigation/schedule.c
+├── workspace.m, rule.c, message.c
+├── navigation/admission.c, topology.c, activation.c
+├── effects/display.m, window_fade.c, snapshot.m ─ snapshot_capture.m, snapshot_surface.m
+├── navigation/step.c, schedule.c, command.c
 ├── display.c, space.c, view.c, window.c, process_manager.c, application.c
 ├── display_manager.c, space_manager.c, window_manager.c, mouse_handler.c
 └── yabai.c (main)
@@ -63,9 +60,9 @@ Consequences:
   what it calls. `hooks.h` declares every module function the core calls,
   grouped by the calling file and handler, and the core's file-static
   functions the modules call.
-- The include order still carries a dependency the headers do not: the
-  navigation sources sit in the middle of `message.c`, after the token and
-  selector parser command uses.
+- The include order still carries a dependency the headers do not:
+  `navigation/command.c` follows `message.c`, whose token and selector parser
+  it uses.
 - Tests include a module's header and source directly and replace its
   dependencies with macros and stubs (`tests/navigation/*.c`).
 

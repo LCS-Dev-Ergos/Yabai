@@ -1,9 +1,3 @@
-#include "../effects/display.m"
-#include "topology.c"
-#include "activation.c"
-#include "step.c"
-#include "schedule.c"
-
 static void space_navigation_focus_schedule(int generation, uint64_t delay_ns)
 {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay_ns), dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{

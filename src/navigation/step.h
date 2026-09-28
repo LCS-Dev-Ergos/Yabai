@@ -1,8 +1,8 @@
 #ifndef NAVIGATION_STEP_H
 #define NAVIGATION_STEP_H
 
-// Navigation step (step.c, which includes effects/window_fade.c): one Desktop
-// switch with its effect and, on the last step, the activation of a window.
+// Navigation step (step.c): one Desktop switch with its effect and, on the
+// last step, the activation of a window.
 //
 // Thread: event loop. A step waits for WindowServer queries, for Dock to
 // switch (up to one second), for the snapshot capture and for an

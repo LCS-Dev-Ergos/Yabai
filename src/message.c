@@ -1772,8 +1772,6 @@ static void handle_domain_display(FILE *rsp, struct token domain, char *message)
     }
 }
 
-#include "navigation/command.c"
-
 static void handle_domain_space(FILE *rsp, struct token domain, char *message)
 {
     TIME_FUNCTION;

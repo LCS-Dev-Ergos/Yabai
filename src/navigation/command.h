@@ -1,9 +1,9 @@
 #ifndef NAVIGATION_COMMAND_H
 #define NAVIGATION_COMMAND_H
 
-// Navigation command (command.c, which includes the other navigation
-// sources): `space --navigate` from the request to the steps it queues or
-// runs, and the host services the other navigation modules call.
+// Navigation command (command.c): `space --navigate` from the request to the
+// steps it queues or runs, and the host services the other navigation modules
+// call.
 //
 // Thread: event loop. The timers below post their events from a global
 // queue.
@@ -11,8 +11,8 @@
 // and each queued step, and asks admission for the claimed steps.
 // Callers: the schedule runs steps and requests wakes; activation requests
 // its delay. The command handler calls its entry points, see hooks.h.
-// message.c includes command.c after its token and selector parser, whose
-// file-static functions and types command.c uses.
+// manifest.m includes command.c after message.c, whose file-static token and
+// selector parser command.c uses.
 
 struct space_navigation_request;
 
