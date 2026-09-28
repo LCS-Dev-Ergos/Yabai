@@ -1,6 +1,13 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
+// Area: display.c supplies display and Space facts and the display callback.
+// Threads: the main thread receives reconfiguration callbacks; the event loop
+// uses display queries while handling commands and events.
+// State: no mutable display state; the callback posts changes to the loop.
+// Callers: display management, space management and event handlers.
+// Calls: CoreGraphics, SkyLight and event_loop_post.
+
 #define DISPLAY_EVENT_HANDLER(name) void name(uint32_t did, CGDisplayChangeSummaryFlags flags, void *context)
 typedef DISPLAY_EVENT_HANDLER(display_callback);
 

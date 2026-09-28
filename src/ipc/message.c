@@ -230,13 +230,6 @@ static uint8_t parse_resize_handle(char *handle)
     }
 }
 
-enum label_type
-{
-    LABEL_DISPLAY,
-    LABEL_SPACE,
-    LABEL_WINDOW
-};
-
 static char *reserved_display_identifiers[] =
 {
     ARGUMENT_COMMON_SEL_NORTH,
@@ -326,14 +319,6 @@ static bool parse_label(FILE *rsp, struct token token, enum label_type type, cha
 
     return true;
 }
-
-struct properties
-{
-    struct token token;
-    bool did_parse;
-    bool did_error;
-    uint64_t flags;
-};
 
 static inline bool parse_property(struct properties *properties, char *property, uint64_t *property_val, char **property_str, int property_count)
 {

@@ -1,6 +1,12 @@
 #ifndef SPACE_MANAGER
 #define SPACE_MANAGER
 
+// Area: space_manager.c owns Space labels, views, layout and Space commands.
+// Threads: startup initializes it; the event loop owns later changes.
+// State: g_space_manager, its view table, layout defaults and labels.
+// Callers: commands, navigation, windows and event handlers.
+// Calls: view and display helpers, window management and scripting addition.
+
 struct space_label
 {
     uint64_t sid;

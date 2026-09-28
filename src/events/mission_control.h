@@ -1,6 +1,12 @@
 #ifndef MISSION_CONTROL_H
 #define MISSION_CONTROL_H
 
+// Area: mission_control.c observes Dock and SkyLight Mission Control changes.
+// Threads: main-thread callbacks post events; the event loop updates mode.
+// State: g_mission_control_mode.
+// Callers: startup, event handlers and navigation.
+// Calls: AX, SkyLight and event_loop_post.
+
 enum mission_control_mode
 {
     MISSION_CONTROL_MODE_INACTIVE           = 0,

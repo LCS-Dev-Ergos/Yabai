@@ -1,6 +1,13 @@
 #ifndef SA_H
 #define SA_H
 
+// Area: sa.m and sa_opacity.c send bounded requests to the Dock payload.
+// Threads: startup loads the payload; event-loop commands and animation
+// workers can send requests to its socket.
+// State: g_sa_socket_file, set at startup; requests use local buffers.
+// Callers: space and window management, navigation and effects.
+// Calls: the Dock payload socket and loader.
+
 extern unsigned char __src_osax_payload[];
 extern unsigned int __src_osax_payload_len;
 extern unsigned char __src_osax_loader[];
@@ -8,6 +15,7 @@ extern unsigned int __src_osax_loader_len;
 
 int scripting_addition_load(void);
 int scripting_addition_uninstall(void);
+static bool scripting_addition_is_sip_friendly(void);
 
 bool scripting_addition_create_space(uint64_t sid);
 bool scripting_addition_destroy_space(uint64_t sid);

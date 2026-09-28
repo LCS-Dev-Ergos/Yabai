@@ -1,6 +1,14 @@
 #ifndef EVENT_LOOP_H
 #define EVENT_LOOP_H
 
+// Area: event_queue.c, event_loop.c, window_focus_events.c and
+// event_loop_trace.c queue, dispatch and trace daemon events.
+// Threads: producers post from the main, message and global-queue threads;
+// one event-loop thread consumes events and runs every handler.
+// State: g_event_loop and the shared pending-focus, gesture and Cmd-Tab flags.
+// Callers: callbacks, message acceptance, navigation timers and startup.
+// Calls: managers, signal dispatch, navigation and scripting addition.
+
 #define EVENT_HANDLER(event_type) void EVENT_HANDLER_##event_type(void *context, int param1)
 
 #define EVENT_TYPE_LIST \
@@ -95,6 +103,11 @@ struct event_loop
 
 bool event_loop_begin(struct event_loop *event_loop);
 void event_loop_post(struct event_loop *event_loop, enum event_type type, void *context, int param1);
+struct window_manager;
+struct mouse_state;
+struct window;
+static void update_window_notifications(void);
+static void window_did_receive_focus(struct window_manager *wm, struct mouse_state *ms, struct window *window);
 
 extern struct event_loop g_event_loop;
 

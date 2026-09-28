@@ -1,6 +1,13 @@
 #ifndef MOUSE_H
 #define MOUSE_H
 
+// Area: mouse_handler.c translates event-tap input into window actions.
+// Threads: the main thread runs the tap; the event loop handles drag, drop
+// and focus actions after posted events.
+// State: g_mouse_state; click flags belong to the tap, settings to the loop.
+// Callers: startup and mouse event handlers.
+// Calls: event_loop_post, window and view management, and SkyLight.
+
 #define MOUSE_EVENT_MASK_FFM (1 << kCGEventMouseMoved) | \
                              (1 << kCGEventLeftMouseDown) | \
                              (1 << kCGEventLeftMouseUp) | \
