@@ -434,6 +434,47 @@ auxiliary Spaces, blends steps queued behind others and held-key steps in
 125 ms, and turns presses beyond ten waiting switches into a jump instead of
 refusing them. Raw evidence is in ignored `build/lcs24-burst-*.log`.
 
+## Activated lcs.29: two 4K displays
+
+On 2026-09-28 lcs.29 ran on the MacBook Pro (M1 Pro, 16 GB) with two Dell
+U3223QE displays at 3008 × 1692 points, 6016 × 3384 pixels each, and
+`crossfade 0.25`. The user kept away from keyboard and pointer; requests went
+to the socket from Desktop 2 through `tools/live`:
+
+| Workload | Switches | Result |
+| --- | --- | --- |
+| 5 presses 100 ms apart | 5, 286–868 ms apart | right Desktop and focus, the last 2.9 s after the last press |
+| key held 1.5 s | 5, 199–803 ms apart | last switch 1.0 s after the release |
+| 3 `next`, then 3 `prev`, 100 ms apart | 2 | back on Desktop 2, focus right |
+| 14 presses 100 ms apart | 12 (a jump at the end) | right Desktop and focus, the last 3.7 s after the last press |
+| `focus_reverse.py` | 10 runs | 10/10 on Desktop 2 with its window focused |
+| 6 `next`, then 4 `prev` | 3 | one Desktop too far: two `prev` sent 70 ms apart counted as a key repeat |
+
+Over 78 crossfade steps, the signposts put the median step at 226 ms from its
+start to Dock's reply and activation: planning 4 ms, capture 51 ms (p75 66,
+max 142), waiting for the event loop 0.1 ms, preparing the image 58 ms (p75
+90, max 551), switch and activation 97 ms (p75 169, max 499). Steps started
+234 ms apart (median) after the previous one ended, mostly the blend of the
+step before. A sample of the daemon at 1 ms during two bursts found the event
+loop busy 6.2 s of 34: drawing the snapshot 0.86 s (a memory copy of 20
+million pixels), creating its window 0.17 s (WindowServer filling the new
+backing), the one-frame wait 0.24 s, waiting for Dock's reply 0.97 s,
+activating applications 0.47 s and reading the Desktop list for every request
+0.46 s. The daemon's footprint was 176 MB, 490 MB at peak.
+
+An isolated benchmark on the same display: `captureImageInRect` took 48–125
+ms for the 6016 × 3384 capture; a filtered capture at the nominal 3008 × 1692
+took 92–210 ms, so a smaller capture does not help. Drawing into a new window
+took 15–46 ms, into a reused one 17–33 ms: the source's pages, not the
+window's, dominate. The payload's window fade, sampled with
+`SLSGetWindowAlpha`, rose from 0.5 to 1 in 300 ms and jumped to its end when
+the next step came.
+
+lcs.31 counts a request after a key release as a press whatever its timing,
+and lets presses queued during a step's capture take its activation over, so
+a held key's steps and a burst's first step no longer activate an application
+and wait for its focus. Raw evidence is in ignored `build/baseline/lcs29`.
+
 ## Remaining work
 
 The 40 ms same-application focus delay is kept for application compatibility
