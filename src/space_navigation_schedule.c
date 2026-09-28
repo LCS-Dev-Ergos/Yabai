@@ -12,8 +12,12 @@
 // Only the last queued step activates an application; the steps before it
 // switch and show their effect. The next step waits for the effect's duration,
 // measured from Dock's acknowledgement, so a blend always finishes before the
-// next one starts. Each step keeps the requested duration. A click after a
-// request, or any other command, empties the queue.
+// next one starts. A step with more queued behind it, or one a held key
+// repeats, blends within SPACE_NAVIGATION_BURST_S, so that scrolling through
+// the Desktops keeps a quick, regular pace; the last of separate presses keeps
+// the requested duration. A held key's last step cannot: when it runs, the key
+// may still be down. A click after a request, or any other command, empties
+// the queue.
 //
 // At most SPACE_NAVIGATION_QUEUE_STEPS switches wait, which bounds how long
 // navigation goes on after the last press. No press is dropped for that:
@@ -25,6 +29,7 @@
 
 #define SPACE_NAVIGATION_RHYTHM_NS     100000000ULL
 #define SPACE_NAVIGATION_ACTIVATION_NS 150000000ULL
+#define SPACE_NAVIGATION_BURST_S       0.125f
 #define SPACE_NAVIGATION_QUEUE_STEPS   10
 
 struct space_navigation_request
@@ -32,6 +37,7 @@ struct space_navigation_request
     bool move;
     int steps;          // Desktops forward (positive) or back; 0 for `sid`.
     bool jump;          // Moves all its steps in one switch.
+    bool repeat;        // Queued by a held key.
     uint64_t sid;
     bool crossfade;
     float alpha;
@@ -144,6 +150,7 @@ static bool space_navigation_schedule_add(struct space_navigation_request *reque
 
     struct space_navigation_request entry = *request;
     entry.jump = false;
+    entry.repeat = repeat;
     entry.time = read_os_timer();
 
     int count = g_space_navigation_schedule.count;
@@ -247,14 +254,13 @@ static void space_navigation_schedule_pump(void)
         memmove(head, head + 1, g_space_navigation_schedule.count * sizeof(*head));
     }
 
-    // Each step keeps the requested duration, including the first and last
-    // step of a burst. Timing of later key presses must not change the curve.
+    bool activate = g_space_navigation_schedule.count == 0;
     float duration = request.duration;
+    if ((!activate || request.repeat) && duration > SPACE_NAVIGATION_BURST_S) duration = SPACE_NAVIGATION_BURST_S;
 
     g_space_navigation_schedule.activated = 0;
     g_space_navigation_schedule.last_step = now;
 
-    bool activate = g_space_navigation_schedule.count == 0;
     os_signpost_interval_begin(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "step",
                                "steps %d sid %llu activate %d duration %.3f late %.1f ms",
                                steps, request.sid, activate, duration, late);

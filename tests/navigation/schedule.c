@@ -162,9 +162,9 @@ static void test_isolated_and_burst(void)
     assert(executed_count == 1 && executed[0].steps == 1 && executed[0].activate);
     assert(executed[0].time == start && executed[0].duration == 0.25f);
 
-    // Every crossfade keeps its requested duration. Further presses wait
-    // for it instead of stacking partly transparent Desktops or shortening
-    // the following effects according to request arrival times.
+    // Presses that arrive meanwhile wait for the running blend, never
+    // shortening or stacking it. The steps queued behind others blend within
+    // the burst's pace; the last one keeps the requested duration.
     advance(30 * MS);
     press(1, false, true);
     advance(30 * MS);
@@ -176,14 +176,16 @@ static void test_isolated_and_burst(void)
     advance(1000 * MS);
     assert(executed_count == 4);
     assert(executed[1].time == start + 250 * MS && !executed[1].activate);
-    assert(executed[2].time == start + 500 * MS && !executed[2].activate);
-    assert(executed[3].time == start + 750 * MS && executed[3].activate);
+    assert(executed[2].time == start + 375 * MS && !executed[2].activate);
+    assert(executed[3].time == start + 500 * MS && executed[3].activate);
+    assert(executed[1].duration == SPACE_NAVIGATION_BURST_S && executed[2].duration == SPACE_NAVIGATION_BURST_S);
+    assert(executed[3].duration == 0.25f);
 
     for (int i = 1; i < 4; ++i) {
-        assert(executed[i].steps == 1 && executed[i].duration == 0.25f);
+        assert(executed[i].steps == 1);
     }
 
-    // The window fade keeps its own duration.
+    // The window fade's last step keeps its own duration.
     reset();
     press(-1, false, false);
     advance(20 * MS);
@@ -191,7 +193,7 @@ static void test_isolated_and_burst(void)
     advance(1000 * MS);
     assert(executed_count == 2 && executed[1].steps == -1 && executed[1].duration == 0.25f);
 
-    // A pause between taps does not change their effect duration.
+    // Separate taps, each alone in the queue, keep the requested duration.
     reset();
     press(1, false, true);
     advance(150 * MS);
@@ -203,6 +205,16 @@ static void test_isolated_and_burst(void)
     assert(executed[1].duration == 0.25f);
     assert(executed[2].duration == 0.25f);
 
+    // A shorter requested duration is never lengthened.
+    reset();
+    struct space_navigation_request quick = relative(1, true);
+    quick.duration = 0.05f;
+    assert(space_navigation_schedule_add(&quick, false));
+    assert(space_navigation_schedule_add(&quick, false));
+    assert(space_navigation_schedule_add(&quick, false));
+    space_navigation_schedule_pump();
+    advance(1000 * MS);
+    assert(executed_count == 3 && executed[0].duration == 0.05f && executed[1].duration == 0.05f);
 }
 
 static void test_activation(void)
@@ -274,8 +286,9 @@ static void test_focus_confirmation_defers_navigation(void)
 
 static void test_repeats_and_reversal(void)
 {
-    // A held key keeps one step pending: a step every rhythm while held, at
-    // 0 and 250 ms, and one more after the release at 300 ms.
+    // A held key keeps one step pending: at 0 ms, when the first blend ends
+    // at 250 ms, and once more after the release at 300 ms, 125 ms later.
+    // The steps a repeat queued blend within the burst's pace.
     reset();
     press(1, false, true);
     for (int i = 0; i < 10; ++i) {
@@ -286,6 +299,10 @@ static void test_repeats_and_reversal(void)
     assert(executed_count == 2);
     advance(1000 * MS);
     assert(executed_count == 3);
+    assert(executed[0].duration == 0.25f);
+    assert(executed[1].duration == SPACE_NAVIGATION_BURST_S && executed[1].activate);
+    assert(executed[2].duration == SPACE_NAVIGATION_BURST_S && executed[2].activate);
+    assert(executed[2].time == executed[1].time + 125 * MS);
 
     // The other direction takes back a step that has not run.
     reset();
@@ -508,6 +525,6 @@ int main(void)
     test_full_queue();
     test_cancellation();
 
-    puts("navigation schedule: rhythm, activation wait, repeats, order, overflow and cancellation checks passed");
+    puts("navigation schedule: rhythm, burst pace, activation wait, repeats, order, overflow and cancellation checks passed");
     return 0;
 }
