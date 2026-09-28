@@ -110,7 +110,7 @@ Recording permission. Build it locally:
 xcrun clang -fobjc-arc -O2 tools/effects/frame_capture.m \
   -framework Foundation -framework ScreenCaptureKit -framework CoreMedia \
   -framework CoreVideo -framework CoreGraphics -framework ImageIO \
-  -o build/effects-frame-capture
+  -o build/tools/effects-frame-capture
 ```
 
 Announce the test before running it. Choose two existing ordinary Desktops on
@@ -118,7 +118,7 @@ the same display; this example uses the empty 9 and 10 on the test host:
 
 ```sh
 python3 tools/effects/check_bar.py 9 10 \
-  --capture build/effects-frame-capture \
+  --capture build/tools/effects-frame-capture \
   --output build/bar-regression --effects crossfade none
 ```
 
@@ -131,7 +131,7 @@ JSON results locally. `--images` also saves PNGs for inspection and adds
 capture work; do not use that mode to benchmark frame timing.
 
 The top 40 logical points are specific to this bar layout. Its endpoint-based
-luminance check catches the [lcs.21 disappearance](effects-lcs22-validation.md),
+luminance check catches the [lcs.21 disappearance](reports/lcs22-space-crossfade.md),
 but cannot establish Finder icon visibility, focus correctness throughout a
 burst, smooth motion or CPU/GPU performance. Notifications and changing bar
 content can affect the score; inspect images when the result is ambiguous.
@@ -151,10 +151,10 @@ xcrun clang -fno-objc-arc -O2 tools/effects/snapshot_probe.m \
   -framework Cocoa -framework Carbon -framework CoreGraphics \
   -framework ScreenCaptureKit -framework QuartzCore \
   -F/System/Library/PrivateFrameworks -framework SkyLight \
-  -o build/snapshot-crossfade
+  -o build/tools/snapshot-crossfade
 python3 tools/effects/check_bar.py 2 1 \
-  --capture build/effects-frame-capture \
-  --snapshot-probe build/snapshot-crossfade --effects snapshot \
+  --capture build/tools/effects-frame-capture \
+  --snapshot-probe build/tools/snapshot-crossfade --effects snapshot \
   --output build/snapshot-check --images --static-desktop
 ```
 
@@ -171,11 +171,11 @@ record without PNG encoding and use the separate progression check:
 
 ```sh
 python3 tools/effects/check_bar.py 4 1 \
-  --capture build/effects-frame-capture --effects crossfade \
+  --capture build/tools/effects-frame-capture --effects crossfade \
   --output build/blend-check --blend
 ```
 
-Add `--snapshot-probe build/snapshot-crossfade --effects snapshot` to test the
+Add `--snapshot-probe build/tools/snapshot-crossfade --effects snapshot` to test the
 candidate helper. `--snapshot-warm` also exposes prepare/cancel flashes.
 `tools/effects/check_blend.py CAPTURE_DIRECTORY` can analyze saved `frames.txt`
 and `result.json`. It projects central RGB along the static source-to-target

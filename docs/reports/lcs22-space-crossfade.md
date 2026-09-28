@@ -36,7 +36,7 @@ transition. The no-effect and window-fade controls preserved it.
 | 9 to 10, tracked diagnostic, PNGs disabled | 10.63 | FAIL |
 | 9 to 10, same diagnostic without effect | 0.02 | PASS |
 
-The last pair is reproducible with the command in [testing](testing.md#presented-bar-frames).
+The last pair is reproducible with the command in [testing](../testing.md#presented-bar-frames).
 Its data is in ignored `build/lcs21-bar-regression/`. Earlier image captures
 remain in ignored `build/visual-*`; enabling PNG output adds work and makes
 those runs unsuitable for presentation-timing comparisons. An excursion over

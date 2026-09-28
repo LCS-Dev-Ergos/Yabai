@@ -2,8 +2,8 @@
 
 Payload `2.1.31-lcs.6` separates temporary Desktop navigation effects from
 ordinary focus opacity. This implements the ownership and pacing work from
-the [live investigation](effects-investigation.md) and
-[Apple motion research](apple-motion-research.md).
+the [live investigation](reports/lcs11-opacity-conflict.md) and
+[Apple motion research](research/desktop-motion.md).
 
 ## Navigation lifecycle
 
@@ -124,7 +124,7 @@ normally, and fades that image out over the destination. It preserves the full
 Desktop blend without changing Space alpha/levels or the alpha of Finder,
 wallpaper, SketchyBar or application windows. The installed lcs.22 Space-based
 path reproduced both disappearing Finder icons and a black transition into
-Desktop 1; the [lcs.23 report](effects-lcs23-validation.md) records the comparison.
+Desktop 1; the [lcs.23 report](reports/lcs23-snapshot-crossfade.md) records the comparison.
 
 ScreenCaptureKit capture requires macOS 15.2+ and existing Screen Recording
 permission. The navigation path never requests permission. Unsupported or
@@ -141,7 +141,7 @@ whole navigation request.
 The image is drawn into the window's backing before the window is shown: a
 Core Animation remote surface presented uninitialized white frames during
 rapid preparation and cancellation (see the
-[lcs.24 report](effects-lcs24-validation.md)). The window takes the capture's
+[lcs.24 report](reports/lcs24-snapshot-continuity.md)). The window takes the capture's
 colour space, the display's own profile, before its context is created.
 Without it every pixel was converted to the window's default space: the draw
 of a 4112 × 2658 capture took 46–69 ms, against 15–18 ms without conversion,
@@ -219,7 +219,7 @@ destination at level 0 and lowers older layers to -1/-2. Earlier versions
 raised it above level 0, allowing an empty destination's wallpaper to obscure
 global windows such as SketchyBar. The new ordering still needs live validation
 for the bar and Finder's shared Desktop windows; see the
-[candidate report](effects-lcs22-validation.md).
+[candidate report](reports/lcs22-space-crossfade.md).
 Each frame then commits one transaction with the destination's alpha
 (smoothstep), and the last one hides the other Desktops and restores alpha 1 and
 level 0. The daemon's request returns once the destination is current, and

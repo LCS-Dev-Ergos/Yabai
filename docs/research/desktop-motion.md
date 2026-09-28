@@ -63,11 +63,11 @@ do not turn it into a presentation fence or add an arbitrary waiting timer.
 
 ## Applying this to the lcs.11 baseline
 
-The subsequent implementation and its verification limits are in [effects.md](effects.md).
+The subsequent implementation and its verification limits are in [effects.md](../effects.md).
 
-The [navigation path](../src/space_navigation.c) dims destination windows,
+The [navigation path](../../src/space_navigation.c) dims destination windows,
 switches Space, focuses/possibly raises a window, then submits fades one by
-one. The [worker](../src/osax/window_fade.c) assigns each request its own start
+one. The [worker](../../src/osax/window_fade.c) assigns each request its own start
 time and uses `1 - (1 - t)^3`; its timer runs up to 120 Hz without display sync.
 These facts imply possible dim holds during slow focus and inter-window start
 skew. Actual visibility of either artifact requires observation.
@@ -123,7 +123,7 @@ compositing. [Core Animation performance](https://developer.apple.com/library/ar
 5. Gate spatial springs/private compositor interpolation on an isolated visual
    prototype proving interruption, reversal, focus, live content and cleanup.
    The prior native-alpha probe did not establish rendered interpolation or
-   cancellation; see [effects.md](effects.md). It remains experimental.
+   cancellation; see [effects.md](../effects.md). It remains experimental.
 
 For each prototype test single presses, held keys, reversals, empty/populated
 Desktops, the same app across displays, cancellation, window close and display

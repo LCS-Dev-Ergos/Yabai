@@ -1,7 +1,7 @@
 # Effects investigation on lcs.11
 
 Measured on 2026-09-27. Read this alongside the primary-source
-[Apple motion research](apple-motion-research.md). This pass investigates
+[Apple motion research](../research/desktop-motion.md). This pass investigates
 the current visual complaint; it does not change the production animator.
 
 ## Host and current policy
@@ -80,9 +80,9 @@ of these values were scanned out by either monitor.
    Changing cubic to spring, or merely lowering the timer rate, would leave
    this ownership conflict in place.
 
-Source pointers: [navigation](../src/space_navigation.c),
-[focus handling](../src/event_loop.c), [opacity dispatch](../src/window_manager.c),
-[fade state](../src/osax/window_fade.c).
+Source pointers: [navigation](../../src/space_navigation.c),
+[focus handling](../../src/event_loop.c), [opacity dispatch](../../src/window_manager.c),
+[fade state](../../src/osax/window_fade.c).
 
 ## Proposed implementation sequence
 
