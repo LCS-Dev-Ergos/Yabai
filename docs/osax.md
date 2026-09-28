@@ -42,7 +42,7 @@ bits, one per lookup that succeeded:
 | `0x04` | `add_space` function | creating spaces |
 | `0x08` | `remove_space` function | destroying spaces |
 | `0x10` | `move_space` function; since macOS 27, the Dock's handler for moved spaces | moving spaces |
-| `0x20` | `set_front_window` function | nothing: the caller in `window_manager.c` is compiled out |
+| `0x20` | `set_front_window` function | nothing: the caller in `window_manager/focus.c` is compiled out |
 | `0x40` | space switch animation instruction, patched to a zero duration | instant space switching |
 
 On macOS 27.2 the handshake reports `0x5D`. `--load-sa` requires the lookups

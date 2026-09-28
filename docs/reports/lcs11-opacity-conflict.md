@@ -81,7 +81,7 @@ of these values were scanned out by either monitor.
    this ownership conflict in place.
 
 Source pointers: [navigation](../../src/navigation/step.c),
-[focus handling](../../src/event_loop.c), [opacity dispatch](../../src/window_manager.c),
+[focus handling](../../src/event_loop.c), [opacity dispatch](../../src/window_manager/appearance.c),
 [fade state](../../src/osax/window_fade.c).
 
 ## Proposed implementation sequence

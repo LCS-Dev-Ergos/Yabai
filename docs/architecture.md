@@ -49,7 +49,10 @@ manifest.m
 ├── commands/config.c, display.c, space.c, window.c, query.c, rule.c, signal.c
 ├── message_loop.c
 ├── display.c, space.c, view.c, window.c, process_manager.c, application.c
-├── display_manager.c, space_manager.c, window_manager.c, mouse_handler.c
+├── display_manager.c, space_manager.c
+├── window_manager/tables.c, query.c, rules.c, frames.c, animation.c, appearance.c,
+│   lookup.c, focus.c, operations.c, scratchpad.c, spaces.c
+├── mouse_handler.c
 └── yabai.c (main)
 ```
 
@@ -178,9 +181,11 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 - **Processes and applications** (`process_manager.c`, `application.c`,
   `workspace.m`): which applications exist, their AX observers and launch
   state.
-- **Windows** (`window.c`, `window_manager.c`, 3,900 lines together): the
-  window table, eligibility, rules, focus, frames, opacity, borders
-  (JankyBorders notifications), animations.
+- **Windows** (`window.c`, and `window_manager/` by concern): the window and
+  application tables, queries, rules, frames, animations with their
+  JankyBorders notifications, opacity and layers, lookups, focus, the window
+  commands, the scratchpad, and keeping views in step with Space and display
+  changes (`spaces.c`).
 - **Spaces and views** (`space.c`, `space_manager.c`, `view.c`): Desktop
   queries through SkyLight, one view (layout and BSP tree) per Space, Space
   commands through the payload.
@@ -285,10 +290,11 @@ lands as its own commits.
 5. Done. **Remove the legacy Space crossfade** from the payload and the
    protocol: payload `2.1.31-lcs.13` drops about 630 lines and opcode `0x16`,
    which stays reserved; loading it needs a scripting-addition reload.
-6. **Upstream files where it pays**: `message.c` by command domain (done:
-   `commands/`, byte-identical binary),
-   `window_manager.c` by concern (table and rules, focus, frames, animation),
-   and the Space-change revalidation that holds the event loop.
+6. Done for the files. **Upstream files where it pays**: `message.c` by
+   command domain (`commands/`, byte-identical binary) and `window_manager.c`
+   by concern (`window_manager/`, identical LLVM IR for every function and
+   global). Left for the efficiency work: the Space-change revalidation that
+   holds the event loop (`window_manager/spaces.c`).
 7. Done. **Workflow**: `sync-upstream` reports new commits by the author in
    an issue instead of proposing a merge.
 
