@@ -1,7 +1,7 @@
 #ifndef VIEW_H
 #define VIEW_H
 
-// Area: view.c owns area geometry, BSP nodes and each Space's view lifecycle.
+// Area: view/*.c owns area geometry, BSP nodes and each Space's view lifecycle.
 // Thread: the event loop mutates views and their BSP trees.
 // State: view and window_node objects; g_space_manager holds their table.
 // Callers: space and window managers, display geometry and event handlers.

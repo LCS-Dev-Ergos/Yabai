@@ -14,7 +14,7 @@ the fork's own features are in [navigation](navigation.md),
 | `yabai` daemon | `src/manifest.m` (unity build) | Window manager: observes applications, windows, Spaces and displays, tiles, answers commands, runs signals. |
 | `yabai -m` client | `src/yabai.c` (`client_send_message`) | Sends one command over the daemon socket and prints the reply. `skhd` and `space.sh` start one per key press. |
 | Dock payload | `src/osax/payload.m` and fork handlers | Injected into Dock by `yabai --load-sa` (root, `src/osax/loader.m`). Runs Dock-private operations: Space focus, create, move; window order, level, opacity and fades. |
-| Signal actions | `src/event_signal*.c` | Shell commands the daemon starts with `posix_spawn` when a subscribed event occurs. |
+| Signal actions | `src/events/event_signal*.c` | Shell commands the daemon starts with `posix_spawn` when a subscribed event occurs. |
 
 The two sockets:
 
@@ -43,16 +43,23 @@ src/manifest.m
 ├── navigation/step.c, schedule.c, command.c
 ├── sa/sa.m ─ sa_opacity.c
 ├── events/mission_control.c
-├── events/event_queue.c, event_loop.c ─ window_focus_events.c, event_loop_trace.c
+├── events/event_queue.c, event_loop.c ─ window_focus_events.c,
+│   handlers/{applications,windows,spaces,displays,mouse,mission_control,system,messages}.c,
+│   event_loop_trace.c
 ├── events/event_signal.c ─ event_signal_process.c
 ├── events/workspace.m
 ├── windows/rule.c
 ├── ipc/message.c
 ├── ipc/commands/config.c, display.c, space.c, window.c, query.c, rule.c, signal.c
 ├── ipc/message_loop.c
-├── displays/display.c, spaces/space.c, spaces/view.c, windows/window.c
+├── displays/display.c, spaces/space.c
+├── spaces/view/{feedback,geometry,nodes,direction,operations,lifecycle}.c
+├── windows/window/{observation,space,serialize_nonax,serialize,attributes,
+│   properties,identity,lifecycle}.c
 ├── applications/process_manager.c, application.c
-├── displays/display_manager.c, spaces/space_manager.c
+├── displays/display_manager.c
+├── spaces/space_manager/{views,labels,layout,selectors,window_moves,
+│   operations,state}.c
 ├── windows/window_manager/tables.c, query.c, rules.c, frames.c, animation.c,
 │   appearance.c, lookup.c, focus.c, operations.c, scratchpad.c, spaces.c
 ├── events/mouse_handler.c
@@ -78,7 +85,8 @@ Consequences:
 - Each shared global is declared in the header of the part that owns it.
   The daemon's globals are defined together in `yabai.c` because startup
   initializes several areas before their callbacks or the message loop can
-  run. `event_loop.c` defines its pending-event flags beside their handlers.
+  run. `event_loop.c` defines its pending-event flags before the included
+  handlers.
   Their writing threads and readers are listed below; the definition's file
   does not imply ownership after startup.
 - Each navigation and effects module declares what other files use in its
@@ -213,19 +221,24 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 - **Processes and applications** (`applications/process_manager.c`,
   `applications/application.c`, `events/workspace.m`): which applications
   exist, their AX observers and launch state.
-- **Windows** (`windows/window.c`, `windows/rule.c`, and
-  `windows/window_manager/` by concern): the window and application tables,
+- **Windows** (`windows/window/` for observation, Space membership,
+  serialization, attributes, properties, identity and lifecycle;
+  `windows/rule.c`; `windows/window_manager/` by concern): the window and
+  application tables,
   queries, rules, frames, animations with their JankyBorders notifications,
   opacity and layers, lookups, focus, the window commands, the scratchpad, and
   keeping views in step with Space and display changes (`spaces.c`).
-- **Spaces and views** (`spaces/space.c`, `spaces/space_manager.c`,
-  `spaces/view.c`): Desktop queries through SkyLight, one view (layout and BSP
+- **Spaces and views** (`spaces/space.c`, `spaces/space_manager/` for views,
+  labels, layout, selectors, window moves, operations and state;
+  `spaces/view/` for feedback, geometry, nodes, directional lookup, operations
+  and lifecycle): Desktop queries through SkyLight, one view (layout and BSP
   tree) per Space, Space commands through the payload.
 - **Displays** (`displays/display.c`, `displays/display_manager.c`).
 - **Commands** (`ipc/`): the parser (`message.c`), one file per domain in
   `commands/` (`config`, `display`, `space`, `window`, `query`, `rule`,
   `signal`), and the socket's accept thread and dispatch (`message_loop.c`).
-- **Events** (`events/`): the event loop and its queue, signals
+- **Events** (`events/`): the event loop, domain handlers in `handlers/` and
+  its queue, signals
   (`event_signal.c`: subscriptions and spawning), the mouse
   (`mouse_handler.c`: modifier drags, drops and focus follows mouse), Mission
   Control (`mission_control.c`: its modes and the SkyLight notification

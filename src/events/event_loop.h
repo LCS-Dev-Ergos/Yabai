@@ -1,8 +1,8 @@
 #ifndef EVENT_LOOP_H
 #define EVENT_LOOP_H
 
-// Area: event_queue.c, event_loop.c, window_focus_events.c and
-// event_loop_trace.c queue, dispatch and trace daemon events.
+// Area: event_queue.c, event_loop.c, handlers/*.c, window_focus_events.c
+// and event_loop_trace.c queue, dispatch and trace daemon events.
 // Threads: producers post from the main, message and global-queue threads;
 // one event-loop thread consumes events and runs every handler.
 // State: g_event_loop and the shared pending-focus, gesture and Cmd-Tab flags.

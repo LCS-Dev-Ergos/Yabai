@@ -1,7 +1,7 @@
 #ifndef WINDOW_H
 #define WINDOW_H
 
-// Area: window.c reads AX and SkyLight window facts and serializes windows.
+// Area: window/*.c reads AX and SkyLight window facts and serializes windows.
 // Threads: the event loop owns window objects; the main thread observes AX
 // notifications through application.c and posts events.
 // State: each window's AX element and flags; startup sets the g_layer_* levels.
