@@ -159,14 +159,29 @@ static bool space_navigation_settle(uint64_t sid)
     return true;
 }
 
-static bool space_navigation_run_step(uint64_t current, struct space_navigation_step *step)
+// A click since `time` wins over navigation that has not switched yet.
+static bool space_navigation_clicked_since(uint64_t time)
+{
+    return space_navigation_seconds_since_click() * 1e9 < (double) (read_os_timer() - time);
+}
+
+// The crossfade blends two opaque Desktops, so it stays under Reduce Motion,
+// whose own Desktop transition is a crossfade. It needs a hidden destination
+// and ordinary Desktops on both sides.
+static bool space_navigation_crossfades(uint64_t current, struct space_navigation_step *step)
+{
+    return step->crossfade && step->duration > 0.0f && !space_navigation_space_visible(step->sid)
+        && !space_navigation_space_fullscreen(step->sid) && !space_navigation_space_fullscreen(current);
+}
+
+// What a step decides before Dock switches: the destination's display, the
+// window to activate and whether it needs a raise. The destination's windows
+// are left in `ids` for a window fade. False when the step cannot switch.
+static bool space_navigation_plan(uint64_t current, struct space_navigation_step *step,
+                                  struct space_navigation_plan *plan, uint32_t **ids, int *count)
 {
     uint64_t sid = step->sid;
     bool move = step->move;
-    float alpha = step->alpha;
-    float duration = step->duration;
-
-    if (current == sid) return step->activate && step->settle ? space_navigation_settle(sid) : true;
 
     space_navigation_snapshot_cancel();
     // A deferred focus from the previous navigation must not follow this one.
@@ -188,85 +203,128 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
         window_manager_send_window_to_space(&g_space_manager, &g_window_manager, focus, sid, false);
     }
 
-    int count = 0;
-    uint32_t *ids = space_window_list(sid, &count, false);
-    if (!ids) count = 0;
+    *count = 0;
+    *ids = space_window_list(sid, count, false);
+    if (!*ids) *count = 0;
 
-    if (!focus) focus = space_navigation_candidate(ids, count);
+    if (!focus) focus = space_navigation_candidate(*ids, *count);
 
     // Decided before the switch: afterwards WindowServer is busy showing the
     // new Desktop, and each query waits for about a frame.
     bool raise = focus && step->activate && (move || space_navigation_needs_raise(focus, display));
 
-    uint64_t now = read_os_timer();
+    *plan = (struct space_navigation_plan) {
+        .current = current,
+        .sid = sid,
+        .display = display,
+        .current_display = space_navigation_space_display(current),
+        .focus_id = focus ? focus->id : 0,
+        .move = move,
+        .activate = step->activate,
+        .raise = raise,
+        .duration = step->duration,
+        .now = read_os_timer()
+    };
 
-    // The crossfade blends two opaque Desktops, so it stays under Reduce
-    // Motion, whose own Desktop transition is a crossfade. It needs a hidden
-    // destination and ordinary Desktops on both sides.
-    bool crossfade = step->crossfade && duration > 0.0f && !space_navigation_space_visible(sid)
-        && !space_navigation_space_fullscreen(sid) && !space_navigation_space_fullscreen(current);
+    return true;
+}
 
-    // Repeated navigation stays immediate. Suppress effects, never navigation.
-    bool fade = !step->crossfade && duration > 0.0f && alpha < 1.0f && !space_navigation_space_visible(sid)
-        && !space_navigation_space_fullscreen(sid)
-        && (space_navigation_last_time == 0 || now - space_navigation_last_time >= 180000000ULL)
-        && !space_navigation_reduce_motion();
-
-    uint32_t focus_id = focus ? focus->id : 0;
-    struct space_navigation_effect effect = { .count = 0 };
-    bool effects_ok = step->crossfade || space_navigation_prepare_effect(&effect, display, ids, count, focus_id, alpha, fade);
-    bool success;
-    bool crossfade_started = false;
-
-    if (crossfade) {
-        // Blend the composed outgoing frame over an ordinary switch. Never
-        // apply alpha to Spaces: Finder content is shared between them.
-        float interval = space_navigation_frame_interval(display);
-        uint64_t capture_started = read_os_timer();
-        bool prepared = space_navigation_snapshot_prepare(display, sid, interval);
-        if (space_navigation_seconds_since_click() * 1e9 < (double) (read_os_timer() - capture_started)) {
-            space_navigation_snapshot_cancel();
-            return false; // A newer pointer action wins over a slow capture.
-        }
-        success = scripting_addition_focus_space(sid);
-        crossfade_started = prepared && space_navigation_snapshot_start(duration, success);
-    } else if (step->crossfade) {
-        success = scripting_addition_focus_space(sid);
-    } else {
-        // Unlike generic --focus, do not silently fall back to asynchronous
-        // gestures after dimming windows: failure must restore opacity
-        // before returning.
-        success = effects_ok && scripting_addition_focus_space(sid);
-
-        // Start the entire group before application activation or AXRaise
-        // can block. Failure restores ordinary opacity without leaving dim
-        // windows.
-        effects_ok = space_navigation_start_effect(&effect, display,
-            success ? focus_id : g_window_manager.focused_window_id, alpha, duration, success) && effects_ok;
-    }
-
+// After Dock switched, or failed to: the report to the schedule, the
+// activation and the anchor.
+static void space_navigation_finish(struct space_navigation_plan *plan, bool success, float effect_duration)
+{
     if (success) {
-        space_navigation_last_time = now;
-        space_navigation_schedule_switched(crossfade_started ? duration : 0.0f);
+        space_navigation_last_time = plan->now;
+        space_navigation_schedule_switched(effect_duration);
     }
 
-    if (success && step->activate) {
-        if (space_navigation_space_display(current) != display) {
+    if (success && plan->activate) {
+        struct window *focus = window_manager_find_window(&g_window_manager, plan->focus_id);
+
+        if (plan->current_display != plan->display) {
             if (focus) {
-                display_manager_set_active_display_id(display);
+                display_manager_set_active_display_id(plan->display);
                 window_manager_center_mouse(&g_window_manager, focus);
             } else {
-                display_manager_focus_display(display, sid);
+                display_manager_focus_display(plan->display, plan->sid);
             }
         }
 
-        if (focus) space_navigation_activate(focus, move, raise);
+        if (focus) space_navigation_activate(focus, plan->move, plan->raise);
     }
 
     if (success) {
-        space_navigation_anchor.sid = sid;
+        space_navigation_anchor.sid = plan->sid;
         space_navigation_anchor.time = read_os_timer();
     }
+}
 
+// Switches under the prepared snapshot, if there is one: Dock's own switch,
+// with only our overlay fading. Never apply alpha to Spaces: Finder content
+// is shared between them.
+static bool space_navigation_switch_crossfade(struct space_navigation_plan *plan, bool prepared)
+{
+    bool success = scripting_addition_focus_space(plan->sid);
+    bool started = prepared && space_navigation_snapshot_start(plan->duration, success);
+
+    space_navigation_finish(plan, success, started ? plan->duration : 0.0f);
+    return success;
+}
+
+// Switches with the destination's windows fading in from the step's alpha.
+static bool space_navigation_switch_fade(struct space_navigation_plan *plan, struct space_navigation_step *step,
+                                         uint32_t *ids, int count)
+{
+    uint64_t sid = plan->sid;
+    float alpha = step->alpha;
+    float duration = step->duration;
+
+    // Repeated navigation stays immediate. Suppress effects, never navigation.
+    bool fade = duration > 0.0f && alpha < 1.0f && !space_navigation_space_visible(sid)
+        && !space_navigation_space_fullscreen(sid)
+        && (space_navigation_last_time == 0 || plan->now - space_navigation_last_time >= 180000000ULL)
+        && !space_navigation_reduce_motion();
+
+    struct space_navigation_effect effect = { .count = 0 };
+    bool effects_ok = space_navigation_prepare_effect(&effect, plan->display, ids, count, plan->focus_id, alpha, fade);
+
+    // Unlike generic --focus, do not silently fall back to asynchronous
+    // gestures after dimming windows: failure must restore opacity before
+    // returning.
+    bool success = effects_ok && scripting_addition_focus_space(sid);
+
+    // Start the entire group before application activation or AXRaise can
+    // block. Failure restores ordinary opacity without leaving dim windows.
+    effects_ok = space_navigation_start_effect(&effect, plan->display,
+        success ? plan->focus_id : g_window_manager.focused_window_id, alpha, duration, success) && effects_ok;
+
+    space_navigation_finish(plan, success, 0.0f);
     return success && effects_ok;
+}
+
+// Runs a step to its end. A crossfade waits here for its capture.
+static bool space_navigation_run_step(uint64_t current, struct space_navigation_step *step)
+{
+    if (current == step->sid) return step->activate && step->settle ? space_navigation_settle(step->sid) : true;
+
+    struct space_navigation_plan plan;
+    uint32_t *ids;
+    int count;
+    if (!space_navigation_plan(current, step, &plan, &ids, &count)) return false;
+
+    if (!step->crossfade) return space_navigation_switch_fade(&plan, step, ids, count);
+
+    bool prepared = false;
+
+    if (space_navigation_crossfades(current, step)) {
+        uint64_t capture_started = read_os_timer();
+        prepared = space_navigation_snapshot_prepare(plan.display, plan.sid, space_navigation_frame_interval(plan.display));
+
+        if (space_navigation_clicked_since(capture_started)) {
+            space_navigation_snapshot_cancel();
+            return false; // A newer pointer action wins over a slow capture.
+        }
+    }
+
+    return space_navigation_switch_crossfade(&plan, prepared);
 }

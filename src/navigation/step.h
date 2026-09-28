@@ -4,6 +4,9 @@
 // Navigation step (step.c): one Desktop switch with its effect and, on the
 // last step, the activation of a window.
 //
+// A step plans (destination, window, raise), switches through Dock with its
+// effect, then activates.
+//
 // Thread: event loop. A step waits for WindowServer queries, for Dock to
 // switch (up to one second), for the snapshot capture and for an
 // application's AX raise.
@@ -32,6 +35,23 @@ struct space_navigation_step
     bool activate;
     bool settle;
 };
+
+// A step's decisions before Dock switches.
+struct space_navigation_plan
+{
+    uint64_t current;
+    uint64_t sid;
+    uint32_t display;
+    uint32_t current_display;
+    uint32_t focus_id;          // The window to activate, 0 for none.
+    bool move;
+    bool activate;
+    bool raise;
+    float duration;
+    uint64_t now;               // When the step was planned.
+};
+
+struct window;
 
 static void space_navigation_forget(void);
 static double space_navigation_seconds_since_click(void);
