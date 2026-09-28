@@ -1,6 +1,3 @@
-extern struct event_loop g_event_loop;
-extern void *g_workspace_context;
-
 static TABLE_HASH_FUNC(hash_psn)
 {
     return ((ProcessSerialNumber *) key)->lowLongOfPSN;

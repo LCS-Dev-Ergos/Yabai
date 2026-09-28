@@ -32,4 +32,6 @@ struct process *process_manager_find_process(struct process_manager *pm, Process
 bool process_manager_begin(struct process_manager *pm);
 uint64_t process_manager_active_space_for_psn(int connection);
 
+extern struct process_manager g_process_manager;
+
 #endif

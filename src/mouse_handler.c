@@ -1,7 +1,3 @@
-extern struct event_loop g_event_loop;
-extern volatile bool __pending_gesture;
-extern volatile uint64_t __last_gesture_time;
-
 static inline uint8_t mouse_mod_from_cgflags(uint32_t cgflags)
 {
     uint8_t flags = 0;

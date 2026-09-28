@@ -1,6 +1,3 @@
-extern struct event_loop g_event_loop;
-extern int g_connection;
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
 static DISPLAY_EVENT_HANDLER(display_handler)

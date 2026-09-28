@@ -37,14 +37,14 @@ several sources include further sources:
 
 ```
 manifest.m
+├── navigation/admission.c, topology.c, activation.c
+├── effects/display.m, window_fade.c, snapshot.m ─ snapshot_capture.m, snapshot_surface.m
+├── navigation/step.c, schedule.c, command.c
 ├── sa.m ─ sa_opacity.c
 ├── mission_control.c
 ├── event_loop.c ─ window_focus_events.c, event_loop_trace.c
 ├── event_signal.c ─ event_signal_process.c
 ├── workspace.m, rule.c, message.c
-├── navigation/admission.c, topology.c, activation.c
-├── effects/display.m, window_fade.c, snapshot.m ─ snapshot_capture.m, snapshot_surface.m
-├── navigation/step.c, schedule.c, command.c
 ├── display.c, space.c, view.c, window.c, process_manager.c, application.c
 ├── display_manager.c, space_manager.c, window_manager.c, mouse_handler.c
 └── yabai.c (main)
@@ -54,16 +54,16 @@ Consequences:
 
 - Every function and global is visible to everything included after it.
   The core's files call each other's file-static functions by include order.
-  Nothing enforces a module boundary.
+- Each global is declared once, in the header of the part that owns it, and
+  defined in `yabai.c` or `event_loop.c`.
 - Each navigation and effects module declares what other files use in its
   header, which also states its threads, the state it owns, its callers and
   what it calls. `hooks.h` declares every module function the core calls,
   grouped by the calling file and handler. What the modules call in the core
   is declared in the core's headers: the command vocabulary, tokens and
   selectors in `message.h`, Mission Control's mode in `mission_control.h`,
-  focus in `window_manager.h`.
-- The core's globals are declared by `extern` lines at the top of the core
-  files that use them, so a source that uses one must follow such a file.
+  focus in `window_manager.h`. The navigation and effects sources come before
+  every core source, so the compiler holds them to what the headers declare.
 - Tests include a module's header and source directly and replace its
   dependencies with macros and stubs (`tests/navigation/*.c`).
 

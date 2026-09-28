@@ -75,4 +75,13 @@ struct event_loop
 bool event_loop_begin(struct event_loop *event_loop);
 void event_loop_post(struct event_loop *event_loop, enum event_type type, void *context, int param1);
 
+extern struct event_loop g_event_loop;
+
+// Written on the main thread and read on the event loop, see event_loop.c.
+extern volatile bool __pending_window_focus;
+extern volatile uint32_t __pending_window_focus_id;
+extern volatile bool __pending_gesture;
+extern volatile uint64_t __last_gesture_time;
+extern volatile uint64_t __last_cmd_tab_time;
+
 #endif

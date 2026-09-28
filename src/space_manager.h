@@ -108,4 +108,6 @@ bool space_manager_refresh_application_windows(struct space_manager *sm);
 void space_manager_handle_display_add(struct space_manager *sm, uint32_t did);
 void space_manager_begin(struct space_manager *sm);
 
+extern struct space_manager g_space_manager;
+
 #endif

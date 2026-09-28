@@ -32,4 +32,6 @@ bool scripting_addition_order_window_in(uint32_t *window_list, int window_count)
 bool scripting_addition_move_window_list_to_space(uint64_t sid, uint32_t *window_list, int window_count);
 bool scripting_addition_move_window_to_space(uint64_t sid, uint32_t wid);
 
+extern char g_sa_socket_file[MAXLEN];
+
 #endif

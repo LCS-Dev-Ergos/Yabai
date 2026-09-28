@@ -126,4 +126,7 @@ bool event_signal_remove(char *label);
 void event_signal_list(FILE *rsp);
 enum signal_type signal_type_from_string(const char *str);
 
+extern struct signal *g_signal_event[SIGNAL_TYPE_COUNT];
+extern struct memory_pool g_signal_storage;
+
 #endif

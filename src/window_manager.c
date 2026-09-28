@@ -1,11 +1,3 @@
-extern mach_port_t g_bs_port;
-extern uint8_t *g_event_bytes;
-extern struct event_loop g_event_loop;
-extern void *g_workspace_context;
-extern struct process_manager g_process_manager;
-extern struct mouse_state g_mouse_state;
-extern double g_cv_host_clock_frequency;
-
 static TABLE_HASH_FUNC(hash_wm)
 {
     return *(uint32_t *) key;

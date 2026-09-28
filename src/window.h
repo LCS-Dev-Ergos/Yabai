@@ -171,4 +171,8 @@ void window_unobserve(struct window *window);
 struct window *window_create(struct application *application, AXUIElementRef window_ref, uint32_t window_id);
 void window_destroy(struct window *window);
 
+extern int g_layer_normal_window_level;
+extern int g_layer_below_window_level;
+extern int g_layer_above_window_level;
+
 #endif

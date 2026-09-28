@@ -4,12 +4,6 @@ static struct {
     pthread_t thread;
 } g_message_loop;
 
-extern struct event_loop g_event_loop;
-extern struct display_manager g_display_manager;
-extern struct space_manager g_space_manager;
-extern struct window_manager g_window_manager;
-extern struct mouse_state g_mouse_state;
-extern bool g_verbose;
 
 static const int token_char_int_table[] =
 {

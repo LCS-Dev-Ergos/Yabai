@@ -3,6 +3,9 @@
 #ifndef EXTERN_H
 #define EXTERN_H
 
+// The daemon's own SkyLight connection, opened in main.
+extern int g_connection;
+
 #define CONNECTION_CALLBACK(name) void name(uint32_t type, void *data, size_t data_length, void *context, int cid)
 typedef CONNECTION_CALLBACK(connection_callback);
 

@@ -1,7 +1,3 @@
-extern struct event_loop g_event_loop;
-extern enum mission_control_mode g_mission_control_mode;
-extern volatile uint64_t __last_cmd_tab_time;
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
 static CONNECTION_CALLBACK(connection_handler)

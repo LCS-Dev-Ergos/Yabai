@@ -1,9 +1,3 @@
-extern struct window_manager g_window_manager;
-extern int g_layer_normal_window_level;
-extern int g_layer_below_window_level;
-extern int g_layer_above_window_level;
-extern int g_connection;
-
 bool window_observe(struct window *window)
 {
     for (int i = 0; i < array_count(ax_window_notification); ++i) {

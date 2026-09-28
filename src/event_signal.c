@@ -1,10 +1,3 @@
-extern struct signal *g_signal_event[SIGNAL_TYPE_COUNT];
-extern struct memory_pool g_signal_storage;
-extern struct process_manager g_process_manager;
-extern struct display_manager g_display_manager;
-extern struct space_manager g_space_manager;
-extern struct window_manager g_window_manager;
-
 #include "event_signal_process.c"
 
 static bool event_signal_filter(struct event_signal *es, struct signal *signal)

@@ -90,4 +90,6 @@ void display_manager_focus_display(uint32_t did, uint64_t sid);
 enum space_op_error display_manager_focus_space(uint32_t did, uint64_t sid);
 bool display_manager_begin(struct display_manager *dm);
 
+extern struct display_manager g_display_manager;
+
 #endif

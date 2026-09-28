@@ -111,4 +111,6 @@ void mouse_state_init(struct mouse_state *mouse_state);
 bool mouse_handler_begin(struct mouse_state *mouse_state, uint32_t mask);
 void mouse_handler_end(struct mouse_state *mouse_state);
 
+extern struct mouse_state g_mouse_state;
+
 #endif

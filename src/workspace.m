@@ -149,7 +149,6 @@ pid_t workspace_get_dock_pid(void)
     return 0;
 }
 
-extern struct event_loop g_event_loop;
 @implementation workspace_context
 - (id)init
 {

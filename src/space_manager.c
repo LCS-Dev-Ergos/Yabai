@@ -1,6 +1,3 @@
-extern struct window_manager g_window_manager;
-extern int g_connection;
-
 static TABLE_HASH_FUNC(hash_view)
 {
     return *(uint64_t *) key;

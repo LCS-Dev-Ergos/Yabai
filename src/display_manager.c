@@ -1,7 +1,3 @@
-extern struct display_manager g_display_manager;
-extern struct window_manager g_window_manager;
-extern int g_connection;
-
 bool display_manager_query_displays(FILE *rsp, uint64_t flags)
 {
     TIME_FUNCTION;

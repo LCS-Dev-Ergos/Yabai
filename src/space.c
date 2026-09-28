@@ -1,5 +1,3 @@
-extern int g_connection;
-
 inline uint32_t space_display_id(uint64_t sid)
 {
     CFStringRef uuid_string = SLSCopyManagedDisplayForSpace(g_connection, sid);

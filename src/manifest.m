@@ -89,15 +89,8 @@
 #include "navigation/command.h"
 #include "hooks.h"
 
-#include "sa.m"
-#include "mission_control.c"
-#include "event_loop.c"
-#include "event_signal.c"
-#include "workspace.m"
-#include "rule.c"
-#include "message.c"
-
-// Navigation and effects.
+// Navigation and effects come before the core, so they can use only what the
+// headers declare.
 #include "navigation/admission.c"
 #include "navigation/topology.c"
 #include "navigation/activation.c"
@@ -108,6 +101,13 @@
 #include "navigation/schedule.c"
 #include "navigation/command.c"
 
+#include "sa.m"
+#include "mission_control.c"
+#include "event_loop.c"
+#include "event_signal.c"
+#include "workspace.m"
+#include "rule.c"
+#include "message.c"
 #include "display.c"
 #include "space.c"
 #include "view.c"

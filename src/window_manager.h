@@ -210,4 +210,9 @@ void window_manager_handle_display_add_and_remove(struct space_manager *sm, stru
 void window_manager_begin(struct space_manager *sm, struct window_manager *wm);
 void window_manager_init(struct window_manager *wm);
 
+extern struct window_manager g_window_manager;
+extern double g_cv_host_clock_frequency;
+extern mach_port_t g_bs_port;
+extern uint8_t *g_event_bytes;
+
 #endif

@@ -1,6 +1,5 @@
 #include "sa.h"
 
-extern char g_sa_socket_file[MAXLEN];
 
 static char osax_base_dir[MAXLEN];
 static char osax_contents_dir[MAXLEN];
@@ -601,7 +600,6 @@ bool scripting_addition_order_window(uint32_t a_wid, int order, uint32_t b_wid)
     return sa_payload_send(SA_OPCODE_WINDOW_ORDER);
 }
 
-extern int g_connection;
 bool scripting_addition_order_window_in(uint32_t *window_list, int window_count)
 {
     uint32_t dummy_wid = 0;

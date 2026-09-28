@@ -37,4 +37,6 @@ pid_t workspace_get_dock_pid(void);
 bool workspace_event_handler_begin(void **context);
 bool workspace_use_macos_space_workaround(void);
 
+extern void *g_workspace_context;
+
 #endif

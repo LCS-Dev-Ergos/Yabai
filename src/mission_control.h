@@ -14,4 +14,6 @@ void mission_control_observe(void);
 void mission_control_unobserve(void);
 static inline bool mission_control_is_active(void);
 
+extern enum mission_control_mode g_mission_control_mode;
+
 #endif

@@ -1,6 +1,3 @@
-extern struct space_manager g_space_manager;
-extern struct window_manager g_window_manager;
-
 void rule_serialize(FILE *rsp, struct rule *rule, int index)
 {
     TIME_FUNCTION;

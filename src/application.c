@@ -1,6 +1,3 @@
-extern struct event_loop g_event_loop;
-extern volatile bool __pending_window_focus;
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
 static OBSERVER_CALLBACK(application_notification_handler)

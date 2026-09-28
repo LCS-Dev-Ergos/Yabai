@@ -1,13 +1,3 @@
-extern struct event_loop g_event_loop;
-extern struct process_manager g_process_manager;
-extern struct display_manager g_display_manager;
-extern struct space_manager g_space_manager;
-extern struct window_manager g_window_manager;
-extern struct mouse_state g_mouse_state;
-extern enum mission_control_mode g_mission_control_mode;
-extern int g_connection;
-extern void *g_workspace_context;
-extern int g_layer_below_window_level;
 volatile bool __pending_window_focus;
 volatile uint32_t __pending_window_focus_id;
 volatile bool __pending_gesture;
