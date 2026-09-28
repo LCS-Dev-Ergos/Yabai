@@ -1,4 +1,4 @@
-// The event loop's queue, see src/event_queue.c: order, growth, merged mouse
+// The event loop's queue, see src/events/event_queue.c: order, growth, merged mouse
 // moves, allocation failure and concurrent producers.
 #include <assert.h>
 #include <pthread.h>
@@ -15,9 +15,9 @@ static void *queue_allocate(size_t size)
     return fail_allocation ? NULL : malloc(size);
 }
 
-#include "../../src/event_loop.h"
+#include "../../src/events/event_loop.h"
 #define malloc queue_allocate
-#include "../../src/event_queue.c"
+#include "../../src/events/event_queue.c"
 #undef malloc
 
 static struct event_queue queue;

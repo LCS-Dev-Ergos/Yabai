@@ -91,7 +91,7 @@ static void event_signal_push(int type, struct window *window)
     ++signals;
 }
 
-#include "../../src/window_focus_events.c"
+#include "../../src/events/window_focus_events.c"
 
 static void reset(void)
 {

@@ -15,7 +15,7 @@ so most macOS releases break part of it.
 | `src/osax/pattern.h` | The pattern search, shared by the payload and `tools/osax/pattern_check`. |
 | `src/osax/loader.m` | Injects the payload into the running Dock. |
 | `src/osax/common.h` | Socket path, `OSAX_VERSION`, attribute bits and opcodes shared with yabai. |
-| `src/sa.m` | yabai side: install, load, handshake and the request senders. |
+| `src/sa/sa.m` | yabai side: install, load, handshake and the request senders. |
 
 The payload and loader are embedded in the yabai binary. `yabai --load-sa`
 (as root) installs them to `/Library/ScriptingAdditions/yabai.osax` when the

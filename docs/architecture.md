@@ -20,7 +20,7 @@ The two sockets:
 
 - **Daemon socket** `/tmp/yabai_$USER.socket`, created with `bind` and then
   `chmod 0600`. A message is a 4-byte length and NUL-separated tokens
-  (`src/message_loop.c`, parsed by `src/message.c`). The daemon answers on the same connection. No peer
+  (`src/ipc/message_loop.c`, parsed by `src/ipc/message.c`). The daemon answers on the same connection. No peer
   authentication (planned; see the Atrium open threads).
 - **Payload socket** in Dock. Each request opens its own connection
   (`scripting_addition_send_bytes`), builds its message in a stack buffer of
@@ -37,24 +37,39 @@ the core's first and then those of navigation and effects (`effects/*.h`,
 several sources include further sources:
 
 ```
-manifest.m
+src/manifest.m
 ├── navigation/admission.c, topology.c, activation.c
 ├── effects/display.m, window_fade.c, snapshot.m ─ snapshot_capture.m, snapshot_surface.m
 ├── navigation/step.c, schedule.c, command.c
-├── sa.m ─ sa_opacity.c
-├── mission_control.c
-├── event_queue.c, event_loop.c ─ window_focus_events.c, event_loop_trace.c
-├── event_signal.c ─ event_signal_process.c
-├── workspace.m, rule.c, message.c
-├── commands/config.c, display.c, space.c, window.c, query.c, rule.c, signal.c
-├── message_loop.c
-├── display.c, space.c, view.c, window.c, process_manager.c, application.c
-├── display_manager.c, space_manager.c
-├── window_manager/tables.c, query.c, rules.c, frames.c, animation.c, appearance.c,
-│   lookup.c, focus.c, operations.c, scratchpad.c, spaces.c
-├── mouse_handler.c
+├── sa/sa.m ─ sa_opacity.c
+├── events/mission_control.c
+├── events/event_queue.c, event_loop.c ─ window_focus_events.c, event_loop_trace.c
+├── events/event_signal.c ─ event_signal_process.c
+├── events/workspace.m
+├── windows/rule.c
+├── ipc/message.c
+├── ipc/commands/config.c, display.c, space.c, window.c, query.c, rule.c, signal.c
+├── ipc/message_loop.c
+├── displays/display.c, spaces/space.c, spaces/view.c, windows/window.c
+├── applications/process_manager.c, application.c
+├── displays/display_manager.c, spaces/space_manager.c
+├── windows/window_manager/tables.c, query.c, rules.c, frames.c, animation.c,
+│   appearance.c, lookup.c, focus.c, operations.c, scratchpad.c, spaces.c
+├── events/mouse_handler.c
 └── yabai.c (main)
 ```
+
+Each directory holds one concern, with its headers next to its sources:
+`applications/` (processes and their AX observers), `displays/`, `spaces/`
+(Spaces and their views), `windows/` (windows, rules and the window
+manager), `events/` (the event loop and queue, signals, and the sources of
+events: WindowServer notifications, NSWorkspace, the mouse), `ipc/` (the
+daemon socket, the message parser and one file of commands per domain) and
+`sa/` (the daemon's side of the scripting addition, whose payload is in
+`osax/`). `navigation/` and `effects/` hold the fork's modules and `misc/`
+the shared helpers and system declarations; `manifest.m`, `yabai.c` (main)
+and `hooks.h` stay at the top. The `#include` order in `manifest.m`, not
+the directory, decides what each file sees.
 
 Consequences:
 
@@ -136,7 +151,7 @@ under a mutex (`event_queue.c`) and wakes the consumer with a semaphore. A full
 ring doubles, with a warning in the log, so an event loop that falls behind
 costs memory rather than events. A mouse move replaces the move queued right
 before it.
-The 43 event types (`src/event_loop.h`) come from:
+The 43 event types (`src/events/event_loop.h`) come from:
 
 | Producer | Events |
 | --- | --- |
@@ -178,26 +193,27 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 
 ## Upstream subsystems
 
-- **Processes and applications** (`process_manager.c`, `application.c`,
-  `workspace.m`): which applications exist, their AX observers and launch
-  state.
-- **Windows** (`window.c`, and `window_manager/` by concern): the window and
-  application tables, queries, rules, frames, animations with their
-  JankyBorders notifications, opacity and layers, lookups, focus, the window
-  commands, the scratchpad, and keeping views in step with Space and display
-  changes (`spaces.c`).
-- **Spaces and views** (`space.c`, `space_manager.c`, `view.c`): Desktop
-  queries through SkyLight, one view (layout and BSP tree) per Space, Space
-  commands through the payload.
-- **Displays** (`display.c`, `display_manager.c`).
-- **Commands**: the parser (`message.c`), one file per domain in `commands/`
-  (`config`, `display`, `space`, `window`, `query`, `rule`, `signal`), and the
-  socket's accept thread and dispatch (`message_loop.c`).
-- **Signals** (`event_signal.c`): subscriptions and spawning.
-- **Mouse** (`mouse_handler.c`): modifier drags, drops and focus follows mouse.
-- **Mission Control** (`mission_control.c`): its modes and the SkyLight
-  notification callback.
-- **Scripting addition** (`sa.m`, `osax/`): install, load, and one request
+- **Processes and applications** (`applications/process_manager.c`,
+  `applications/application.c`, `events/workspace.m`): which applications
+  exist, their AX observers and launch state.
+- **Windows** (`windows/window.c`, `windows/rule.c`, and
+  `windows/window_manager/` by concern): the window and application tables,
+  queries, rules, frames, animations with their JankyBorders notifications,
+  opacity and layers, lookups, focus, the window commands, the scratchpad, and
+  keeping views in step with Space and display changes (`spaces.c`).
+- **Spaces and views** (`spaces/space.c`, `spaces/space_manager.c`,
+  `spaces/view.c`): Desktop queries through SkyLight, one view (layout and BSP
+  tree) per Space, Space commands through the payload.
+- **Displays** (`displays/display.c`, `displays/display_manager.c`).
+- **Commands** (`ipc/`): the parser (`message.c`), one file per domain in
+  `commands/` (`config`, `display`, `space`, `window`, `query`, `rule`,
+  `signal`), and the socket's accept thread and dispatch (`message_loop.c`).
+- **Events** (`events/`): the event loop and its queue, signals
+  (`event_signal.c`: subscriptions and spawning), the mouse
+  (`mouse_handler.c`: modifier drags, drops and focus follows mouse), Mission
+  Control (`mission_control.c`: its modes and the SkyLight notification
+  callback) and NSWorkspace notifications (`workspace.m`).
+- **Scripting addition** (`sa/sa.m`, `osax/`): install, load, and one request
   function per Dock operation.
 
 ## Fork subsystems
