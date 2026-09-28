@@ -425,9 +425,18 @@ out:
     return result;
 }
 
-#define sa_payload_init() char bytes[SA_SOCKET_BUFF_LEN]; int16_t length = 1+sizeof(length)
-#define pack(v) memcpy(bytes+length, &v, sizeof(v)); length += sizeof(v)
-#define sa_payload_send(op) *(int16_t*)bytes = length-sizeof(length), bytes[sizeof(length)] = op, scripting_addition_send_bytes(bytes, length)
+// A request is built in one buffer of the payload's message size. One that
+// does not fit, such as a window list of about a thousand windows, is not
+// sent, and its caller sees the failure of a Dock that did not answer.
+#define sa_payload_init() char bytes[SA_SOCKET_BUFF_LEN]; int16_t length = 1+sizeof(length); bool fits = true
+#define pack(v) do { if (length + sizeof(v) <= sizeof(bytes)) { memcpy(bytes+length, &v, sizeof(v)); length += sizeof(v); } else { fits = false; } } while (0)
+#define sa_payload_send(op) (fits ? (*(int16_t*)bytes = length-sizeof(length), bytes[sizeof(length)] = op, scripting_addition_send_bytes(bytes, length)) : scripting_addition_refuse(__FUNCTION__))
+
+static bool scripting_addition_refuse(const char *function)
+{
+    warn("%s: request exceeds %d bytes and was not sent\n", function, SA_SOCKET_BUFF_LEN);
+    return false;
+}
 
 static bool scripting_addition_send_bytes(char *bytes, int length)
 {

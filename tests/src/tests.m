@@ -17,12 +17,14 @@ typedef TEST_SIG(function);
 #include "signal_environment.c"
 #include "opacity_policy.c"
 #include "string_escape.c"
+#include "sa_request.c"
 
 #define TEST_ENTRY(name) { #name, test_##name },
 #define TEST_LIST                                              \
     TEST_ENTRY(opacity_policy)                                 \
     TEST_ENTRY(string_escape)                                  \
     TEST_ENTRY(signal_socket_lifetime)                         \
+    TEST_ENTRY(sa_request_bounds)                              \
     TEST_ENTRY(signal_environment)                             \
     TEST_ENTRY(signal_standard_output)                         \
     TEST_ENTRY(navigation_numbers)                             \
