@@ -24,6 +24,12 @@
 // duration. A held key's last step cannot: when it runs, the key may still be
 // down. A click after a request, or any other command, empties the queue.
 //
+// A press within SPACE_NAVIGATION_FAST_NS of the one before starts a quick
+// burst: every switch queued from then on, the last included, shows no effect
+// and waits only for the rhythm, not for the blend of the step before, which
+// the next switch ends. On two 4K displays a crossfade step takes 300-460 ms,
+// more than such presses leave between them.
+//
 // At most SPACE_NAVIGATION_QUEUE_STEPS switches wait, which bounds how long
 // navigation goes on after the last press: four keep it within about 1.5 s on
 // two 4K displays, where crossfade steps run 300-460 ms apart. No press is
@@ -159,6 +165,11 @@ static bool space_navigation_schedule_add(struct space_navigation_request *reque
     struct space_navigation_request *tail = count ? &g_space_navigation_schedule.queue[count - 1] : NULL;
     bool same = tail && space_navigation_schedule_same_effect(tail, &entry);
 
+    // A quick press makes the whole burst queued so far quick too.
+    if (entry.fast) {
+        for (int i = 0; i < count; ++i) g_space_navigation_schedule.queue[i].fast = true;
+    }
+
     // Relative steps add up with those of the last request, which is taken
     // out and queued again with their sum.
     if (entry.steps && same && tail->steps) {
@@ -166,6 +177,7 @@ static bool space_navigation_schedule_add(struct space_navigation_request *reque
 
         struct space_navigation_request joined = *tail;
         joined.steps += entry.steps;
+        joined.fast = joined.fast || entry.fast;
         --g_space_navigation_schedule.count;
 
         // Steps that cancel out a jump from a Desktop number leave the number.
@@ -289,7 +301,7 @@ static void space_navigation_schedule_pump(void)
     }
 
     uint64_t due = g_space_navigation_schedule.last_step + SPACE_NAVIGATION_RHYTHM_NS;
-    if (g_space_navigation_schedule.effect_until > due) due = g_space_navigation_schedule.effect_until;
+    if (!head->fast && g_space_navigation_schedule.effect_until > due) due = g_space_navigation_schedule.effect_until;
 
     if (g_space_navigation_schedule.activated) {
         uint64_t deadline = g_space_navigation_schedule.activated_at + SPACE_NAVIGATION_ACTIVATION_NS;
@@ -320,7 +332,7 @@ static void space_navigation_schedule_pump(void)
 
     bool activate = g_space_navigation_schedule.count == 0;
     bool settle = activate && g_space_navigation_schedule.unsettled;
-    float duration = request.duration;
+    float duration = request.fast ? 0.0f : request.duration;
     if ((!activate || request.repeat) && duration > SPACE_NAVIGATION_BURST_S) duration = SPACE_NAVIGATION_BURST_S;
 
     space_navigation_schedule_run(&request, steps, activate, settle, duration, late);

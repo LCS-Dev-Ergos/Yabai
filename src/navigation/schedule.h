@@ -21,12 +21,18 @@
 // command.c, which start a step and request a wake, and the time since the
 // last click from the step. Tests supply all three.
 
+// Presses closer than this make a quick burst, whose switches show no effect.
+// Recorded on this host, presses meant to look at each Desktop came 450-600 ms
+// apart, and quick runs 150-350 ms apart.
+#define SPACE_NAVIGATION_FAST_NS 400000000ULL
+
 struct space_navigation_request
 {
     bool move;
     int steps;          // Desktops forward (positive) or back; 0 for `sid`.
     bool jump;          // Moves all its steps in one switch, from `sid` if set.
     bool repeat;        // Queued by a held key.
+    bool fast;          // Pressed within SPACE_NAVIGATION_FAST_NS of the press before.
     uint64_t sid;       // With neither steps nor sid: the Desktop navigation reached.
     bool crossfade;
     float alpha;

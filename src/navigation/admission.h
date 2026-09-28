@@ -15,12 +15,15 @@
 // claiming are hooks, see hooks.h.
 
 // The steps the request being handled on the event loop carries: those of
-// the requests that joined it, and whether a key repeat started its group.
+// the requests that joined it, whether a key repeat started its group, and
+// the shortest time between two of its requests or since the relative
+// request before them, which tells how quickly the keys were pressed.
 struct space_navigation_claim
 {
     bool active;
     int steps;
     bool repeat;
+    uint64_t gap;
 };
 
 static struct space_navigation_claim space_navigation_queue_claimed(void);

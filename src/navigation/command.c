@@ -193,10 +193,13 @@ static void space_navigation_run_request(FILE *rsp, char **message)
     // Joined requests whose steps cancelled out leave nothing to do.
     if (joined && !steps) return;
 
+    // A window move keeps its effect however quickly it was pressed.
+    struct space_navigation_claim claim = space_navigation_queue_claimed();
     struct space_navigation_request request = {
         .move = move,
         .steps = steps,
         .sid = steps ? 0 : selector.sid,
+        .fast = !move && claim.active && claim.gap < SPACE_NAVIGATION_FAST_NS,
         .crossfade = crossfade,
         .alpha = alpha,
         .duration = duration

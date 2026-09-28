@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Navigation switches without an effect once `next` or `prev` come within 400 ms of each other, for the rest of that burst, instead of capturing and blending every Desktop on the way
 - Navigation keeps at most four switches waiting instead of ten: further `next` and `prev` presses join the jump at the end, so a quick burst ends about 1.5 s after the last press on two 4K displays instead of 3.7 s
 - Navigation counts a request as a key press, not a repeat, when a key was released since shortly before the previous request, however soon it arrived: presses 100 ms apart that load delivered 70 ms apart were taken for a held key, and navigation ended a Desktop short
 - Navigation leaves a crossfade step's activation to the presses queued while it captured: a held key's steps and a burst's first step no longer activate an application and wait for its focus, and a Desktop reached without focus, whose queue opposite presses then emptied, takes focus 150 ms after the last request instead of leaving it on a window of a Desktop left behind

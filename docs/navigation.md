@@ -86,6 +86,14 @@ Desktop from a bounded queue, in the order requested:
   ms apart on lcs.29: capturing and preparing the 20-million-pixel image took
   about 110 ms of each, Dock's switch and the activation about 100 ms, and the
   blend of the step before the rest; see [performance](performance.md).
+- A `next` or `prev` pressed within 400 ms of the one before starts a quick
+  burst: every switch queued from then on, the last included, shows no effect
+  and waits only for the 100 ms rhythm, and the next switch ends the blend of
+  the step before. On two 4K displays a crossfade step takes 300–460 ms, more
+  than such presses leave between them. The bound comes from the user's own
+  presses: 150 recorded ones came 450–600 ms apart when meant to look at each
+  Desktop, and 150–350 ms apart in quick runs. A held key's repeats are quick
+  presses; a window `move` keeps its effect.
 - At most four switches wait, which keeps navigation within about 1.5 s of
   the last press on two 4K displays. No press is dropped for that: `next` or
   `prev` steps beyond the four join a jump at the end of the queue, one

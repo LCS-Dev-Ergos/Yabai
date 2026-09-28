@@ -118,6 +118,35 @@ static void test_repeat_groups(void)
     key_up_seconds = 1000.0;
 }
 
+// A claim tells how quickly its presses came: the shortest time between two
+// of its requests, or since the relative request before them.
+static void test_gaps(void)
+{
+    uint64_t now = 300000000000ULL;
+
+    assert(!space_navigation_queue_join(60, 1, now));
+    space_navigation_queue_claim(60);
+    assert(g_space_navigation_claim.active && g_space_navigation_claim.gap > 1000000000ULL);
+
+    assert(!space_navigation_queue_join(61, 1, now + 400000000));
+    space_navigation_queue_claim(61);
+    assert(g_space_navigation_claim.gap == 400000000);
+
+    assert(!space_navigation_queue_join(62, -1, now + 900000000));
+    assert(space_navigation_queue_join(63, -1, now + 1200000000));
+    assert(space_navigation_queue_join(64, -1, now + 1320000000));
+    space_navigation_queue_claim(62);
+    assert(g_space_navigation_claim.steps == -3 && g_space_navigation_claim.gap == 120000000);
+
+    // A request that is not relative is no press to measure from.
+    assert(!space_navigation_queue_join(65, 0, now + 1400000000));
+    space_navigation_queue_claim(65);
+    assert(!g_space_navigation_claim.active && g_space_navigation_claim.gap == UINT64_MAX);
+    assert(!space_navigation_queue_join(66, 1, now + 1500000000));
+    space_navigation_queue_claim(66);
+    assert(g_space_navigation_claim.gap == 180000000);
+}
+
 // Frames a request as the yabai client sends it.
 static int request(char *bytes, const char **arguments, int count)
 {
@@ -273,9 +302,10 @@ int main(void)
     test_allocation_failure();
     test_concurrent_groups();
     test_repeat_groups();
+    test_gaps();
     test_accept();
 
-    puts("navigation queue: parsing, repeats, presses, ordering and accept checks passed");
+    puts("navigation queue: parsing, repeats, presses, gaps, ordering and accept checks passed");
 
     return 0;
 }

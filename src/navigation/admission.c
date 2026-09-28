@@ -38,6 +38,7 @@ struct space_navigation_group
     int direction;
     uint64_t time;
     bool repeat;
+    uint64_t gap;       // The shortest time between its requests, or since the one before.
 };
 
 static struct
@@ -138,6 +139,7 @@ static bool space_navigation_queue_join(int sockfd, int direction, uint64_t now)
         g_space_navigation_queue.open = false;
     } else if (last && g_space_navigation_queue.open) {
         if (!repeat) last->steps += direction;
+        if (since < last->gap) last->gap = since;
 
         last->direction = direction;
         last->time = now;
@@ -152,7 +154,8 @@ static bool space_navigation_queue_join(int sockfd, int direction, uint64_t now)
                 .steps = direction,
                 .direction = direction,
                 .time = now,
-                .repeat = repeat
+                .repeat = repeat,
+                .gap = since
             };
 
             if (last) last->next = group;
@@ -178,6 +181,7 @@ static void space_navigation_queue_claim(int sockfd)
     g_space_navigation_claim.active = first && first->owner == sockfd;
     g_space_navigation_claim.steps  = g_space_navigation_claim.active ? first->steps : 0;
     g_space_navigation_claim.repeat = g_space_navigation_claim.active && first->repeat;
+    g_space_navigation_claim.gap    = g_space_navigation_claim.active ? first->gap : UINT64_MAX;
 
     if (g_space_navigation_claim.active) {
         g_space_navigation_queue.first = first->next;

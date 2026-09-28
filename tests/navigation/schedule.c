@@ -654,6 +654,47 @@ static void test_captured_step(void)
     assert(g_space_navigation_schedule.count == 0);
 }
 
+static void test_fast_burst(void)
+{
+    // A press within SPACE_NAVIGATION_FAST_NS of the one before makes the
+    // burst quick: every switch queued from then on runs without its effect,
+    // the last included, at the rhythm rather than after the blend before it.
+    reset();
+    uint64_t start = now;
+    press(1, false, true);
+    assert(executed[0].duration == 0.25f);
+    space_navigation_schedule_switched(0.25f);
+
+    struct space_navigation_request slow = relative(1, true);
+    assert(space_navigation_schedule_add(&slow, false));
+    advance(20 * MS);
+    struct space_navigation_request quick = relative(1, true);
+    quick.fast = true;
+    assert(space_navigation_schedule_add(&quick, false));
+    assert(g_space_navigation_schedule.count == 1 && g_space_navigation_schedule.queue[0].fast);
+    space_navigation_schedule_pump();
+
+    advance(1000 * MS);
+    assert(executed_count == 3);
+    assert(executed[1].time == start + SPACE_NAVIGATION_RHYTHM_NS && executed[1].duration == 0.0f);
+    assert(executed[2].time == executed[1].time + SPACE_NAVIGATION_RHYTHM_NS && executed[2].duration == 0.0f);
+    assert(!executed[1].activate && executed[2].activate);
+
+    // A press after a pause keeps its effect.
+    press(1, false, true);
+    assert(executed_count == 4 && executed[3].duration == 0.25f);
+
+    // A quick press joins a Desktop number queued before it to the burst.
+    reset();
+    press(1, false, true);
+    go_to(5);
+    assert(!g_space_navigation_schedule.queue[0].fast);
+    quick.steps = 1;
+    assert(space_navigation_schedule_add(&quick, false));
+    assert(g_space_navigation_schedule.count == 2);
+    assert(g_space_navigation_schedule.queue[0].fast && g_space_navigation_schedule.queue[1].fast);
+}
+
 static void test_deferred_activation(void)
 {
     // Presses that arrive while a step captures take its activation over:
@@ -791,9 +832,10 @@ int main(void)
     test_full_queue();
     test_cancellation();
     test_captured_step();
+    test_fast_burst();
     test_deferred_activation();
     test_settle();
 
-    puts("navigation schedule: rhythm, burst pace, activation wait, repeats, order, overflow, cancellation, captured-step, deferred-activation and settle checks passed");
+    puts("navigation schedule: rhythm, burst pace, activation wait, repeats, order, overflow, cancellation, captured-step, quick-burst, deferred-activation and settle checks passed");
     return 0;
 }
