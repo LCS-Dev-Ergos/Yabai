@@ -128,12 +128,11 @@ static struct selector space_navigation_selector(char **message, uint64_t curren
     char *start = *message;
     struct token token = get_token(message);
     struct token_value value = token_to_value(token);
+    struct space_navigation_claim claim = space_navigation_queue_claimed();
 
     // Requests that joined this one while it waited move it further.
-    if (!move && g_space_navigation_claim.active && current) {
-        uint64_t sid = g_space_navigation_claim.steps
-                     ? space_navigation_step(current, g_space_navigation_claim.steps)
-                     : current;
+    if (!move && claim.active && current) {
+        uint64_t sid = claim.steps ? space_navigation_step(current, claim.steps) : current;
 
         return (struct selector) { .token = token, .did_parse = true, .sid = sid };
     }
@@ -161,10 +160,11 @@ static struct selector space_navigation_selector(char **message, uint64_t curren
 static int space_navigation_relative_steps(char *message, bool move, bool *repeat)
 {
     *repeat = false;
+    struct space_navigation_claim claim = space_navigation_queue_claimed();
 
-    if (!move && g_space_navigation_claim.active) {
-        *repeat = g_space_navigation_claim.repeat && abs(g_space_navigation_claim.steps) == 1;
-        return g_space_navigation_claim.steps;
+    if (!move && claim.active) {
+        *repeat = claim.repeat && abs(claim.steps) == 1;
+        return claim.steps;
     }
 
     struct token token = get_token(&message);
@@ -185,7 +185,7 @@ static void space_navigation_request(FILE *rsp, char **message)
     }
 
     bool repeat;
-    bool joined = !move && g_space_navigation_claim.active;
+    bool joined = !move && space_navigation_queue_claimed().active;
     int steps = space_navigation_relative_steps(*message, move, &repeat);
 
     uint64_t current = space_navigation_active_space();

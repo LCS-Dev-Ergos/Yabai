@@ -15,6 +15,7 @@ static void *queue_allocate(size_t size)
 }
 
 #define malloc queue_allocate
+#include "../../src/navigation/admission.h"
 #include "../../src/navigation/admission.c"
 #undef malloc
 

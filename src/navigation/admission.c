@@ -44,13 +44,7 @@ static struct
     .lock = PTHREAD_MUTEX_INITIALIZER
 };
 
-// The steps the request being handled on the event loop carries.
-static struct
-{
-    bool active;
-    int steps;
-    bool repeat;
-} g_space_navigation_claim;
+static struct space_navigation_claim g_space_navigation_claim;
 
 static bool space_navigation_request_token(const char **cursor, const char *end, const char **token)
 {
@@ -178,4 +172,10 @@ static void space_navigation_queue_claim(int sockfd)
     }
 
     pthread_mutex_unlock(&g_space_navigation_queue.lock);
+}
+
+// Event loop, while the claimed request is handled.
+static struct space_navigation_claim space_navigation_queue_claimed(void)
+{
+    return g_space_navigation_claim;
 }
