@@ -22,8 +22,8 @@
 // At most SPACE_NAVIGATION_QUEUE_STEPS switches wait, which bounds how long
 // navigation goes on after the last press. No press is dropped for that:
 // relative steps beyond the bound join a jump at the end of the queue, one
-// switch over several Desktops, and a Desktop number replaces the last focus
-// request. Navigation still ends where the presses asked.
+// switch over several Desktops, and a Desktop number takes the place of the
+// last switch. Navigation still ends where the presses asked.
 
 #include <os/signpost.h>
 

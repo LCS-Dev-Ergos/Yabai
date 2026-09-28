@@ -159,8 +159,9 @@ synchronization or a presentation fence. Fading the CALayer's opacity itself
 was rejected after captured frames showed a luminosity dip on the test host.
 
 Preparation runs on the daemon's event loop and holds it: on the MacBook
-display, capture took 37–63 ms warm and up to 93 ms cold, and window, draw and
-Space together about 20 ms, before the one-frame presentation opportunity. A
+display, capture took 26–63 ms warm and 76–150 ms for a process's first
+capture (one of them past the deadline), and window, draw and Space together
+about 20 ms, before the one-frame presentation opportunity. A
 signpost in category `effects` records each snapshot's capture and preparation
 time and, when none was used, why.
 
