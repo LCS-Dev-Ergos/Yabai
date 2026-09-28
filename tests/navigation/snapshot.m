@@ -11,13 +11,17 @@ static uint64_t read_os_timer(void)
     return clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
 }
 
-static int live_windows, live_spaces, alpha_writes;
+static int live_windows, live_spaces, alpha_writes, color_space_writes;
 static bool deny_capture, fail_create, fail_context, fail_order, fail_attach, fail_alpha;
 static uint64_t capture_delay, capture_start_delay;
 static uint64_t active_sid = 2;
 static bool overlay_attached;
 static CGImageRef fixture_image;
 static CGRect fixture_bounds = {{0, 0}, {16, 16}};
+
+// A capture whose callback does not arrive until the test delivers it.
+static bool capture_lost;
+static void (^lost_handler)(CGImageRef, NSError *);
 
 @interface SnapshotCaptureMock : NSObject
 + (void)captureImageInRect:(CGRect)rect completionHandler:(void (^)(CGImageRef, NSError *))handler;
@@ -26,6 +30,12 @@ static CGRect fixture_bounds = {{0, 0}, {16, 16}};
 + (void)captureImageInRect:(CGRect)rect completionHandler:(void (^)(CGImageRef, NSError *))handler
 {
     (void)rect;
+    if (capture_lost) {
+        assert(!lost_handler);
+        lost_handler = Block_copy(handler);
+        return;
+    }
+
     bool denied = deny_capture;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, capture_delay), dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
         handler(denied ? NULL : fixture_image, nil);
@@ -66,6 +76,7 @@ static CGError SLSNewWindowWithOpaqueShapeAndContext(int c, int t, CFTypeRef r, 
     assert(!(*tags & (1ULL << 11))); // Sticky source membership must not return.
     assert(*tags & (1ULL << 9)); // Overlay must never intercept clicks.
     if (fail_create) return kCGErrorFailure;
+    color_space_writes = 0;
     *w = 77;
     __atomic_add_fetch(&live_windows, 1, __ATOMIC_SEQ_CST);
     return 0;
@@ -130,11 +141,22 @@ static CGContextRef bitmap(void)
     return ctx;
 }
 
+// The window takes the capture's colour space before its context exists, so
+// that drawing the image converts nothing.
+static CGError SLSSetWindowColorSpace(int c, uint32_t w, CGColorSpaceRef space)
+{
+    (void)c;
+    assert(w == 77 && space == CGImageGetColorSpace(fixture_image));
+    ++color_space_writes;
+    return 0;
+}
+
 static CGContextRef SLWindowContextCreate(int c, uint32_t w, void *options)
 {
     (void)c;
     (void)w;
     (void)options;
+    assert(color_space_writes > 0);
     return fail_context ? NULL : bitmap();
 }
 
@@ -249,7 +271,17 @@ static CFUUIDRef fake_uuid(uint32_t display)
 #define CGDisplayModeGetPixelHeight fake_pixels
 #define CGDisplayModeRelease fake_mode_release
 #define CGDisplayCreateUUIDFromDisplayID fake_uuid
+#define SPACE_SNAPSHOT_STALE_NS 400000000ULL
 #include "../../src/space_navigation_snapshot.m"
+
+static bool space_snapshot_capture_pending(void)
+{
+    pthread_mutex_lock(&space_snapshot_captures.lock);
+    bool pending = space_snapshot_captures.pending != 0;
+    pthread_mutex_unlock(&space_snapshot_captures.lock);
+
+    return pending;
+}
 
 static bool prepare(void)
 {
@@ -330,13 +362,40 @@ int main(void)
         capture_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
         assert(!prepare()); // Timeout, then a new request while the callback is late.
         assert(!prepare());
-        while (__atomic_load_n(&space_snapshot_capturing, __ATOMIC_ACQUIRE))
+        while (space_snapshot_capture_pending())
             usleep(1000);
         capture_delay = 0;
         assert(prepare()); // The late callback did not resurrect its image/window.
         expect_released(); // Prepared but never started: watchdog releases it.
+
+        // A callback that never comes blocks new captures only for a while.
+        capture_lost = true;
+        assert(!prepare());
+        capture_lost = false;
+        assert(!prepare() && space_snapshot_capture_pending());
+        usleep((useconds_t) (SPACE_SNAPSHOT_STALE_NS / 1000));
+        assert(prepare());
+        space_navigation_snapshot_cancel();
+        expect_released();
+
+        // When it finally comes, it releases only its own image and leaves a
+        // newer capture in flight alone.
+        capture_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
+        assert(!prepare() && space_snapshot_capture_pending());
+        lost_handler(fixture_image, nil);
+        Block_release(lost_handler);
+        lost_handler = NULL;
+        assert(space_snapshot_capture_pending());
+        while (space_snapshot_capture_pending())
+            usleep(1000);
+        capture_delay = 0;
+
+        // The daemon recognises the auxiliary Spaces it created, and no other.
+        assert(space_navigation_snapshot_owns_space(123));
+        assert(!space_navigation_snapshot_owns_space(2) && !space_navigation_snapshot_owns_space(0));
+
         CGImageRelease(fixture_image);
-        puts("snapshot: endpoint, cancellation, allocation failures, late capture and watchdog passed");
+        puts("snapshot: endpoint, cancellation, allocation failures, late and lost capture, colour space and watchdog passed");
     }
     return 0;
 }

@@ -950,6 +950,9 @@ static EVENT_HANDLER(SLS_WINDOW_DESTROYED)
 static EVENT_HANDLER(SLS_SPACE_CREATED)
 {
     uint64_t sid = (uint64_t)(intptr_t) context;
+    // Fork: the crossfade's own Space, see space_navigation_snapshot.m.
+    if (space_navigation_snapshot_owns_space(sid)) return;
+
     int type = SLSSpaceGetType(g_connection, sid);
 
     if (type == 0 || type == 4) {

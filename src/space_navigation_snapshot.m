@@ -2,20 +2,88 @@
 // switch. Space alpha affects shared Finder windows and Space levels reorder
 // global windows; this path changes only a window owned by yabai.
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
+#include <os/signpost.h>
 
 #define SPACE_SNAPSHOT_CAPTURE_NS 150000000ULL
 #define SPACE_SNAPSHOT_MAX_PIXELS 24000000ULL
 
+// How long a capture may stay without its callback before it counts as lost.
+#ifndef SPACE_SNAPSHOT_STALE_NS
+#define SPACE_SNAPSHOT_STALE_NS 2000000000ULL
+#endif
+
+// Signposts in subsystem com.lcs.yabai, category effects: how long each
+// snapshot took to capture and to prepare, and why one was not used.
+static os_log_t space_snapshot_log(void)
+{
+    static os_log_t log;
+    static dispatch_once_t once;
+
+    dispatch_once(&once, ^{
+        log = os_log_create("com.lcs.yabai", "effects");
+    });
+
+    return log;
+}
+
+static void space_snapshot_trace(const char *result, uint64_t began, uint64_t captured)
+{
+    uint64_t now = read_os_timer();
+    double capture = captured ? (captured - began) / 1e6 : 0.0;
+
+    os_signpost_event_emit(space_snapshot_log(), OS_SIGNPOST_ID_EXCLUSIVE, "snapshot",
+                           "%{public}s capture %.1f ms prepare %.1f ms", result, capture, (now - began) / 1e6);
+}
+
 struct space_snapshot_capture
 {
     int references;
+    uint64_t generation;
     dispatch_semaphore_t ready;
     CGImageRef image;
 };
 
 // A timed-out capture remains the only request in flight until its callback
-// arrives. Slow WindowServer responses must not build an unbounded backlog.
-static volatile int space_snapshot_capturing;
+// arrives, so slow WindowServer responses cannot build a backlog. A callback
+// that never arrived would disable the crossfade until yabai restarts: after
+// SPACE_SNAPSHOT_STALE_NS the request counts as lost and another may start.
+// Its callback, if it still comes, only releases its own image.
+static struct
+{
+    pthread_mutex_t lock;
+    uint64_t generation;
+    uint64_t pending;       // The capture in flight, 0 when none.
+    uint64_t started;
+} space_snapshot_captures = { .lock = PTHREAD_MUTEX_INITIALIZER };
+
+static uint64_t space_snapshot_capture_begin(void)
+{
+    uint64_t generation = 0;
+    uint64_t now = read_os_timer();
+
+    pthread_mutex_lock(&space_snapshot_captures.lock);
+
+    if (!space_snapshot_captures.pending || now - space_snapshot_captures.started >= SPACE_SNAPSHOT_STALE_NS) {
+        generation = ++space_snapshot_captures.generation;
+        space_snapshot_captures.pending = generation;
+        space_snapshot_captures.started = now;
+    }
+
+    pthread_mutex_unlock(&space_snapshot_captures.lock);
+
+    return generation;
+}
+
+static void space_snapshot_capture_end(uint64_t generation)
+{
+    pthread_mutex_lock(&space_snapshot_captures.lock);
+
+    if (space_snapshot_captures.pending == generation) {
+        space_snapshot_captures.pending = 0;
+    }
+
+    pthread_mutex_unlock(&space_snapshot_captures.lock);
+}
 
 static void space_snapshot_capture_release(struct space_snapshot_capture *capture)
 {
@@ -28,17 +96,22 @@ static void space_snapshot_capture_release(struct space_snapshot_capture *captur
 static CGImageRef space_snapshot_capture_image(CGRect bounds)
 {
     if (@available(macOS 15.2, *)) { } else return NULL;
-    if (!__sync_bool_compare_and_swap(&space_snapshot_capturing, 0, 1)) return NULL;
+
+    uint64_t generation = space_snapshot_capture_begin();
+    if (!generation) return NULL;
+
     struct space_snapshot_capture *capture = calloc(1, sizeof(*capture));
     if (!capture) {
-        __sync_lock_release(&space_snapshot_capturing);
+        space_snapshot_capture_end(generation);
         return NULL;
     }
+
     capture->references = 2; // Caller and asynchronous completion.
+    capture->generation = generation;
     capture->ready = dispatch_semaphore_create(0);
     if (!capture->ready) {
         free(capture);
-        __sync_lock_release(&space_snapshot_capturing);
+        space_snapshot_capture_end(generation);
         return NULL;
     }
 
@@ -48,8 +121,8 @@ static CGImageRef space_snapshot_capture_image(CGRect bounds)
         [SCScreenshotManager captureImageInRect:bounds completionHandler:^(CGImageRef image, NSError *error) {
             (void) error;
             capture->image = image ? CGImageRetain(image) : NULL;
+            space_snapshot_capture_end(capture->generation);
             dispatch_semaphore_signal(capture->ready);
-            __sync_lock_release(&space_snapshot_capturing);
             space_snapshot_capture_release(capture);
         }];
     }
@@ -75,10 +148,40 @@ struct space_snapshot
     dispatch_source_t timer;
 };
 
-#include "space_navigation_snapshot_surface.m"
-
 static pthread_mutex_t space_snapshot_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct space_snapshot *space_snapshot_active;
+
+// The auxiliary Spaces created most recently, with space_snapshot_lock held.
+// WindowServer announces each new Space to the daemon, whose handler asks for
+// its type: while a switch is under way that waited 24-41 ms on the event
+// loop, for every step of a burst.
+#define SPACE_SNAPSHOT_RECENT_SPACES 4
+
+static uint64_t space_snapshot_recent_spaces[SPACE_SNAPSHOT_RECENT_SPACES];
+static int space_snapshot_recent_next;
+
+static void space_snapshot_space_created(uint64_t sid)
+{
+    space_snapshot_recent_spaces[space_snapshot_recent_next] = sid;
+    space_snapshot_recent_next = (space_snapshot_recent_next + 1) % SPACE_SNAPSHOT_RECENT_SPACES;
+}
+
+static bool space_navigation_snapshot_owns_space(uint64_t sid)
+{
+    bool owned = false;
+
+    pthread_mutex_lock(&space_snapshot_lock);
+
+    for (int i = 0; sid && i < SPACE_SNAPSHOT_RECENT_SPACES; ++i) {
+        if (space_snapshot_recent_spaces[i] == sid) owned = true;
+    }
+
+    pthread_mutex_unlock(&space_snapshot_lock);
+
+    return owned;
+}
+
+#include "space_navigation_snapshot_surface.m"
 
 // Lock held. Timer cancellation keeps its captured pointer alive until all
 // queued handlers have returned; its cancel handler owns the final free.
@@ -138,25 +241,42 @@ static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t target,
 {
     space_navigation_snapshot_cancel();
     if (@available(macOS 15.2, *)) { } else return false;
-    if (!CGPreflightScreenCaptureAccess() || !CGDisplayIsActive(display)) return false;
-    if (!target) return false;
-    if (!(interval >= 1.0f / 240.0f && interval <= 1.0f)) return false;
+
+    uint64_t began = read_os_timer();
+    if (!CGPreflightScreenCaptureAccess() || !CGDisplayIsActive(display) || !target
+        || !(interval >= 1.0f / 240.0f && interval <= 1.0f)) {
+        space_snapshot_trace("unavailable", began, 0);
+        return false;
+    }
 
     CGRect bounds = CGDisplayBounds(display);
     CGDisplayModeRef mode = CGDisplayCopyDisplayMode(display);
-    if (!mode) return false;
+    if (!mode) {
+        space_snapshot_trace("unsupported display", began, 0);
+        return false;
+    }
+
     size_t width = CGDisplayModeGetPixelWidth(mode), height = CGDisplayModeGetPixelHeight(mode);
     CGDisplayModeRelease(mode);
     if (!width || !height || width > SPACE_SNAPSHOT_MAX_PIXELS / height
-        || CGRectIsEmpty(bounds) || CGRectIsNull(bounds)) return false;
+        || CGRectIsEmpty(bounds) || CGRectIsNull(bounds)) {
+        space_snapshot_trace("unsupported display", began, 0);
+        return false;
+    }
 
     CGImageRef image = space_snapshot_capture_image(bounds);
-    if (!image) return false;
+    uint64_t captured = read_os_timer();
+    if (!image) {
+        space_snapshot_trace("no capture", began, captured);
+        return false;
+    }
+
     width = CGImageGetWidth(image);
     height = CGImageGetHeight(image);
     if (!width || !height || width > SPACE_SNAPSHOT_MAX_PIXELS / height
         || !CGRectEqualToRect(bounds, CGDisplayBounds(display))) {
         CGImageRelease(image);
+        space_snapshot_trace("display changed", began, captured);
         return false;
     }
 
@@ -166,6 +286,7 @@ static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t target,
         free(snapshot);
         if (uuid) CFRelease(uuid);
         CGImageRelease(image);
+        space_snapshot_trace("failed", began, captured);
         return false;
     }
     snapshot->uuid = CFUUIDCreateString(NULL, uuid);
@@ -182,6 +303,7 @@ static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t target,
         }
         free(snapshot);
         CGImageRelease(image);
+        space_snapshot_trace("failed", began, captured);
         return false;
     }
 
@@ -222,6 +344,8 @@ static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t target,
     CGImageRelease(image);
     if (!success) space_snapshot_cancel_locked();
     pthread_mutex_unlock(&space_snapshot_lock);
+
+    space_snapshot_trace(success ? "ready" : "failed", began, captured);
 
     // Allow one refresh for the outgoing image before hiding the source.
     // This is a bounded presentation opportunity, not a presentation fence.
