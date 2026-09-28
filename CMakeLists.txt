@@ -139,6 +139,11 @@ target_compile_options(focus_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
 target_link_options(focus_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
 add_test(NAME focus_tests COMMAND focus_tests)
 
+add_executable(event_queue_tests tests/event_loop/queue.c)
+target_compile_options(event_queue_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
+target_link_options(event_queue_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
+add_test(NAME event_queue_tests COMMAND event_queue_tests)
+
 add_executable(fade_tests tests/fade/timing.c)
 target_compile_options(fade_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
 target_link_options(fade_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
