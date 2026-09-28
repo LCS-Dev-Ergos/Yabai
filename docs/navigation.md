@@ -69,6 +69,13 @@ Desktop from a bounded queue, in the order requested:
   current already, as a jump over a whole lap of Desktops or the number of the
   Desktop the steps before it reached, it still gives that Desktop's frontmost
   window focus, unless something emptied the queue in between.
+- A crossfade step that finds more steps queued when it comes to activate,
+  presses that arrived while it captured, leaves the activation to the last of
+  them, unless it moved a window. A held key's steps, and the first press of a
+  quick burst, therefore neither activate an application nor wait for its
+  focus. Should opposite presses then empty the queue, the Desktop reached
+  takes focus once 150 ms have passed without a request, without a switch; a
+  click or another command in that time decides the focus instead.
 - A step with more queued behind it, and a step a held key repeats, blend in
   125 ms at most; the last of separate presses keeps the requested duration.
   The first step of a burst keeps it too: it starts before the next press is

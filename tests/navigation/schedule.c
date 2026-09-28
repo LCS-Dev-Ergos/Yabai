@@ -651,6 +651,131 @@ static void test_captured_step(void)
     assert(g_space_navigation_schedule.count == 0);
 }
 
+static void test_deferred_activation(void)
+{
+    // Presses that arrive while a step captures take its activation over:
+    // the step reaches its Desktop without focus, and the last queued step
+    // activates and settles, with no wait for a focus that never comes.
+    reset();
+    activate_window = 7;
+    execute_pending = true;
+    press(1, false, true);
+    assert(executed[0].activate);
+    press(1, false, true);
+    assert(space_navigation_schedule_defers_activation());
+
+    execute_pending = false;
+    uint64_t ended = now;
+    space_navigation_schedule_switched(SPACE_NAVIGATION_BURST_S);
+    space_navigation_schedule_completed(true);
+    assert(g_space_navigation_schedule.unsettled && !g_space_navigation_schedule.activated);
+    advance(1000 * MS);
+    assert(executed_count == 2 && executed[1].time == ended + 125 * MS);
+    assert(executed[1].activate && executed[1].settle && !g_space_navigation_schedule.unsettled);
+
+    // Nothing queued, or no step running: the step activates.
+    reset();
+    execute_pending = true;
+    press(1, false, true);
+    assert(!space_navigation_schedule_defers_activation());
+    space_navigation_schedule_completed(true);
+    assert(!g_space_navigation_schedule.unsettled);
+    press(1, false, true);
+    assert(executed_count == 1 && !space_navigation_schedule_defers_activation());
+}
+
+static void test_settle(void)
+{
+    // Opposite presses empty the queue behind a step that deferred its
+    // activation: once no request has come for 150 ms, the Desktop reached
+    // takes focus without a switch, a step that names no Desktop.
+    reset();
+    execute_pending = true;
+    press(1, false, true);
+    press(1, false, true);
+    assert(space_navigation_schedule_defers_activation());
+    execute_pending = false;
+    space_navigation_schedule_completed(true);
+    advance(20 * MS);
+    uint64_t last = now;
+    press(-1, false, true);
+    assert(g_space_navigation_schedule.count == 0 && executed_count == 1);
+
+    advance(SPACE_NAVIGATION_SETTLE_NS - MS);
+    assert(executed_count == 1);
+    advance(MS);
+    assert(executed_count == 2 && executed[1].time == last + SPACE_NAVIGATION_SETTLE_NS);
+    assert(executed[1].steps == 0 && executed[1].sid == 0 && executed[1].activate && executed[1].settle);
+    assert(!g_space_navigation_schedule.unsettled);
+    advance(1000 * MS);
+    assert(executed_count == 2 && pending_wakes() == 0);
+
+    // A step that ends after that quiet time settles as soon as it has
+    // ended, and not from within its own report.
+    reset();
+    execute_pending = true;
+    press(1, false, true);
+    press(1, false, true);
+    press(-1, false, true);
+    assert(g_space_navigation_schedule.count == 0 && space_navigation_schedule_defers_activation() == false);
+    press(1, false, true);
+    assert(space_navigation_schedule_defers_activation());
+    press(-1, false, true);
+    assert(g_space_navigation_schedule.count == 0);
+    advance(400 * MS);
+    execute_pending = false;
+    space_navigation_schedule_completed(true);
+    assert(executed_count == 1);
+    advance(0);
+    assert(executed_count == 2 && executed[1].steps == 0 && executed[1].activate);
+
+    // A press during the quiet time runs as the last step and settles; the
+    // wake then finds nothing to do.
+    reset();
+    execute_pending = true;
+    press(1, false, true);
+    press(1, false, true);
+    assert(space_navigation_schedule_defers_activation());
+    execute_pending = false;
+    space_navigation_schedule_completed(true);
+    press(-1, false, true);
+    advance(60 * MS);
+    press(1, false, true);
+    advance(1000 * MS);
+    assert(executed_count == 2 && executed[1].steps == 1 && executed[1].activate && executed[1].settle);
+
+    // A click or another command in the quiet time decided the focus.
+    for (int action = 0; action < 2; ++action) {
+        reset();
+        execute_pending = true;
+        press(1, false, true);
+        press(1, false, true);
+        assert(space_navigation_schedule_defers_activation());
+        execute_pending = false;
+        space_navigation_schedule_completed(true);
+        press(-1, false, true);
+        advance(50 * MS);
+        if (action) space_navigation_schedule_cancel();
+        else click_seconds = 0.01;
+        advance(1000 * MS);
+        assert(executed_count == 1 && !g_space_navigation_schedule.unsettled);
+    }
+
+    // A step failing after one that deferred its activation leaves that
+    // Desktop without focus: it settles. A settle that fails ends there.
+    reset();
+    execute_pending = true;
+    press(1, false, true);
+    press(1, false, true);
+    assert(space_navigation_schedule_defers_activation());
+    execute_pending = false;
+    space_navigation_schedule_completed(true);
+    execute_success = false;
+    advance(1000 * MS);
+    assert(executed_count == 3 && executed[1].steps == 1 && executed[2].steps == 0 && executed[2].sid == 0);
+    assert(!g_space_navigation_schedule.unsettled && pending_wakes() == 0);
+}
+
 int main(void)
 {
     test_isolated_and_burst();
@@ -663,7 +788,9 @@ int main(void)
     test_full_queue();
     test_cancellation();
     test_captured_step();
+    test_deferred_activation();
+    test_settle();
 
-    puts("navigation schedule: rhythm, burst pace, activation wait, repeats, order, overflow, cancellation and captured-step checks passed");
+    puts("navigation schedule: rhythm, burst pace, activation wait, repeats, order, overflow, cancellation, captured-step, deferred-activation and settle checks passed");
     return 0;
 }

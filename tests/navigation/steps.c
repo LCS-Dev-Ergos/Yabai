@@ -102,6 +102,29 @@ static void test_captured_steps(void)
     assert(focus_calls == 1 && window_focus_calls == 0 && activated_id == 0);
     assert(completed_calls == 1 && completed_success);
 
+    // Presses queued while the image was captured take the activation over:
+    // the step switches and crossfades, and activates nothing, not even the
+    // destination's display.
+    reset();
+    assert(begin_step(3, true, true) == SPACE_NAVIGATION_PENDING);
+    space_navigation_step_captured(capture_token);
+    assert(defer_queries == 1 && window_focus_calls == 1 && display_calls == 1);
+
+    reset();
+    defer_activation = true;
+    assert(begin_step(3, true, true) == SPACE_NAVIGATION_PENDING);
+    space_navigation_step_captured(capture_token);
+    assert(focus_calls == 1 && snapshot_starts == 1 && defer_queries == 1);
+    assert(window_focus_calls == 0 && activated_id == 0 && noted_id == 0 && display_calls == 0);
+    assert(completed_calls == 1 && completed_success && space_navigation_anchor.sid == 3);
+
+    // A step that does not activate never asks.
+    reset();
+    defer_activation = true;
+    assert(begin_step(2, true, false) == SPACE_NAVIGATION_PENDING);
+    space_navigation_step_captured(capture_token);
+    assert(focus_calls == 1 && defer_queries == 0 && window_focus_calls == 0);
+
     // Dock fails after the image was presented: the crossfade is ended and
     // nothing is activated.
     reset();

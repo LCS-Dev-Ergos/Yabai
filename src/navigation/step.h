@@ -20,7 +20,9 @@
 // and asks where navigation stands; the schedule asks for the time since the
 // last click; the window fade uses the window and opacity rules. Calls
 // topology, both effects, activation, the observed focus (window_focus_note)
-// and the schedule's reports, including the end of a step in flight.
+// and the schedule, which says whether steps queued since a step started take
+// its activation over and hears its reports, including the end of a step in
+// flight.
 
 // One Desktop switch of a navigation. Its effect is either the fade of the
 // destination's windows from `alpha`, or a crossfade of the whole display. A

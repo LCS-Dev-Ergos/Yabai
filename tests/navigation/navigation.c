@@ -103,6 +103,18 @@ int main(void)
     assert(move_calls == 1 && focused_id == 1 && opacity_calls == 0);
     assert(click_raise_calls == 1); // A moved window keeps window --focus's raise.
 
+    // The window moved with the user takes focus whatever is queued behind.
+    reset();
+    defer_activation = true;
+    assert(space_navigation_run(active_space, 2, true, .95f, 0));
+    assert(move_calls == 1 && click_raise_calls == 1 && defer_queries == 0);
+
+    // Any other window leaves focus to the presses queued behind it.
+    reset();
+    defer_activation = true;
+    assert(space_navigation_run(active_space, 2, false, .95f, 0));
+    assert(focus_calls == 1 && window_focus_calls == 0 && defer_queries == 1);
+
     reset();
 
     fullscreen = true;

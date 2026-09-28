@@ -44,9 +44,10 @@ static void space_navigation_note_message(char *message)
 
 // Starts one switch of a queued request: `steps` Desktops from where
 // navigation stands, one except for a jump, or the request's own Desktop when
-// 0. A jump from a Desktop number counts from that Desktop. A request handled
-// at once reuses its snapshot of the Desktops; a later one takes its own. A
-// crossfade step returns while its capture is under way, see step.h.
+// 0, or no switch when it names none. A jump from a Desktop number counts from
+// that Desktop. A request handled at once reuses its snapshot of the Desktops;
+// a later one takes its own. A crossfade step returns while its capture is
+// under way, see step.h.
 static enum space_navigation_result space_navigation_execute(struct space_navigation_request *request, int steps,
                                                              bool activate, bool settle, float duration)
 {
@@ -55,7 +56,7 @@ static enum space_navigation_result space_navigation_execute(struct space_naviga
 
     uint64_t current = space_navigation_active_space();
     uint64_t from = request->sid ? request->sid : current;
-    uint64_t sid = steps ? space_navigation_spaces_offset(from, steps) : request->sid;
+    uint64_t sid = steps ? space_navigation_spaces_offset(from, steps) : request->sid ? request->sid : current;
 
     struct space_navigation_step step = {
         .sid = sid,

@@ -10,14 +10,19 @@
 // the user had moved on brought its Desktop back into view.
 //
 // Only the last queued step activates an application; the steps before it
-// switch and show their effect. The next step waits for the effect's duration,
-// measured from Dock's acknowledgement, so a blend always finishes before the
-// next one starts. A step with more queued behind it, or one a held key
-// repeats, blends within SPACE_NAVIGATION_BURST_S, so that scrolling through
-// the Desktops keeps a quick, regular pace; the last of separate presses keeps
-// the requested duration. A held key's last step cannot: when it runs, the key
-// may still be down. A click after a request, or any other command, empties
-// the queue.
+// switch and show their effect. A step that finds more queued behind it when
+// it comes to activate, as presses that arrived while it captured, leaves the
+// activation to the last of them too. A Desktop reached without activation,
+// whose queue opposite presses then emptied, takes focus without a switch
+// once SPACE_NAVIGATION_SETTLE_NS have passed without a request.
+//
+// The next step waits for the effect's duration, measured from Dock's
+// acknowledgement, so a blend always finishes before the next one starts. A
+// step with more queued behind it, or one a held key repeats, blends within
+// SPACE_NAVIGATION_BURST_S, so that scrolling through the Desktops keeps a
+// quick, regular pace; the last of separate presses keeps the requested
+// duration. A held key's last step cannot: when it runs, the key may still be
+// down. A click after a request, or any other command, empties the queue.
 //
 // At most SPACE_NAVIGATION_QUEUE_STEPS switches wait, which bounds how long
 // navigation goes on after the last press. No press is dropped for that:
@@ -32,6 +37,7 @@
 #define SPACE_NAVIGATION_ACTIVATION_NS 150000000ULL
 #define SPACE_NAVIGATION_BURST_S       0.125f
 #define SPACE_NAVIGATION_QUEUE_STEPS   10
+#define SPACE_NAVIGATION_SETTLE_NS     150000000ULL
 
 static struct
 {
@@ -46,6 +52,7 @@ static struct
     uint64_t activated_at;
     uint64_t confirmed_at;  // When the last activation reported focus.
     bool unsettled;         // The last step switched and left activation to the next.
+    uint64_t last_request;  // When the last request was queued.
     bool running;           // The step the pump started has not ended, as while it waits for its capture.
     bool running_activates; // That step activates.
 
@@ -145,6 +152,7 @@ static bool space_navigation_schedule_add(struct space_navigation_request *reque
     entry.jump = false;
     entry.repeat = repeat;
     entry.time = read_os_timer();
+    g_space_navigation_schedule.last_request = entry.time;
 
     int count = g_space_navigation_schedule.count;
     struct space_navigation_request *tail = count ? &g_space_navigation_schedule.queue[count - 1] : NULL;
@@ -218,12 +226,60 @@ static void space_navigation_schedule_wake(uint64_t delay_ns)
     space_navigation_schedule_after(delay_ns);
 }
 
+// Starts a step, which reports its end to space_navigation_schedule_completed
+// at once or once its capture came back.
+static void space_navigation_schedule_run(struct space_navigation_request *request, int steps, bool activate,
+                                          bool settle, float duration, double late)
+{
+    g_space_navigation_schedule.activated = 0;
+    g_space_navigation_schedule.last_step = read_os_timer();
+
+    os_signpost_interval_begin(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "step",
+                               "steps %d sid %llu activate %d duration %.3f late %.1f ms",
+                               steps, request->sid, activate, duration, late);
+
+    g_space_navigation_schedule.running = true;
+    g_space_navigation_schedule.running_activates = activate;
+
+    enum space_navigation_result result = space_navigation_execute(request, steps, activate, settle, duration);
+    if (result != SPACE_NAVIGATION_PENDING) space_navigation_schedule_completed(result == SPACE_NAVIGATION_SWITCHED);
+}
+
+// The queue is empty and the Desktop the last step reached has no focus of
+// its own. A click since the last request decided the focus instead.
+static void space_navigation_schedule_settle(uint64_t now)
+{
+    uint64_t quiet = now - g_space_navigation_schedule.last_request;
+    if (space_navigation_seconds_since_click() * 1e9 < (double) quiet) {
+        g_space_navigation_schedule.unsettled = false;
+        return;
+    }
+
+    uint64_t due = g_space_navigation_schedule.last_request + SPACE_NAVIGATION_SETTLE_NS;
+    if (now < due) {
+        space_navigation_schedule_wake(due - now);
+        return;
+    }
+
+    // Neither steps nor a Desktop: the step stays on the Desktop navigation
+    // reached and gives it focus. It settles once, whether or not it succeeds.
+    g_space_navigation_schedule.unsettled = false;
+    struct space_navigation_request request = { .time = now };
+    space_navigation_schedule_run(&request, 0, true, true, 0.0f, (now - due) / 1e6);
+}
+
 // Runs the next step when it is due, or asks to be woken when it will be.
 static void space_navigation_schedule_pump(void)
 {
-    if (!g_space_navigation_schedule.count || g_space_navigation_schedule.running) return;
+    if (g_space_navigation_schedule.running) return;
 
     uint64_t now = read_os_timer();
+
+    if (!g_space_navigation_schedule.count) {
+        if (g_space_navigation_schedule.unsettled) space_navigation_schedule_settle(now);
+        return;
+    }
+
     struct space_navigation_request *head = &g_space_navigation_schedule.queue[0];
 
     if (space_navigation_seconds_since_click() * 1e9 < (double) (now - head->time)) {
@@ -266,18 +322,17 @@ static void space_navigation_schedule_pump(void)
     float duration = request.duration;
     if ((!activate || request.repeat) && duration > SPACE_NAVIGATION_BURST_S) duration = SPACE_NAVIGATION_BURST_S;
 
-    g_space_navigation_schedule.activated = 0;
-    g_space_navigation_schedule.last_step = now;
+    space_navigation_schedule_run(&request, steps, activate, settle, duration, late);
+}
 
-    os_signpost_interval_begin(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "step",
-                               "steps %d sid %llu activate %d duration %.3f late %.1f ms",
-                               steps, request.sid, activate, duration, late);
+// The running step is about to activate. Steps queued behind it since it
+// started make it leave the activation to the last of them.
+static bool space_navigation_schedule_defers_activation(void)
+{
+    if (!g_space_navigation_schedule.running || !g_space_navigation_schedule.count) return false;
 
-    g_space_navigation_schedule.running = true;
-    g_space_navigation_schedule.running_activates = activate;
-
-    enum space_navigation_result result = space_navigation_execute(&request, steps, activate, settle, duration);
-    if (result != SPACE_NAVIGATION_PENDING) space_navigation_schedule_completed(result == SPACE_NAVIGATION_SWITCHED);
+    g_space_navigation_schedule.running_activates = false;
+    return true;
 }
 
 // The step the pump started has ended: at once, or once its capture came
@@ -287,7 +342,9 @@ static void space_navigation_schedule_completed(bool success)
     if (!g_space_navigation_schedule.running) return;
     g_space_navigation_schedule.running = false;
 
-    g_space_navigation_schedule.unsettled = success && !g_space_navigation_schedule.running_activates;
+    // A failed step leaves the Desktop the steps before it reached as it was,
+    // without focus when the last of them deferred its activation.
+    bool unsettled = success ? !g_space_navigation_schedule.running_activates : g_space_navigation_schedule.unsettled;
     // A slow WindowServer query or AX raise can consume the whole rhythm.
     // Admission of the next request must obey the same pause as our timer,
     // rather than immediately executing another step to catch up.
@@ -299,7 +356,15 @@ static void space_navigation_schedule_completed(bool success)
         space_navigation_schedule_clear();
     }
 
-    if (g_space_navigation_schedule.count) space_navigation_schedule_wake(SPACE_NAVIGATION_RHYTHM_NS);
+    g_space_navigation_schedule.unsettled = unsettled;
+
+    // The wake settles a Desktop left without focus when it is due, never
+    // from within the step that ends here.
+    if (g_space_navigation_schedule.count) {
+        space_navigation_schedule_wake(SPACE_NAVIGATION_RHYTHM_NS);
+    } else if (g_space_navigation_schedule.unsettled) {
+        space_navigation_schedule_wake(0);
+    }
 }
 
 // Event loop, when a requested delay has passed. The pump asks again for

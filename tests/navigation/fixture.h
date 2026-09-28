@@ -68,6 +68,8 @@ static bool expect_fade_started;
 static bool reduce_motion;
 static int batch_calls;
 static int window_list_queries, focus_cancels;
+static bool defer_activation;
+static int defer_queries;
 static int switches_at_query;
 static uint32_t focused_id, noted_id;
 static double seconds_since_click;
@@ -145,4 +147,6 @@ static void reset(void)
     batch_calls = 0;
     window_list_queries = focus_cancels = 0;
     switches_at_query = -1;
+    defer_activation = false;
+    defer_queries = 0;
 }

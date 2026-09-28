@@ -2,7 +2,9 @@
 #define NAVIGATION_SCHEDULE_H
 
 // Navigation schedule (schedule.c): queued navigation runs one Desktop at a
-// time, paced by a rhythm, the effect's duration and the last activation.
+// time, paced by a rhythm, the effect's duration and the last activation. A
+// Desktop reached without activation, with nothing queued after it, takes
+// focus once no request has come for a moment.
 //
 // Thread: event loop. Its wakes arrive as SPACE_NAVIGATION_DISPATCH events.
 // State: g_space_navigation_schedule, the queued switches, when the last step
@@ -10,7 +12,8 @@
 // whether a step is still running.
 // A step that waits for its capture keeps the schedule running: no other
 // step starts until it reports its end.
-// Callers: command queues, pumps and cancels; the step reports the window it
+// Callers: command queues, pumps and cancels; the step asks whether to leave
+// its activation to steps queued since it started, and reports the window it
 // activated, the effect Dock accepted and the end of a step that waited for
 // its capture. The wake, focus changes and the pacing setting are hooks, see
 // hooks.h.
@@ -24,7 +27,7 @@ struct space_navigation_request
     int steps;          // Desktops forward (positive) or back; 0 for `sid`.
     bool jump;          // Moves all its steps in one switch, from `sid` if set.
     bool repeat;        // Queued by a held key.
-    uint64_t sid;
+    uint64_t sid;       // With neither steps nor sid: the Desktop navigation reached.
     bool crossfade;
     float alpha;
     float duration;
@@ -36,6 +39,7 @@ static void space_navigation_schedule_pump(void);
 static void space_navigation_schedule_cancel(void);
 static void space_navigation_schedule_activated(uint32_t window_id);
 static void space_navigation_schedule_switched(float duration);
+static bool space_navigation_schedule_defers_activation(void);
 static void space_navigation_schedule_completed(bool success);
 
 #endif

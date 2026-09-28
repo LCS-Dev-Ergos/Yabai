@@ -231,7 +231,8 @@ static bool space_navigation_plan(uint64_t current, struct space_navigation_step
 
 // After Dock switched, or failed to: the report to the schedule, the
 // activation and the anchor. The window is looked up again, since an
-// asynchronous capture lets other events run after the plan.
+// asynchronous capture lets other events run after the plan. Presses queued
+// meanwhile take the activation over, except from a moved window.
 static void space_navigation_finish(struct space_navigation_plan *plan, bool success, float effect_duration)
 {
     if (success) {
@@ -239,7 +240,7 @@ static void space_navigation_finish(struct space_navigation_plan *plan, bool suc
         space_navigation_schedule_switched(effect_duration);
     }
 
-    if (success && plan->activate) {
+    if (success && plan->activate && (plan->move || !space_navigation_schedule_defers_activation())) {
         struct window *focus = window_manager_find_window(&g_window_manager, plan->focus_id);
 
         if (plan->current_display != plan->display) {

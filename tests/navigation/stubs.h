@@ -207,6 +207,13 @@ static void space_navigation_schedule_activated(uint32_t window_id)
     activated_id = window_id;
 }
 
+// Whether presses queued since the step started take its activation over.
+static bool space_navigation_schedule_defers_activation(void)
+{
+    ++defer_queries;
+    return defer_activation;
+}
+
 static float switched_duration;
 
 static void space_navigation_schedule_switched(float duration)
