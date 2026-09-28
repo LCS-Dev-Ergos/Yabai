@@ -130,7 +130,9 @@ cycle through the Desktops of every display. A scenario whose start Desktop
 never became active reports `setup_ok: false`: an application that makes its
 window on another display key, as Chromium does, can keep that display active.
 `back` overshoots and takes steps back while they are still queued, which
-leaves the Desktop reached to take focus once the presses stop.
+leaves the Desktop reached to take focus once the presses stop. Presses under
+400 ms apart make a quick burst, which switches without effects; `taps 5 450`
+measures crossfade steps.
 `focus_reverse.py` repeats three `next` and three `prev` and checks the Desktop
 and focus they end on.
 
