@@ -215,44 +215,67 @@ if(YABAI_BUILD_TOOLS AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
     add_test(NAME osax_patterns COMMAND pattern_check)
 endif()
 
-# Language server support. Each source included by a unity translation unit is
-# parsed with everything its unity file includes before it, which is exactly
-# the context the compiler sees. The target is never built.
-function(yabai_unity_sources unity_file target)
-    # A renamed or removed source would otherwise stay in the build graph,
-    # and Ninja stops at the missing file until CMake runs again.
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${unity_file})
-    file(STRINGS ${unity_file} lines)
+# Language server support. A source the unity build includes is parsed with
+# everything the compiler has seen before it: the prelude of the file that
+# includes it, then that file's text up to the #include, with the conditionals
+# still open closed at the end. A source that includes further sources is
+# their unity file in turn. The target is never built.
+#
+# The text is handled as one string: a list of lines would split at
+# semicolons and merge lines around an unbalanced bracket.
+function(yabai_unity_sources unity_file target prelude_var depth)
+    # Read before this call sets a variable of the same name for its own
+    # sources.
+    set(inherited "${${prelude_var}}")
+    file(READ ${unity_file} content)
     get_filename_component(unity_dir ${unity_file} DIRECTORY)
-    set(prelude "")
-    # A source included inside a conditional, such as one payload per
-    # architecture, would leave its prelude unterminated; the prelude closes
-    # the conditionals still open.
-    set(depth 0)
-    foreach(line IN LISTS lines)
-        if(line MATCHES "^[ \t]*#[ \t]*if")
-            math(EXPR depth "${depth} + 1")
-        elseif(line MATCHES "^[ \t]*#[ \t]*endif")
-            math(EXPR depth "${depth} - 1")
-        endif()
+    string(REGEX MATCHALL "(^|\n)#include \"[^\"\n]+\\.[cm]\"" includes "${content}")
+    if(NOT includes)
+        return()
+    endif()
 
-        if(line MATCHES "^#include \"([^\"]+\\.[cm])\"$")
-            set(source ${unity_dir}/${CMAKE_MATCH_1})
-            get_filename_component(source ${source} ABSOLUTE)
-            file(RELATIVE_PATH id ${SRC} ${source})
-            string(MAKE_C_IDENTIFIER ${id} id)
-            set(header ${CMAKE_BINARY_DIR}/unity/${id}.h)
-            string(REPEAT "#endif\n" ${depth} closing)
-            file(CONFIGURE OUTPUT ${header} CONTENT "${prelude}${closing}" @ONLY)
-            target_sources(${target} PRIVATE ${source})
-            set_source_files_properties(${source} PROPERTIES
-                LANGUAGE OBJC
-                COMPILE_OPTIONS "-include;${header}")
-            string(APPEND prelude "#include \"${source}\"\n")
-        else()
-            string(REGEX REPLACE "^#include \"([^\"]+)\"" "#include \"${unity_dir}/\\1\"" line "${line}")
-            string(APPEND prelude "${line}\n")
-        endif()
+    # A renamed or removed source would otherwise stay in the build graph, and
+    # Ninja stops at the missing file until CMake runs again; an edit before a
+    # nested include changes that include's prelude.
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${unity_file})
+
+    foreach(include IN LISTS includes)
+        string(REGEX REPLACE "^\n?#include \"([^\"]+)\"$" "\\1" name "${include}")
+        string(FIND "\n${content}" "\n#include \"${name}\"" position)
+        string(SUBSTRING "${content}" 0 ${position} before)
+
+        # Quoted includes resolve next to the file first; the prelude lives in
+        # the build directory, so it names them by absolute path.
+        string(REGEX MATCHALL "(^|\n)#include \"[^\"\n]+\"" quoted "${before}")
+        foreach(line IN LISTS quoted)
+            string(REGEX REPLACE "^\n?#include \"([^\"]+)\"$" "\\1" path "${line}")
+            if(EXISTS ${unity_dir}/${path})
+                get_filename_component(absolute ${unity_dir}/${path} ABSOLUTE)
+                string(REPLACE "#include \"${path}\"" "#include \"${absolute}\"" before "${before}")
+            endif()
+        endforeach()
+
+        # A source included inside a conditional, such as one payload per
+        # architecture, would leave its prelude unterminated.
+        string(REGEX MATCHALL "(^|\n)[ \t]*#[ \t]*if" opened "${before}")
+        string(REGEX MATCHALL "(^|\n)[ \t]*#[ \t]*endif" closed "${before}")
+        list(LENGTH opened opened)
+        list(LENGTH closed closed)
+        math(EXPR open "${depth} + ${opened} - ${closed}")
+
+        get_filename_component(source ${unity_dir}/${name} ABSOLUTE)
+        file(RELATIVE_PATH id ${SRC} ${source})
+        string(MAKE_C_IDENTIFIER ${id} id)
+        set(header ${CMAKE_BINARY_DIR}/unity/${id}.h)
+        set(source_prelude "${inherited}#line 1 \"${unity_file}\"\n${before}")
+        string(REPEAT "#endif\n" ${open} closing)
+        file(CONFIGURE OUTPUT ${header} CONTENT "${source_prelude}${closing}" @ONLY)
+        target_sources(${target} PRIVATE ${source})
+        set_source_files_properties(${source} PROPERTIES
+            LANGUAGE OBJC
+            COMPILE_OPTIONS "-include;${header}")
+
+        yabai_unity_sources(${source} ${target} source_prelude ${open})
     endforeach()
 endfunction()
 
@@ -268,6 +291,7 @@ endif()
 add_library(yabai_unity OBJECT EXCLUDE_FROM_ALL)
 target_include_directories(yabai_unity PRIVATE ${SRC} ${OSAX_OUT})
 target_compile_options(yabai_unity PRIVATE -std=c11 -fno-objc-arc -Wno-undefined-internal)
-yabai_unity_sources(${SRC}/manifest.m yabai_unity)
-yabai_unity_sources(${SRC}/osax/payload.m yabai_unity)
+set(yabai_unity_prelude "")
+yabai_unity_sources(${SRC}/manifest.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/osax/payload.m yabai_unity yabai_unity_prelude 0)
 set_property(SOURCE ${SRC}/osax/x64_payload.m APPEND PROPERTY COMPILE_OPTIONS -arch x86_64)
