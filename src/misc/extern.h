@@ -1,3 +1,8 @@
+// Private SkyLight, HIServices and system declarations of the daemon. The
+// Dock payload is built on its own and declares its own in osax/payload.m.
+#ifndef EXTERN_H
+#define EXTERN_H
+
 #define CONNECTION_CALLBACK(name) void name(uint32_t type, void *data, size_t data_length, void *context, int cid)
 typedef CONNECTION_CALLBACK(connection_callback);
 
@@ -16,6 +21,7 @@ extern int SLSGetWindowSubLevel(int cid, uint32_t wid);
 extern CGError SLSGetWindowAlpha(int cid, uint32_t wid, float *alpha);
 extern CGError SLSSetWindowAlpha(int cid, uint32_t wid, float alpha);
 extern CGError SLSSetWindowResolution(int cid, uint32_t wid, double resolution);
+extern CGError SLSSetWindowColorSpace(int cid, uint32_t wid, CGColorSpaceRef space);
 extern CGError SLSCopyWindowProperty(int cid, uint32_t wid, CFStringRef property, CFTypeRef *value);
 extern CFStringRef SLSCopyManagedDisplayForWindow(int cid, uint32_t wid);
 extern CFStringRef SLSCopyBestManagedDisplayForRect(int cid, CGRect rect);
@@ -55,6 +61,11 @@ extern CFStringRef SLSCopyManagedDisplayForSpace(int cid, uint64_t sid);
 extern CGError SLSSpaceSetFrontPSN(int cid, uint64_t sid, ProcessSerialNumber psn);
 extern int SLSSpaceGetType(int cid, uint64_t sid);
 extern CFStringRef SLSSpaceCopyName(int cid, uint64_t sid);
+extern int SLSSpaceCreate(int cid, int type, int options);
+extern CGError SLSSpaceDestroy(int cid, int sid);
+extern void SLSSpaceSetAbsoluteLevel(int cid, int sid, int level);
+extern void SLSShowSpaces(int cid, CFArrayRef spaces);
+extern void SLSSpaceAddWindowsAndRemoveFromSpaces(int cid, int sid, CFArrayRef windows, int mask);
 extern CFArrayRef SLSCopyWindowsWithOptionsAndTags(int cid, uint32_t owner, CFArrayRef spaces, uint32_t options, uint64_t *set_tags, uint64_t *clear_tags);
 extern int SLSGetSpaceManagementMode(int cid);
 extern CFArrayRef SLSCopyManagedDisplaySpaces(int cid);
@@ -95,3 +106,18 @@ extern CGError SLSTransactionSetWindowSystemAlpha(CFTypeRef transaction, uint32_
 extern CFArrayRef SLSHWCaptureWindowList(int cid, uint32_t *window_list, int window_count, uint32_t options);
 extern CGError SLSSpaceSetCompatID(int cid, uint64_t sid, int workspace);
 extern CGError SLSSetWindowListWorkspace(int cid, uint32_t *window_list, int window_count, int workspace);
+
+// Options of _SLPSSetFrontProcessWithOptions.
+#define kCPSAllWindows    0x100
+#define kCPSUserGenerated 0x200
+#define kCPSNoWindows     0x400
+
+// Accessibility attribute of AppKit windows, absent from the public headers.
+const CFStringRef kAXFullscreenAttribute = CFSTR("AXFullScreen");
+
+// System Integrity Protection configuration, see bsd/sys/csr.h in XNU.
+extern int csr_get_active_config(uint32_t *config);
+#define CSR_ALLOW_UNRESTRICTED_FS 0x02
+#define CSR_ALLOW_TASK_FOR_PID    0x04
+
+#endif

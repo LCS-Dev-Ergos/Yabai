@@ -1,9 +1,5 @@
 #include "sa.h"
 
-extern int csr_get_active_config(uint32_t *config);
-#define CSR_ALLOW_UNRESTRICTED_FS 0x02
-#define CSR_ALLOW_TASK_FOR_PID    0x04
-
 extern char g_sa_socket_file[MAXLEN];
 
 static char osax_base_dir[MAXLEN];

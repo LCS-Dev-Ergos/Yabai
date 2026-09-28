@@ -1,12 +1,6 @@
 // Draw before ordering the window: a remote CA layer can present uninitialized
 // white backing during prepare/cancel bursts. The copy costs preparation time,
 // but does not depend on an asynchronous layer upload completing before Dock.
-extern int SLSSpaceCreate(int cid, int type, int options);
-extern CGError SLSSpaceDestroy(int cid, int sid);
-extern void SLSSpaceSetAbsoluteLevel(int cid, int sid, int level);
-extern void SLSShowSpaces(int cid, CFArrayRef spaces);
-extern void SLSSpaceAddWindowsAndRemoveFromSpaces(int cid, int sid, CFArrayRef windows, int mask);
-extern CGError SLSSetWindowColorSpace(int cid, uint32_t wid, CGColorSpaceRef space);
 
 static void space_snapshot_surface_destroy(struct space_snapshot *snapshot)
 {

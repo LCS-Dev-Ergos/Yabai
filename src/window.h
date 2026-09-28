@@ -1,8 +1,6 @@
 #ifndef WINDOW_H
 #define WINDOW_H
 
-const CFStringRef kAXFullscreenAttribute = CFSTR("AXFullScreen");
-
 #define AX_WINDOW_MINIMIZED_INDEX      0
 #define AX_WINDOW_DEMINIMIZED_INDEX    1
 #define AX_WINDOW_DESTROYED_INDEX      2

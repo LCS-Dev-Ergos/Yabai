@@ -1,10 +1,6 @@
 #ifndef WINDOW_MANAGER_H
 #define WINDOW_MANAGER_H
 
-#define kCPSAllWindows    0x100
-#define kCPSUserGenerated 0x200
-#define kCPSNoWindows     0x400
-
 enum window_op_error
 {
     WINDOW_OP_ERROR_SUCCESS,
