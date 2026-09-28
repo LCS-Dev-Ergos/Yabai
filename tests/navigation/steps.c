@@ -80,4 +80,39 @@ static void test_steps(void)
     reset();
     assert(run_step(2, false, false));
     assert(batch_calls == 2 && opacity_calls == 4 && focus_calls == 1 && window_focus_calls == 0);
+
+    // The last step of a burst can find its Desktop current already. When the
+    // steps before it left activation to it, it activates that Desktop's
+    // window, and switches nothing.
+    reset();
+    struct space_navigation_step settle = {
+        .sid = active_space,
+        .crossfade = true,
+        .alpha = 1.0f,
+        .duration = .2f,
+        .activate = true,
+        .settle = true
+    };
+    assert(space_navigation_run_step(active_space, &settle));
+    assert(focus_calls == 0 && snapshot_prepares == 0 && snapshot_cancels == 0 && opacity_calls == 0);
+    assert(window_focus_calls == 1 && focused_id == 1 && activated_id == 1 && noted_id == 1);
+
+    // Nothing to do when that window has focus, nor for a plain request for
+    // the current Desktop.
+    reset();
+    g_window_manager.focused_window_id = 1;
+    assert(space_navigation_run_step(active_space, &settle));
+    assert(window_focus_calls == 0 && activated_id == 0);
+
+    reset();
+    settle.settle = false;
+    assert(space_navigation_run_step(active_space, &settle));
+    assert(window_focus_calls == 0 && focus_cancels == 0 && activated_id == 0);
+
+    // Mission Control fails the step, as it fails a switch.
+    reset();
+    settle.settle = true;
+    mission_control = true;
+    assert(!space_navigation_run_step(active_space, &settle));
+    assert(window_focus_calls == 0);
 }

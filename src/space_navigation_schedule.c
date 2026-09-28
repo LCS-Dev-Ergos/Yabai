@@ -57,13 +57,14 @@ static struct
     uint32_t activated;     // The window the last step activated, until it reports focus.
     uint64_t activated_at;
     uint64_t confirmed_at;  // When the last activation reported focus.
+    bool unsettled;         // The last step switched and left activation to the next.
 
     // When the earliest wake requested is due, 0 when none is.
     uint64_t timer;
 } g_space_navigation_schedule = { .pacing = true };
 
 static bool space_navigation_execute(struct space_navigation_request *request, int steps,
-                                     bool activate, float duration);
+                                     bool activate, bool settle, float duration);
 static void space_navigation_schedule_after(uint64_t delay_ns);
 
 // Signposts for Instruments, subsystem com.lcs.yabai: requests, steps,
@@ -81,10 +82,16 @@ static bool space_navigation_schedule_pacing(void)
     return g_space_navigation_schedule.pacing;
 }
 
+static void space_navigation_schedule_clear(void)
+{
+    g_space_navigation_schedule.count = 0;
+    g_space_navigation_schedule.unsettled = false;
+}
+
 static void space_navigation_schedule_set_pacing(bool pacing)
 {
     g_space_navigation_schedule.pacing = pacing;
-    g_space_navigation_schedule.count = 0;
+    space_navigation_schedule_clear();
 }
 
 // The switches a queued request still makes: one for a Desktop number or a jump.
@@ -220,7 +227,7 @@ static void space_navigation_schedule_pump(void)
     struct space_navigation_request *head = &g_space_navigation_schedule.queue[0];
 
     if (space_navigation_seconds_since_click() * 1e9 < (double) (now - head->time)) {
-        g_space_navigation_schedule.count = 0;
+        space_navigation_schedule_clear();
         return;
     }
 
@@ -255,6 +262,7 @@ static void space_navigation_schedule_pump(void)
     }
 
     bool activate = g_space_navigation_schedule.count == 0;
+    bool settle = activate && g_space_navigation_schedule.unsettled;
     float duration = request.duration;
     if ((!activate || request.repeat) && duration > SPACE_NAVIGATION_BURST_S) duration = SPACE_NAVIGATION_BURST_S;
 
@@ -265,7 +273,8 @@ static void space_navigation_schedule_pump(void)
                                "steps %d sid %llu activate %d duration %.3f late %.1f ms",
                                steps, request.sid, activate, duration, late);
 
-    bool success = space_navigation_execute(&request, steps, activate, duration);
+    bool success = space_navigation_execute(&request, steps, activate, settle, duration);
+    g_space_navigation_schedule.unsettled = success && !activate;
     // A slow WindowServer query or AX raise can consume the whole rhythm.
     // Admission of the next request must obey the same pause as our timer,
     // rather than immediately executing another step to catch up.
@@ -274,7 +283,7 @@ static void space_navigation_schedule_pump(void)
 
     if (!success) {
         debug("%s: navigation step failed, dropping %d queued\n", __FUNCTION__, g_space_navigation_schedule.count);
-        g_space_navigation_schedule.count = 0;
+        space_navigation_schedule_clear();
     }
 
     if (g_space_navigation_schedule.count) space_navigation_schedule_wake(SPACE_NAVIGATION_RHYTHM_NS);
@@ -319,5 +328,5 @@ static void space_navigation_schedule_focused(uint32_t window_id)
 
 static void space_navigation_schedule_cancel(void)
 {
-    g_space_navigation_schedule.count = 0;
+    space_navigation_schedule_clear();
 }

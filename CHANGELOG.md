@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Fork navigation gives the destination window focus when a burst's last step finds its Desktop current already, as a jump over a whole lap of Desktops does; focus stayed on a window of a Desktop left behind
 - Fork daemon no longer crashes when navigation cancels a running crossfade: the snapshot timer's cancel handler could free the snapshot on another thread before the timer was released through it
 - Fork navigation no longer drops presses when ten switches already wait: further `next`/`prev` steps join a jump at the end of the queue and a Desktop number takes the place of the last switch, so navigation still ends where the presses asked
 - Fork navigation blends the steps queued behind others, and those a held key repeats, in 125 ms at most; the last of separate presses keeps the requested duration

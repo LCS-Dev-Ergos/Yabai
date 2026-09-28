@@ -123,7 +123,9 @@ static bool space_navigation_needs_raise(struct window *window, uint32_t display
 // One Desktop switch of a navigation. Its effect is either the fade of the
 // destination's windows from `alpha`, or a crossfade of the whole display. A
 // step that does not activate only switches and shows its effect: another
-// step queued after it will.
+// step queued after it will. That step can find its Desktop current already,
+// a jump over a whole lap of Desktops or the number of the Desktop reached;
+// `settle` then still gives the Desktop's window focus.
 struct space_navigation_step
 {
     uint64_t sid;
@@ -132,10 +134,61 @@ struct space_navigation_step
     float alpha;
     float duration;
     bool activate;
+    bool settle;
 };
 
 static void space_navigation_schedule_activated(uint32_t window_id);
 static void space_navigation_schedule_switched(float duration);
+
+// The window navigation activates on a Desktop: its frontmost eligible one.
+static struct window *space_navigation_candidate(uint32_t *ids, int count)
+{
+    for (int i = 0; i < count; ++i) {
+        struct window *window = window_manager_find_window(&g_window_manager, ids[i]);
+        if (space_navigation_window(window)) return window;
+    }
+
+    return NULL;
+}
+
+static void space_navigation_activate(struct window *focus, bool move, bool raise)
+{
+    if (move) {
+        window_manager_focus_window_with_raise(&focus->application->psn, focus->id, focus->ref);
+    } else if (raise) {
+        // Raising completes before the next navigation can switch away, so
+        // the application cannot raise it on a hidden space.
+        space_navigation_raise_window(&focus->application->psn, focus->id, focus->ref);
+    } else {
+        // The selected window is already frontmost. AXRaise can block while
+        // its application responds to the space switch.
+        space_navigation_focus_window(&focus->application->psn, focus->id);
+    }
+
+    // The activation that follows need not ask the application, which is
+    // busy with the switch, for its focused window.
+    window_focus_note(focus->id);
+    space_navigation_schedule_activated(focus->id);
+}
+
+// The steps before this one reached its Desktop without activating anything,
+// so the window focused may still be one of a Desktop left behind.
+static bool space_navigation_settle(uint64_t sid)
+{
+    if (mission_control_is_active()) return false;
+
+    space_navigation_focus_cancel();
+
+    int count = 0;
+    uint32_t *ids = space_window_list(sid, &count, false);
+    struct window *focus = ids ? space_navigation_candidate(ids, count) : NULL;
+
+    if (focus && focus->id != g_window_manager.focused_window_id) {
+        space_navigation_activate(focus, false, space_navigation_needs_raise(focus, space_navigation_space_display(sid)));
+    }
+
+    return true;
+}
 
 static bool space_navigation_run_step(uint64_t current, struct space_navigation_step *step)
 {
@@ -144,7 +197,7 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
     float alpha = step->alpha;
     float duration = step->duration;
 
-    if (current == sid) return true;
+    if (current == sid) return step->activate && step->settle ? space_navigation_settle(sid) : true;
 
     space_navigation_snapshot_cancel();
     // A deferred focus from the previous navigation must not follow this one.
@@ -170,10 +223,7 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
     uint32_t *ids = space_window_list(sid, &count, false);
     if (!ids) count = 0;
 
-    for (int i = 0; !focus && i < count; ++i) {
-        struct window *window = window_manager_find_window(&g_window_manager, ids[i]);
-        if (space_navigation_window(window)) focus = window;
-    }
+    if (!focus) focus = space_navigation_candidate(ids, count);
 
     // Decided before the switch: afterwards WindowServer is busy showing the
     // new Desktop, and each query waits for about a frame.
@@ -241,24 +291,7 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
             }
         }
 
-        if (focus) {
-            if (move) {
-                window_manager_focus_window_with_raise(&focus->application->psn, focus->id, focus->ref);
-            } else if (raise) {
-                // Raising completes before the next navigation can switch
-                // away, so the application cannot raise it on a hidden space.
-                space_navigation_raise_window(&focus->application->psn, focus->id, focus->ref);
-            } else {
-                // The selected window is already frontmost. AXRaise can block
-                // while its application responds to the space switch.
-                space_navigation_focus_window(&focus->application->psn, focus->id);
-            }
-
-            // The activation that follows need not ask the application,
-            // which is busy with the switch, for its focused window.
-            window_focus_note(focus->id);
-            space_navigation_schedule_activated(focus->id);
-        }
+        if (focus) space_navigation_activate(focus, move, raise);
     }
 
     if (success) {

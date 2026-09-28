@@ -21,9 +21,10 @@ editor's root `compile_commands.json` symlink.
   variables and retained standard output/error. They do not run the daemon.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
   implementation with simulated OS calls, including rapid repeats, failure
-  restoration, the starting Desktop of relative navigation and the raise for
-  applications with windows on two displays; numeric arguments are also
-  covered by the unity tests.
+  restoration, the starting Desktop of relative navigation, the raise for
+  applications with windows on two displays and the focus a burst's last step
+  gives a Desktop it finds current; numeric arguments are also covered by the
+  unity tests.
 - `navigation_spaces_tests` reads a constructed Desktop snapshot: mission-control
   order across displays, visibility, fullscreen type, the Desktops visible on
   other displays, the fallback to WindowServer for unknown or unreadable data and
@@ -35,7 +36,8 @@ editor's root `compile_commands.json` symlink.
   rhythm, the burst and held-key blend durations, the wait for an activation
   and its confirmation, key repeats, reversals, Desktop numbers, the ten-switch
   limit with its jump and replacement (every press reaching the destination),
-  refused requests, clicks, other commands, failed steps and early wakes.
+  which step settles a Desktop, refused requests, clicks, other commands,
+  failed steps and early wakes.
 - `navigation_queue_tests` checks how relative requests are recognized and
   merged while one waits: repeats, separate presses, directions, interleaved
   queries, allocation failure and concurrent admission/consumption.

@@ -30,6 +30,7 @@ static struct
     int steps;
     uint64_t sid;
     bool activate;
+    bool settle;
     float duration;
     uint64_t time;
 } executed[64];
@@ -41,10 +42,10 @@ static uint64_t execute_delay;
 
 // The window each activating step activates, if any, as navigation reports it.
 static bool space_navigation_execute(struct space_navigation_request *request, int steps,
-                                     bool activate, float duration)
+                                     bool activate, bool settle, float duration)
 {
     assert(executed_count < 64);
-    executed[executed_count++] = (typeof(executed[0])) { steps, request->sid, activate, duration, now };
+    executed[executed_count++] = (typeof(executed[0])) { steps, request->sid, activate, settle, duration, now };
     now += execute_delay;
 
     if (execute_success) space_navigation_schedule_switched(request->crossfade ? duration : 0.0f);
@@ -185,6 +186,10 @@ static void test_isolated_and_burst(void)
     assert(executed[1].duration == SPACE_NAVIGATION_BURST_S && executed[2].duration == SPACE_NAVIGATION_BURST_S);
     assert(executed[3].duration == 0.25f);
 
+    // The last step settles the Desktop the steps before it reached without
+    // activating, should it find that Desktop current already.
+    assert(!executed[0].settle && !executed[1].settle && !executed[2].settle && executed[3].settle);
+
     for (int i = 1; i < 4; ++i) {
         assert(executed[i].steps == 1);
     }
@@ -205,6 +210,7 @@ static void test_isolated_and_burst(void)
     advance(400 * MS);
     press(1, false, true);
     assert(executed_count == 3);
+    assert(!executed[1].settle && !executed[2].settle);
     assert(executed[0].duration == 0.25f);
     assert(executed[1].duration == 0.25f);
     assert(executed[2].duration == 0.25f);
@@ -457,6 +463,7 @@ static void test_full_queue(void)
     space_navigation_schedule_pump();
     advance(5000 * MS);
     assert(executed_count == 11 && executed[10].sid == 6 && executed[10].activate);
+    assert(executed[10].settle);
 
     // A queued move is not replaced either.
     reset();
@@ -497,6 +504,29 @@ static void test_cancellation(void)
     execute_success = false;
     advance(1000 * MS);
     assert(executed_count == 2 && g_space_navigation_schedule.count == 0);
+    assert(!g_space_navigation_schedule.unsettled);
+
+    // Nothing that emptied the queue leaves the next navigation to settle a
+    // Desktop: the user's own action decided the focus since.
+    reset();
+    press(1, false, true);
+    advance(10 * MS);
+    press(2, false, true);
+    advance(300 * MS);
+    assert(executed_count == 2 && g_space_navigation_schedule.unsettled);
+    space_navigation_schedule_cancel();
+    press(1, false, true);
+    advance(1000 * MS);
+    assert(executed_count == 3 && executed[2].activate && !executed[2].settle);
+
+    reset();
+    press(1, false, true);
+    advance(10 * MS);
+    press(2, false, true);
+    advance(300 * MS);
+    click_seconds = 0.005;
+    advance(1000 * MS);
+    assert(!g_space_navigation_schedule.unsettled);
 
     // One wake at a time, and an earlier one only when a confirmation brings
     // the next step forward.

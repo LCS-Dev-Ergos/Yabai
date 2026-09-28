@@ -65,7 +65,10 @@ Desktop from a bounded queue, in the order requested:
 - `next` and `prev` count from the Desktop the previous step switched to. Each
   Desktop number is one step; the same number twice in a row queues once.
 - Only the last queued step activates an application. The steps before it
-  switch Desktop and show their effect.
+  switch Desktop and show their effect. When the last step finds its Desktop
+  current already, as a jump over a whole lap of Desktops or the number of the
+  Desktop the steps before it reached, it still gives that Desktop's frontmost
+  window focus, unless something emptied the queue in between.
 - A step with more queued behind it, and a step a held key repeats, blend in
   125 ms at most; the last of separate presses keeps the requested duration.
   The first step of a burst keeps it too: it starts before the next press is

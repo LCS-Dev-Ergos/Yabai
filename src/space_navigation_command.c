@@ -77,7 +77,7 @@ static bool space_navigation_accept(int sockfd)
 // request handled at once reuses its snapshot of the Desktops; a later one
 // takes its own.
 static bool space_navigation_execute(struct space_navigation_request *request, int steps,
-                                     bool activate, float duration)
+                                     bool activate, bool settle, float duration)
 {
     bool loaded = g_space_navigation_spaces.loaded;
 
@@ -96,7 +96,8 @@ static bool space_navigation_execute(struct space_navigation_request *request, i
         .crossfade = request->crossfade,
         .alpha = request->alpha,
         .duration = duration,
-        .activate = activate
+        .activate = activate,
+        .settle = settle
     };
 
     bool success = current && sid && space_navigation_run_step(current, &step);
