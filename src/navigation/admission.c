@@ -179,3 +179,24 @@ static struct space_navigation_claim space_navigation_queue_claimed(void)
 {
     return g_space_navigation_claim;
 }
+
+// Accept thread. The client sends its whole request right after connecting;
+// a request that is not readable almost at once is posted as usual.
+static bool space_navigation_accept(int sockfd)
+{
+    char bytes[128];
+    int direction = 0;
+    struct pollfd readable = { .fd = sockfd, .events = POLLIN };
+
+    if (poll(&readable, 1, 10) == 1) {
+        ssize_t length = recv(sockfd, bytes, sizeof(bytes), MSG_PEEK);
+        if (length > 0) direction = space_navigation_request_direction(bytes, (int) length);
+    }
+
+    if (!space_navigation_queue_join(sockfd, direction, read_os_timer())) return false;
+
+    while (recv(sockfd, bytes, sizeof(bytes), MSG_DONTWAIT) > 0);
+    socket_close(sockfd);
+
+    return true;
+}

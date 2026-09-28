@@ -1,13 +1,28 @@
 #include <assert.h>
 #include <math.h>
+#include <poll.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 static bool fail_allocation;
+static uint64_t accept_time;
+
+static uint64_t read_os_timer(void)
+{
+    return accept_time;
+}
+
+static void socket_close(int sockfd)
+{
+    shutdown(sockfd, SHUT_RDWR);
+    close(sockfd);
+}
 
 static void *queue_allocate(size_t size)
 {
@@ -95,6 +110,58 @@ static int direction(const char **arguments, int count)
 
 #define DIRECTION(...) direction((const char *[]) { __VA_ARGS__ }, sizeof((const char *[]) { __VA_ARGS__ }) / sizeof(const char *))
 
+// A client connection whose request is already sent. connection[0] is the
+// daemon's end.
+static void connect_request(int connection[2], const char **arguments, int count)
+{
+    char bytes[256];
+    int length = request(bytes, arguments, count);
+
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, connection) == 0);
+    assert(send(connection[1], bytes, length, 0) == length);
+}
+
+// The accept thread answers a press that joins the waiting request by closing
+// its connection, and leaves any other request unread for the event loop.
+static void test_accept(void)
+{
+    const char *next[] = { "space", "--navigate", "focus", "next", "crossfade", "0.2" };
+    const char *query[] = { "query", "--spaces" };
+    int first[2], joined[2], other[2];
+    char byte;
+
+    while (g_space_navigation_queue.first) space_navigation_queue_claim(g_space_navigation_queue.first->owner);
+
+    accept_time = 900000000000ULL;
+    connect_request(first, next, 6);
+    assert(!space_navigation_accept(first[0]));
+
+    accept_time += 200000000;
+    connect_request(joined, next, 6);
+    assert(space_navigation_accept(joined[0]));
+    assert(recv(joined[1], &byte, 1, 0) == 0);
+
+    accept_time += 200000000;
+    connect_request(other, query, 2);
+    assert(!space_navigation_accept(other[0]));
+
+    assert(recv(first[0], &byte, 1, MSG_PEEK) == 1 && recv(other[0], &byte, 1, MSG_PEEK) == 1);
+
+    space_navigation_queue_claim(first[0]);
+    struct space_navigation_claim claim = space_navigation_queue_claimed();
+    assert(claim.active && claim.steps == 2 && !claim.repeat);
+
+    space_navigation_queue_claim(other[0]);
+    assert(!space_navigation_queue_claimed().active);
+    assert(!g_space_navigation_queue.first);
+
+    close(joined[1]);
+    for (int i = 0; i < 2; ++i) {
+        close(first[i]);
+        close(other[i]);
+    }
+}
+
 int main(void)
 {
     assert(DIRECTION("space", "--navigate", "focus", "next", "0.95", "0.1") == 1);
@@ -168,8 +235,9 @@ int main(void)
     test_allocation_failure();
     test_concurrent_groups();
     test_repeat_groups();
+    test_accept();
 
-    puts("navigation queue: parsing, repeats, presses and ordering checks passed");
+    puts("navigation queue: parsing, repeats, presses, ordering and accept checks passed");
 
     return 0;
 }

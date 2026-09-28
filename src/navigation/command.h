@@ -5,13 +5,12 @@
 // sources): `space --navigate` from the request to the steps it queues or
 // runs, and the host services the other navigation modules call.
 //
-// Threads: event loop, except space_navigation_accept on the accept thread.
-// The timers below post their events from a global queue.
+// Thread: event loop. The timers below post their events from a global
+// queue.
 // State: none of its own. It has topology read its snapshot for each request
 // and each queued step, and asks admission for the claimed steps.
 // Callers: the schedule runs steps and requests wakes; activation requests
-// its delay. The command handler and the accept thread call its entry points,
-// see hooks.h.
+// its delay. The command handler calls its entry points, see hooks.h.
 // message.c includes command.c after its token and selector parser, whose
 // file-static functions and types command.c uses.
 

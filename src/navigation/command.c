@@ -40,27 +40,6 @@ static void space_navigation_note_message(char *message)
     space_navigation_schedule_cancel();
 }
 
-// Accept thread. The client sends its whole request right after connecting;
-// a request that is not readable almost at once is posted as usual.
-static bool space_navigation_accept(int sockfd)
-{
-    char bytes[128];
-    int direction = 0;
-    struct pollfd readable = { .fd = sockfd, .events = POLLIN };
-
-    if (poll(&readable, 1, 10) == 1) {
-        ssize_t length = recv(sockfd, bytes, sizeof(bytes), MSG_PEEK);
-        if (length > 0) direction = space_navigation_request_direction(bytes, (int) length);
-    }
-
-    if (!space_navigation_queue_join(sockfd, direction, read_os_timer())) return false;
-
-    while (recv(sockfd, bytes, sizeof(bytes), MSG_DONTWAIT) > 0);
-    socket_close(sockfd);
-
-    return true;
-}
-
 // Runs one switch of a queued request: `steps` Desktops from where navigation
 // stands, one except for a jump, or the request's own Desktop when 0. A jump
 // from a Desktop number counts from that Desktop. A request handled at once
@@ -159,7 +138,7 @@ static int space_navigation_relative_steps(char *message, bool move, bool *repea
     return 0;
 }
 
-static void space_navigation_request(FILE *rsp, char **message)
+static void space_navigation_run_request(FILE *rsp, char **message)
 {
     struct token action = get_token(message);
     bool move = token_equals(action, "move");
@@ -229,6 +208,6 @@ static void space_navigation_request(FILE *rsp, char **message)
 static void space_navigation_command(FILE *rsp, char **message)
 {
     space_navigation_spaces_read();
-    space_navigation_request(rsp, message);
+    space_navigation_run_request(rsp, message);
     space_navigation_spaces_unload();
 }
