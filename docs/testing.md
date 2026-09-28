@@ -118,7 +118,8 @@ python3 tools/effects/check_bar.py 9 10 \
 ```
 
 The tool waits for five seconds without keys or clicks, aborts on new input,
-and restores and verifies the starting Desktop and focused window. Exit 0
+and restores and verifies the starting Desktop and focused window after a
+normal run. On new input it leaves the user's new focus in place. Exit 0
 means all bar checks passed, 1 means a luminance excursion exceeded 3/255,
 and 2 means the run or restoration failed. It saves frame measurements and
 JSON results locally. `--images` also saves PNGs for inspection and adds
@@ -129,6 +130,40 @@ luminance check catches the [lcs.21 disappearance](effects-lcs22-validation.md),
 but cannot establish Finder icon visibility, focus correctness throughout a
 burst, smooth motion or CPU/GPU performance. Notifications and changing bar
 content can affect the score; inspect images when the result is ambiguous.
+
+### Desktop icons and the isolated renderer
+
+For empty Desktops with identical wallpaper and icons, add `--images
+--static-desktop` (requires Pillow). The check uses a fixed mask of bright
+baseline pixels below the bar and rejects a loss over 5/255, or a full-Desktop
+luminance excursion over 3/255. It catches disappearance and alignment errors;
+it is not a perceptual quality score and must not be applied to changing content.
+
+To exercise the production snapshot renderer without installing a daemon:
+
+```sh
+xcrun clang -fno-objc-arc -O2 tools/effects/snapshot_probe.m \
+  -framework Cocoa -framework Carbon -framework CoreGraphics \
+  -framework ScreenCaptureKit -framework QuartzCore \
+  -F/System/Library/PrivateFrameworks -framework SkyLight \
+  -o build/snapshot-crossfade
+python3 tools/effects/check_bar.py 2 1 \
+  --capture build/effects-frame-capture \
+  --snapshot-probe build/snapshot-crossfade --effects snapshot \
+  --output build/snapshot-check --images --static-desktop
+```
+
+Choose indexes from the current topology. `--snapshot-warm` adds three
+prepare/cancel samples before the measured switch. A probe exits unsuccessfully
+if it only fell back without animating. Its capture permission and process
+lifecycle differ from the signed daemon, so passing this probe does not certify
+installed integration, rapid queued navigation or keyboard focus.
+
+`navigation_snapshot_tests` exercises the actual asynchronous renderer with
+mocked capture/window dependencies and real timers. It checks endpoint release,
+cancellation, window/context/surface failures, late capture, a single in-flight
+request and the watchdog. Debug, ASan/UBSan and TSan cover this target; presented
+frames still require the live probe and installed-release check.
 
 ## Static analysis
 
@@ -191,8 +226,8 @@ Branch and pull-request CI runs each target for 60 seconds, enforces a
 120-second outer limit per test, and uploads failure inputs and the CTest log
 on failure. A clean run is a bounded parser check,
 not validation of Dock integration, authentication or animation behavior.
-The sanitizer CI job also runs `fade_tests` and `navigation_queue_tests`
-separately under ThreadSanitizer.
+The sanitizer CI job also runs fade, navigation queue, schedule and snapshot
+tests separately under ThreadSanitizer.
 
 ## Live release checks
 

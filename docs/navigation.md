@@ -81,8 +81,9 @@ several Desktops in one switch.
 Signposts in subsystem `com.lcs.yabai`, category `navigation`, mark each
 request, step, activation and the focus that confirms it.
 
-The revised pacing is part of the [lcs.22 candidate](effects-lcs22-validation.md);
-its live visual acceptance remains pending.
+The pacing introduced in lcs.22 is retained. The [lcs.23 candidate](effects-lcs23-validation.md)
+changes the renderer; full live acceptance of that daemon remains separate
+from the isolated renderer checks.
 
 ## Relative navigation
 
@@ -155,9 +156,11 @@ and delegate directly with `exec`:
 exec "$yabai" -m space --navigate "$action" "$selector" "$effect" "$duration"
 ```
 
-Update the package and script together. `crossfade` needs payload
-`2.1.31-lcs.10`: an older payload either refuses it, and navigation switches
-without an effect, or, `2.1.31-lcs.9`, also leaves the destination transparent
+Update the package and script together. The current `crossfade` renderer runs
+in the daemon and uses the ordinary payload Space-focus operation. It requires
+macOS 15.2+ and existing Screen Recording permission; unavailable capture falls
+back to an ordinary switch. Payload `2.1.31-lcs.12` is retained in lcs.23.
+The legacy Space-alpha crossfade opcode is no longer used by the daemon
 (see [effects](effects.md#desktop-crossfade)).
 
 ## Verification boundaries

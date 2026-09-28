@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Compare presented bar frames across two Desktops; restore the starting focus.
+"""Compare presented bar/Desktop frames; restore focus unless interrupted by input.
 
 This is an opt-in live diagnostic, not a CI test or a general visual-quality
 score. A large luminance excursion catches the lcs.21 bar disappearance; a
-pass alone does not establish icon visibility, correct focus or smooth motion.
+pass alone does not establish correct focus or smooth motion. --static-desktop
+adds a bounded visibility check for bright icons on matching empty Desktops.
 """
 
 import argparse
@@ -24,12 +25,19 @@ def main():
     parser.add_argument("--capture", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--yabai", default="/run/current-system/sw/bin/yabai")
-    parser.add_argument("--effects", nargs="+", choices=("crossfade", "fade", "subtle", "none"), default=["crossfade"])
+    parser.add_argument("--effects", nargs="+", choices=("crossfade", "fade", "subtle", "none", "snapshot"), default=["crossfade"])
+    parser.add_argument("--snapshot-probe", type=Path, help="Opt-in helper compiled from snapshot_probe.m")
+    parser.add_argument("--snapshot-warm", action="store_true", help="Measure three preparations before the helper's switch")
+    parser.add_argument("--static-desktop", action="store_true", help="Empty-to-empty Desktop/icon regression; requires --images and Pillow")
     parser.add_argument("--duration", type=float, default=0.25)
     parser.add_argument("--images", action="store_true", help="Save PNGs for visual inspection; affects capture performance")
     args = parser.parse_args()
     if not math.isfinite(args.duration) or not 0 <= args.duration <= 1:
         parser.error("duration must be finite and in [0, 1]")
+    if "snapshot" in args.effects and (not args.snapshot_probe or not args.duration):
+        parser.error("snapshot requires --snapshot-probe and a positive duration")
+    if args.static_desktop and not args.images:
+        parser.error("--static-desktop requires --images")
 
     cg = ctypes.CDLL("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
     since = cg.CGEventSourceSecondsSinceLastEventType
@@ -52,6 +60,8 @@ def main():
         parser.error("choose two existing, distinct Desktops")
     if source["display"] != destination["display"] or source["is-native-fullscreen"] or destination["is-native-fullscreen"]:
         parser.error("choose two ordinary Desktops on the same display")
+    if args.static_desktop and (source["windows"] or destination["windows"]):
+        parser.error("--static-desktop requires two empty Desktops with matching wallpaper/icons")
     display = next(item["id"] for item in query("--displays") if item["index"] == source["display"])
 
     deadline = time.monotonic() + 30
@@ -80,6 +90,8 @@ def main():
 
     result_code = 0
     process = None
+    effect_process = None
+    interrupted = False
     try:
         for effect in args.effects:
             check_input()
@@ -105,9 +117,23 @@ def main():
 
             pause(0.15)
             request = time.clock_gettime(time.CLOCK_UPTIME_RAW) * 1000
-            alpha = {"crossfade": "crossfade", "fade": "0.7", "subtle": "0.95", "none": "1"}[effect]
+            alpha = {"crossfade": "crossfade", "fade": "0.7", "subtle": "0.95", "none": "1", "snapshot": "1"}[effect]
             duration = 0 if effect == "none" else args.duration
-            command("space", "--navigate", "focus", args.destination, alpha, duration)
+            if effect == "snapshot":
+                probe = [str(args.snapshot_probe.resolve()), str(display), str(args.destination), str(duration)]
+                if args.snapshot_warm:
+                    probe.append("--warm")
+                effect_process = subprocess.Popen(probe)
+                deadline = time.monotonic() + 6
+                while effect_process.poll() is None:
+                    pause(0.02)
+                    if time.monotonic() > deadline:
+                        raise TimeoutError("snapshot probe completion")
+                if effect_process.returncode:
+                    raise RuntimeError("snapshot probe did not animate (capture unavailable, timeout or switch failed)")
+                effect_process = None
+            else:
+                command("space", "--navigate", "focus", args.destination, alpha, duration)
             deadline = time.monotonic() + 5
             while process.poll() is None:
                 pause(0.02)
@@ -135,33 +161,65 @@ def main():
                           request_ms=request, bar_start=before[-1][7], bar_end=after[-1][7],
                           bar_excursion=round(excursion, 2), verdict="FAIL" if excursion > 3 else "PASS",
                           frames=len(rows), images=args.images, directory=str(folder))
+            if args.static_desktop:
+                from PIL import Image
+                files = sorted(folder.glob("*.png"))
+                baseline = Image.open(files[0]).convert("RGB")
+                # Stable bright Desktop content, below the bar and away from
+                # the screen edges. Alignment errors also fail this check.
+                pixels = baseline.load()
+                mask = [(x, y) for y in range(40, baseline.height - 30)
+                        for x in range(30, baseline.width - 30) if min(pixels[x, y]) > 190]
+                if len(mask) < 100:
+                    raise RuntimeError("not enough bright Desktop content for an icon check")
+                icon_values = []
+                for file in files:
+                    with Image.open(file) as png:
+                        rgb = png.convert("RGB")
+                        icon_values.append(sum(sum(rgb.getpixel(xy)) for xy in mask) / (3 * len(mask)))
+                icon_loss = max(icon_values[0] - value for value in icon_values)
+                full_excursion = max(abs(row[2] - before[-1][2]) for row in after)
+                result.update(icon_start=icon_values[0], icon_loss=icon_loss, desktop_excursion=full_excursion)
+                if icon_loss > 5 or full_excursion > 3:
+                    result["verdict"] = "FAIL"
             (folder / "frames.txt").write_text(output)
             (folder / "result.json").write_text(json.dumps(result, indent=2) + "\n")
             print(json.dumps(result), flush=True)
-            result_code = max(result_code, int(excursion > 3))
+            result_code = max(result_code, int(result["verdict"] == "FAIL"))
+    except InterruptedError as error:
+        print(f"ABORT: {error}", file=sys.stderr, flush=True)
+        interrupted = True
+        result_code = 2
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         print(f"ABORT: {error}", file=sys.stderr, flush=True)
         result_code = 2
     finally:
+        if effect_process is not None:
+            if effect_process.poll() is None:
+                effect_process.kill()
+            effect_process.wait()
         if process is not None:
             if process.poll() is None:
                 process.kill()
             process.communicate()
-        try:
-            command("space", "--navigate", "focus", original, 1, 0)
-            deadline = time.monotonic() + 5
-            while query("--spaces", "--space")["index"] != original:
-                if time.monotonic() > deadline:
-                    raise TimeoutError("restoring the starting Desktop")
-                time.sleep(0.05)
-            if window:
-                command("window", "--focus", window)
-                if query("--windows", "--window").get("id") != window:
-                    raise RuntimeError("starting window did not regain focus")
-            print(f"RESTORED: space={original} window={window}", flush=True)
-        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
-            print(f"RESTORATION FAILED: {error}", file=sys.stderr, flush=True)
-            result_code = 2
+        if interrupted:
+            print("USER INPUT: leave the user's new focus in place", flush=True)
+        else:
+            try:
+                command("space", "--navigate", "focus", original, 1, 0)
+                deadline = time.monotonic() + 5
+                while query("--spaces", "--space")["index"] != original:
+                    if time.monotonic() > deadline:
+                        raise TimeoutError("restoring the starting Desktop")
+                    time.sleep(0.05)
+                if window:
+                    command("window", "--focus", window)
+                    if query("--windows", "--window").get("id") != window:
+                        raise RuntimeError("starting window did not regain focus")
+                print(f"RESTORED: space={original} window={window}", flush=True)
+            except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+                print(f"RESTORATION FAILED: {error}", file=sys.stderr, flush=True)
+                result_code = 2
 
     return result_code
 

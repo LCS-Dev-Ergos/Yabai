@@ -975,6 +975,7 @@ static EVENT_HANDLER(SLS_SPACE_DESTROYED)
 
 static EVENT_HANDLER(SPACE_CHANGED)
 {
+    space_navigation_snapshot_space_changed();
     g_space_manager.last_space_id = g_space_manager.current_space_id;
     // The space notification describes WindowServer state. Asking the front
     // application's AX window here can stall the event loop during a switch.
@@ -1066,6 +1067,7 @@ static EVENT_HANDLER(DISPLAY_CHANGED)
 
 static EVENT_HANDLER(DISPLAY_ADDED)
 {
+    space_navigation_snapshot_cancel();
     uint32_t did = (uint32_t)(intptr_t) context;
     debug("%s: %d\n", __FUNCTION__, did);
     space_manager_handle_display_add(&g_space_manager, did);
@@ -1075,6 +1077,7 @@ static EVENT_HANDLER(DISPLAY_ADDED)
 
 static EVENT_HANDLER(DISPLAY_REMOVED)
 {
+    space_navigation_snapshot_cancel();
     uint32_t did = (uint32_t)(intptr_t) context;
     debug("%s: %d\n", __FUNCTION__, did);
     display_manager_remove_label_for_display(&g_display_manager, did);
@@ -1084,6 +1087,7 @@ static EVENT_HANDLER(DISPLAY_REMOVED)
 
 static EVENT_HANDLER(DISPLAY_MOVED)
 {
+    space_navigation_snapshot_cancel();
     uint32_t did = (uint32_t)(intptr_t) context;
     debug("%s: %d\n", __FUNCTION__, did);
     space_manager_mark_spaces_invalid(&g_space_manager);
@@ -1092,6 +1096,7 @@ static EVENT_HANDLER(DISPLAY_MOVED)
 
 static EVENT_HANDLER(DISPLAY_RESIZED)
 {
+    space_navigation_snapshot_cancel();
     uint32_t did = (uint32_t)(intptr_t) context;
     debug("%s: %d\n", __FUNCTION__, did);
     space_manager_mark_spaces_invalid_for_display(&g_space_manager, did);
@@ -1100,6 +1105,7 @@ static EVENT_HANDLER(DISPLAY_RESIZED)
 
 static EVENT_HANDLER(MOUSE_DOWN)
 {
+    space_navigation_snapshot_cancel();
     if (mission_control_is_active())                     goto out;
     if (g_mouse_state.current_action != MOUSE_MODE_NONE) goto out;
 
@@ -1435,6 +1441,7 @@ out:
 
 static EVENT_HANDLER(MISSION_CONTROL_SHOW_ALL_WINDOWS)
 {
+    space_navigation_snapshot_cancel();
     debug("%s:\n", __FUNCTION__);
     g_mission_control_mode = MISSION_CONTROL_MODE_SHOW_ALL_WINDOWS;
     event_signal_push(SIGNAL_MISSION_CONTROL_ENTER, (void*)(uintptr_t)g_mission_control_mode);
@@ -1442,6 +1449,7 @@ static EVENT_HANDLER(MISSION_CONTROL_SHOW_ALL_WINDOWS)
 
 static EVENT_HANDLER(MISSION_CONTROL_SHOW_FRONT_WINDOWS)
 {
+    space_navigation_snapshot_cancel();
     debug("%s:\n", __FUNCTION__);
     g_mission_control_mode = MISSION_CONTROL_MODE_SHOW_FRONT_WINDOWS;
     event_signal_push(SIGNAL_MISSION_CONTROL_ENTER, (void*)(uintptr_t)g_mission_control_mode);
@@ -1449,6 +1457,7 @@ static EVENT_HANDLER(MISSION_CONTROL_SHOW_FRONT_WINDOWS)
 
 static EVENT_HANDLER(MISSION_CONTROL_SHOW_DESKTOP)
 {
+    space_navigation_snapshot_cancel();
     debug("%s:\n", __FUNCTION__);
     g_mission_control_mode = MISSION_CONTROL_MODE_SHOW_DESKTOP;
     event_signal_push(SIGNAL_MISSION_CONTROL_ENTER, (void*)(uintptr_t)g_mission_control_mode);
@@ -1456,6 +1465,7 @@ static EVENT_HANDLER(MISSION_CONTROL_SHOW_DESKTOP)
 
 static EVENT_HANDLER(MISSION_CONTROL_ENTER)
 {
+    space_navigation_snapshot_cancel();
     debug("%s:\n", __FUNCTION__);
     g_mission_control_mode = MISSION_CONTROL_MODE_SHOW;
 
@@ -1528,6 +1538,7 @@ static EVENT_HANDLER(MISSION_CONTROL_EXIT)
 
 static EVENT_HANDLER(DOCK_DID_RESTART)
 {
+    space_navigation_snapshot_cancel();
     debug("%s:\n", __FUNCTION__);
 
     if (workspace_is_macos_monterey() ||
@@ -1585,6 +1596,7 @@ static EVENT_HANDLER(DOCK_DID_CHANGE_PREF)
 
 static EVENT_HANDLER(SYSTEM_WOKE)
 {
+    space_navigation_snapshot_cancel();
     debug("%s:\n", __FUNCTION__);
 
     struct window *focused_window = window_manager_find_window(&g_window_manager, g_window_manager.focused_window_id);

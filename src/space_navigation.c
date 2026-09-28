@@ -146,6 +146,7 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
 
     if (current == sid) return true;
 
+    space_navigation_snapshot_cancel();
     // A deferred focus from the previous navigation must not follow this one.
     space_navigation_focus_cancel();
 
@@ -199,11 +200,17 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
     bool crossfade_started = false;
 
     if (crossfade) {
-        // A crossfade that Dock refuses leaves the Desktop as it was: switch
-        // without an effect.
+        // Blend the composed outgoing frame over an ordinary switch. Never
+        // apply alpha to Spaces: Finder content is shared between them.
         float interval = space_navigation_frame_interval(display);
-        crossfade_started = scripting_addition_focus_space_crossfade(display, sid, duration, interval);
-        success = crossfade_started || scripting_addition_focus_space(sid);
+        uint64_t capture_started = read_os_timer();
+        bool prepared = space_navigation_snapshot_prepare(display, sid, interval);
+        if (space_navigation_seconds_since_click() * 1e9 < (double) (read_os_timer() - capture_started)) {
+            space_navigation_snapshot_cancel();
+            return false; // A newer pointer action wins over a slow capture.
+        }
+        success = scripting_addition_focus_space(sid);
+        crossfade_started = prepared && space_navigation_snapshot_start(duration, success);
     } else if (step->crossfade) {
         success = scripting_addition_focus_space(sid);
     } else {

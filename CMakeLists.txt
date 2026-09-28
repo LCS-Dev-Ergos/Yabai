@@ -67,7 +67,8 @@ target_link_options(yabai PRIVATE
     -F${PRIVATE_FRAMEWORKS}
     LINKER:-sectcreate,__TEXT,__info_plist,${CMAKE_CURRENT_SOURCE_DIR}/assets/Info.plist)
 target_link_libraries(yabai PRIVATE
-    "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight")
+    "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight"
+    "-weak_framework ScreenCaptureKit" "-framework QuartzCore")
 
 if(YABAI_SANITIZE STREQUAL "address")
     set(YABAI_SANITIZE_FLAGS -fsanitize=address,undefined)
@@ -96,7 +97,8 @@ target_compile_definitions(yabai_tests PRIVATE TESTS PROFILE=1)
 target_compile_options(yabai_tests PRIVATE -std=c11 -fno-objc-arc ${YABAI_SANITIZE_FLAGS})
 target_link_options(yabai_tests PRIVATE -F${PRIVATE_FRAMEWORKS} ${YABAI_SANITIZE_FLAGS})
 target_link_libraries(yabai_tests PRIVATE
-    "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight")
+    "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight"
+    "-weak_framework ScreenCaptureKit" "-framework QuartzCore")
 add_test(NAME yabai_tests COMMAND yabai_tests)
 
 # Exercise the actual navigation implementation with isolated OS dependencies.
@@ -104,6 +106,12 @@ add_executable(navigation_tests tests/navigation/navigation.c)
 target_compile_options(navigation_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
 target_link_options(navigation_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
 add_test(NAME navigation_tests COMMAND navigation_tests)
+
+add_executable(navigation_snapshot_tests tests/navigation/snapshot.m)
+target_compile_options(navigation_snapshot_tests PRIVATE -UNDEBUG -fno-objc-arc ${YABAI_SANITIZE_FLAGS})
+target_link_options(navigation_snapshot_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
+target_link_libraries(navigation_snapshot_tests PRIVATE "-framework Cocoa" "-framework QuartzCore" "-weak_framework ScreenCaptureKit")
+add_test(NAME navigation_snapshot_tests COMMAND navigation_snapshot_tests)
 
 add_executable(navigation_schedule_tests tests/navigation/schedule.c)
 target_compile_options(navigation_schedule_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
@@ -150,7 +158,8 @@ if(YABAI_FUZZ)
     add_executable(fuzz_daemon_message tests/fuzz/daemon_message.m)
     target_compile_definitions(fuzz_daemon_message PRIVATE TESTS)
     target_link_libraries(fuzz_daemon_message PRIVATE
-        "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight")
+        "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight"
+        "-weak_framework ScreenCaptureKit" "-framework QuartzCore")
 
     add_executable(fuzz_payload_message tests/fuzz/payload_message.m)
     target_include_directories(fuzz_payload_message PRIVATE ${SRC}/osax)

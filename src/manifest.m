@@ -79,6 +79,7 @@
 
 #include "sa.m"
 #include "mission_control.c"
+#include "space_navigation_snapshot.m"
 #include "event_loop.c"
 #include "event_signal.c"
 #include "workspace.m"

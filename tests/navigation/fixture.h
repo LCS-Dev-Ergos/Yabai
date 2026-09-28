@@ -54,6 +54,8 @@ static int click_raise_calls;
 static int crossfade_calls;
 static bool crossfade_success;
 static float last_crossfade_duration;
+static int snapshot_prepares, snapshot_starts, snapshot_cancels;
+static bool click_during_snapshot;
 static uint32_t activated_id;
 static int opacity_fail_at;
 static bool expect_fade_started;
@@ -121,6 +123,8 @@ static void reset(void)
     crossfade_calls = 0;
     crossfade_success = true;
     last_crossfade_duration = 0.0f;
+    snapshot_prepares = snapshot_starts = snapshot_cancels = 0;
+    click_during_snapshot = false;
     activated_id = 0;
     focused_id = noted_id = 0;
     opacity_fail_at = 0;

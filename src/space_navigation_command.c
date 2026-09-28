@@ -45,6 +45,7 @@ static void space_navigation_note_message(char *message)
     if (token_equals(domain, DOMAIN_QUERY)) return;
     if (token_equals(domain, DOMAIN_SPACE) && token_equals(get_token(&message), COMMAND_SPACE_NAVIGATE)) return;
 
+    space_navigation_snapshot_cancel();
     space_navigation_forget();
     space_navigation_focus_cancel();
     space_navigation_schedule_cancel();

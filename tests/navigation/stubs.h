@@ -157,7 +157,28 @@ static bool scripting_addition_focus_space(uint64_t sid)
     return focus_success;
 }
 
-// Dock's reply to a crossfade: 'k' switches Desktop, anything else leaves it.
+static void space_navigation_snapshot_cancel(void)
+{
+    ++snapshot_cancels;
+}
+
+static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t sid, float interval)
+{
+    (void) display; (void) sid; (void) interval;
+    ++snapshot_prepares;
+    assert(focus_calls == 0); // Capture the source before switching.
+    if (click_during_snapshot) { timestamp += 100000000; seconds_since_click = .01; }
+    return crossfade_success;
+}
+static bool space_navigation_snapshot_start(float duration, bool success)
+{
+    ++snapshot_starts;
+    assert(focus_calls == 1 && window_focus_calls == 0);
+    last_crossfade_duration = duration;
+    return success;
+}
+
+// Retained only to catch an accidental return to the legacy Dock opcode.
 static bool scripting_addition_focus_space_crossfade(uint32_t display, uint64_t sid, float duration, float interval)
 {
     ++crossfade_calls;

@@ -118,6 +118,53 @@ acceptance remain separate gates from the isolated probe.
 
 ## Desktop crossfade
 
+The daemon's `crossfade` path now captures one composed frame of the outgoing
+display, places it in a noninteractive window owned by yabai, switches Desktop
+normally, and fades that image out over the destination. It preserves the full
+Desktop blend without changing Space alpha/levels or the alpha of Finder,
+wallpaper, SketchyBar or application windows. The installed lcs.22 Space-based
+path reproduced both disappearing Finder icons and a black transition into
+Desktop 1; the [lcs.23 report](effects-lcs23-validation.md) records the comparison.
+
+ScreenCaptureKit capture requires macOS 15.2+ and existing Screen Recording
+permission. The navigation path never requests permission. Unsupported or
+refused capture, allocation failure and capture timeout all fall back to an
+ordinary Desktop switch. There is one capture in flight and one overlay
+globally, including across displays. A timed-out callback can only release its
+image; it cannot later create a window. A 24-million-pixel limit bounds the
+accepted image size. The 150 ms deadline includes starting the capture, but
+cannot interrupt the framework's call itself; it is not a hard bound on the
+whole navigation request.
+
+A Core Animation remote surface holds the image directly, avoiding the measured
+Retina CGContext image copy. A bounded timer applies smoothstep to the owned
+window's alpha, using the display mode's reported interval (60 Hz when
+unspecified, capped at 240 Hz). The timer releases everything at the endpoint;
+a one-second watchdog also retires an overlay if Dock has not replied.
+This is not display-link synchronization or a presentation fence. Fading the
+CALayer's opacity itself was rejected after captured frames showed a luminosity
+dip on the test host.
+
+New navigation, mouse input, other non-query commands, display reconfiguration,
+Mission Control, Dock restart and wake cancel the overlay. A click during
+capture cancels the pending step before switching. One bounded refresh
+opportunity precedes the switch; it does not prove the image was presented.
+The outgoing frame is a still image, so video and changing application content
+freeze within that image for the short blend.
+
+The existing pacing reserves the requested effect duration before the next
+step. With pacing disabled, interruption discards the previous image; seamless
+retargeting in that mode is not promised. Reduce Motion retains this nonspatial
+blend. Fullscreen Desktops and already-visible destinations switch without it.
+No blur is applied. The payload's legacy crossfade opcode remains for protocol
+compatibility, but this daemon no longer calls it.
+
+### Legacy Space crossfade (through lcs.22)
+
+The following describes the retained payload implementation, not the current
+daemon renderer.
+
+
 Payload `2.1.31-lcs.10` can crossfade the whole display, requested with
 `crossfade` in place of the starting opacity (see [navigation](navigation.md)).
 The window fade dims the destination's windows, so the wallpaper shows through
