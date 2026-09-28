@@ -214,6 +214,9 @@ endif()
 # parsed with everything its unity file includes before it, which is exactly
 # the context the compiler sees. The target is never built.
 function(yabai_unity_sources unity_file target)
+    # A renamed or removed source would otherwise stay in the build graph,
+    # and Ninja stops at the missing file until CMake runs again.
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${unity_file})
     file(STRINGS ${unity_file} lines)
     get_filename_component(unity_dir ${unity_file} DIRECTORY)
     set(prelude "")
