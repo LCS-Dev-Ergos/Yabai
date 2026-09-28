@@ -20,7 +20,7 @@ The two sockets:
 
 - **Daemon socket** `/tmp/yabai_$USER.socket`, created with `bind` and then
   `chmod 0600`. A message is a 4-byte length and NUL-separated tokens
-  (`src/message.c`). The daemon answers on the same connection. No peer
+  (`src/message_loop.c`, parsed by `src/message.c`). The daemon answers on the same connection. No peer
   authentication (planned; see the Atrium open threads).
 - **Payload socket** in Dock. Each request opens its own connection
   (`scripting_addition_send_bytes`), builds its message in a stack buffer of
@@ -46,6 +46,8 @@ manifest.m
 ├── event_queue.c, event_loop.c ─ window_focus_events.c, event_loop_trace.c
 ├── event_signal.c ─ event_signal_process.c
 ├── workspace.m, rule.c, message.c
+├── commands/config.c, display.c, space.c, window.c, query.c, rule.c, signal.c
+├── message_loop.c
 ├── display.c, space.c, view.c, window.c, process_manager.c, application.c
 ├── display_manager.c, space_manager.c, window_manager.c, mouse_handler.c
 └── yabai.c (main)
@@ -183,8 +185,9 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
   queries through SkyLight, one view (layout and BSP tree) per Space, Space
   commands through the payload.
 - **Displays** (`display.c`, `display_manager.c`).
-- **Commands** (`message.c`, 3,000 lines): parsing and every domain
-  (`config`, `display`, `space`, `window`, `query`, `rule`, `signal`).
+- **Commands**: the parser (`message.c`), one file per domain in `commands/`
+  (`config`, `display`, `space`, `window`, `query`, `rule`, `signal`), and the
+  socket's accept thread and dispatch (`message_loop.c`).
 - **Signals** (`event_signal.c`): subscriptions and spawning.
 - **Mouse** (`mouse_handler.c`): modifier drags, drops and focus follows mouse.
 - **Mission Control** (`mission_control.c`): its modes and the SkyLight
@@ -282,7 +285,8 @@ lands as its own commits.
 5. Done. **Remove the legacy Space crossfade** from the payload and the
    protocol: payload `2.1.31-lcs.13` drops about 630 lines and opcode `0x16`,
    which stays reserved; loading it needs a scripting-addition reload.
-6. **Upstream files where it pays**: `message.c` by command domain,
+6. **Upstream files where it pays**: `message.c` by command domain (done:
+   `commands/`, byte-identical binary),
    `window_manager.c` by concern (table and rules, focus, frames, animation),
    and the Space-change revalidation that holds the event loop.
 7. Done. **Workflow**: `sync-upstream` reports new commits by the author in
