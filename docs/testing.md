@@ -16,8 +16,9 @@ editor's root `compile_commands.json` symlink.
 ## CTest and sanitizers
 
 - `yabai_tests` runs the core's unit tests against the unity build, plus
-  navigation argument, opacity-policy protocol, signal dispatch and query
-  string escaping regressions. The signal tests launch
+  navigation argument, opacity-policy protocol, signal dispatch and storage
+  bound, scripting-addition request size and query string escaping
+  regressions. The signal tests launch
   harmless local shell actions and check socket lifetime, isolated event
   variables and retained standard output/error. They do not run the daemon.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
@@ -47,6 +48,9 @@ editor's root `compile_commands.json` symlink.
 - `navigation_queue_tests` checks how relative requests are recognized and
   merged while one waits: repeats, separate presses, directions, interleaved
   queries, allocation failure and concurrent admission/consumption.
+- `event_queue_tests` checks the event loop's queue: order when events wrap
+  around the ring's end, growth, merged mouse moves, allocation failure and
+  concurrent producers.
 - `focus_tests` exercises production focus-event handling with simulated OS
   calls: reuse of pending observations, stale activations, invalid/hidden or
   minimized windows, and the normal AX fallback, including no focused window.
@@ -263,8 +267,8 @@ Branch and pull-request CI runs each target for 60 seconds, enforces a
 120-second outer limit per test, and uploads failure inputs and the CTest log
 on failure. A clean run is a bounded parser check,
 not validation of Dock integration, authentication or animation behavior.
-The sanitizer CI job also runs fade, navigation queue, schedule and snapshot
-tests separately under ThreadSanitizer.
+The sanitizer CI job also runs the event queue, fade, navigation queue,
+schedule and snapshot tests separately under ThreadSanitizer.
 
 ## Live release checks
 

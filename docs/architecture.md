@@ -1,7 +1,7 @@
 # Architecture
 
 This map describes the daemon, its client and the Dock payload as they stand
-on `dev` after lcs.27: which components exist, which thread runs what, how
+on `dev` after lcs.28: which components exist, which thread runs what, how
 events flow and who owns each piece of state. It is the starting point for the
 refactor at the end, and it lists the risks found while drawing it. Details of
 the fork's own features are in [navigation](navigation.md),
@@ -24,8 +24,9 @@ The two sockets:
   authentication (planned; see the Atrium open threads).
 - **Payload socket** in Dock. Each request opens its own connection
   (`scripting_addition_send_bytes`), builds its message in a stack buffer of
-  `SA_SOCKET_BUFF_LEN` (4 KiB) and waits up to one second for Dock to close
-  the connection or reply. Dock handles connections one at a time on one
+  `SA_SOCKET_BUFF_LEN` (4 KiB), the payload's message size, refusing one that
+  does not fit, and waits up to one second for Dock to close the connection
+  or reply. Dock handles connections one at a time on one
   thread.
 
 ## Build structure
@@ -42,7 +43,7 @@ manifest.m
 ├── navigation/step.c, schedule.c, command.c
 ├── sa.m ─ sa_opacity.c
 ├── mission_control.c
-├── event_loop.c ─ window_focus_events.c, event_loop_trace.c
+├── event_queue.c, event_loop.c ─ window_focus_events.c, event_loop_trace.c
 ├── event_signal.c ─ event_signal_process.c
 ├── workspace.m, rule.c, message.c
 ├── display.c, space.c, view.c, window.c, process_manager.c, application.c
@@ -125,8 +126,11 @@ try the lock, so Dock's main thread never waits for the worker.
 
 ## Events
 
-Producers post with `event_loop_post`: a lock-free multi-producer list whose
-nodes come from a 512 KiB memory pool, and a semaphore wakes the consumer.
+Producers post with `event_loop_post`, which copies the event into a ring
+under a mutex (`event_queue.c`) and wakes the consumer with a semaphore. A full
+ring doubles, with a warning in the log, so an event loop that falls behind
+costs memory rather than events. A mouse move replaces the move queued right
+before it.
 The 43 event types (`src/event_loop.h`) come from:
 
 | Producer | Events |
@@ -143,7 +147,8 @@ The 43 event types (`src/event_loop.h`) come from:
 | ScreenCaptureKit completion | `SPACE_NAVIGATION_CAPTURED` |
 | Handlers themselves | Directly: `APPLICATION_FRONT_SWITCHED` and `WINDOW_FOCUSED` that arrived before their application or window was known. Through the main queue, 100 ms later: `APPLICATION_LAUNCHED` retries, `MISSION_CONTROL_CHECK_FOR_EXIT`, `MISSION_CONTROL_EXIT`. |
 
-Ordering is FIFO. Object lifetimes rely on it: the main thread posts
+Ordering is FIFO; a merged mouse move keeps the place of the one it
+replaced. Object lifetimes rely on it: the main thread posts
 `APPLICATION_TERMINATED` after every earlier event about that process, and
 only that handler frees it. Handlers taking more than 10 ms emit a signpost
 (category `events`, `event_loop_trace.c`).
@@ -157,6 +162,8 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 | `g_display_manager` | Event loop | Display reconfiguration callback only posts. |
 | `g_process_manager.process` (table) | Main thread | Event loop receives `struct process *` through events; main-queue retries look processes up on the main thread. |
 | `g_mouse_state` | Split: settings written by commands on the event loop, click state by the tap on the main thread | The tap reads `modifier` without synchronization (a benign race upstream). |
+| `g_event_loop.queue` | Event loop takes events | Every producer adds them; mutex. |
+| `g_signal_storage` | Event loop | — |
 | `g_space_navigation_queue` (fork) | Message loop and event loop | Mutex. |
 | `g_space_navigation_schedule`, `_focus`, `_anchor`, `_spaces` (fork) | Event loop | Timers only post events. |
 | Snapshot (`space_snapshot_active`, recent Spaces) | Event loop creates and cancels | Alpha timer on a global queue, under `space_snapshot_lock`; the timer's cancel handler frees the snapshot without the lock. |
@@ -230,11 +237,11 @@ Diagnostics: signposts in subsystem `com.lcs.yabai`, categories
 | # | Where | Risk | Severity |
 | --- | --- | --- | --- |
 | 1 | `space_snapshot_cancel_locked` | Read the snapshot after its cancel handler could free it; crashed lcs.25. | Fixed in lcs.26 |
-| 2 | `memory_pool_push` for events and signals | The pool wraps to its start without checking that the consumer is past it. If the event loop stalls while producers post more than about 21,000 events (24 bytes each), new events overwrite unread ones and their `next` links. Needs a long stall (each AX call may wait one second) and a busy producer, such as mouse moves with `focus_follows_mouse` (off here). | Latent; memory corruption if hit |
-| 3 | `sa.m` request builders | `pack` never checks the 4 KiB buffer. Requests with one entry per window (`move_window_list_to_space`, proxy swaps, `order_window_in`) overflow the stack past roughly 500 to 1,000 windows. The fork's opacity batch has a bound. | Latent; stack overflow if hit |
-| 4 | Event loop | Everything runs on one thread, and some calls wait for others: on a Space change upstream revalidates windows and sets frames over AX (about 1.1 s of busy time in a 45-second sample of bursts), activation waits for WindowServer (about 40 ms on average over 16 activations), Dock up to 1 s. A paced crossfade no longer waits for its capture; drawing the image and one refresh (about 30 ms) remain, and with pacing off the capture (up to 150 ms) as well. | Performance; bounded by timeouts |
+| 2 | Event queue and signal storage | The events' memory pool wrapped to its start without checking that the consumer was past it: a stall with about 21,000 events posted would have overwritten unread ones. Signals of one event were written without a bound. | Fixed after lcs.28: a ring that grows (`event_queue.c`), consecutive mouse moves merged, a signal that does not fit dropped with a warning |
+| 3 | `sa.m` request builders | `pack` never checked the 4 KiB buffer: requests with one entry per window (`move_window_list_to_space`, proxy swaps, `order_window_in`) overflowed the stack past roughly 500 to 1,000 windows. | Fixed after lcs.28: a request that does not fit is refused |
+| 4 | Event loop | Everything runs on one thread, and some calls wait for others: on a Space change upstream revalidates windows and sets frames over AX (about 1.1 s of busy time in a 45-second sample of bursts), activation waits for WindowServer (about 40 ms on average over 16 activations), Dock up to 1 s. A paced crossfade no longer waits for its capture; drawing the image and one refresh remain, with the switch and the activation, and with pacing off the capture (up to 150 ms) as well. On two 4K displays (20 Mpx each) with lcs.28 that part held the loop a median 132 ms per step (p90 435 ms). | Performance; bounded by timeouts |
 | 5 | Daemon socket | A fixed name in the shared `/tmp`: another local user who creates it first stops the daemon from binding. It is made `0600` only after `bind`, which matters with a permissive umask. No peer authentication. | Security; local |
-| 6 | TCC | Grants of a bare binary follow its path; every store path asked again and ran without crossfades until restart. | Fixed in Dotfiles `9a8fb78` (switch pending) |
+| 6 | TCC | Grants of a bare binary follow its path; every store path asked again and ran without crossfades until restart. | Fixed in Dotfiles `9a8fb78`; the grants survived the update to lcs.28 |
 | 7 | Upstream animations and navigation | The CVDisplayLink thread and the event loop both send Dock requests; Dock serialises them, but nothing orders a proxy swap against a navigation switch. | Unverified; watch |
 | 8 | Unity build | Hidden coupling through include order and file-static globals, so a module's inputs and threads are not visible where it is used. Navigation and effects now declare their interfaces, threads and state in headers and compile before the core; the core's files still call each other's file-static functions by include order. | Maintainability; reduced |
 
@@ -267,8 +274,11 @@ lands as its own commits.
    this way; with pacing off a request still waits.
 3. Done. **One header for private SkyLight and AX declarations**: the daemon's
    are in `misc/extern.h`; the payload keeps its own in `osax/payload.m`.
-4. **Fix risks 2 and 3**: a bounded event queue that reports overflow and
-   coalesces mouse moves; bounds checks in `pack`.
+4. Done. **Fix risks 2 and 3**: the event queue copies each event into a
+   ring under a mutex and doubles it when full, reporting the growth.
+   Dropping an event instead would leak what it carries or leave a client
+   waiting, and with consecutive mouse moves merged the ring grows only with
+   what the user does. `pack` refuses a request that does not fit.
 5. **Remove the legacy Space crossfade** from the payload and the protocol
    (new payload version; needs a scripting-addition reload).
 6. **Upstream files where it pays**: `message.c` by command domain,

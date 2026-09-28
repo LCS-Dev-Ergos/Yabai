@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Daemon queues events in a ring that grows when the event loop falls behind, instead of a pool that wrapped over events not yet handled, and handles only the latest of consecutive mouse moves
+- Scripting-addition requests that do not fit the payload's 4 KiB message size are refused instead of overflowing the daemon's stack, and signals beyond their storage are dropped with a warning instead of written past it
 - Fork navigation no longer holds the daemon while it captures a crossfade's snapshot: a paced step asks for the capture and returns, and switches Desktop when the image or its 150 ms deadline arrives; a click, Mission Control, a display animation or another command during the capture stops the step, and a missing or late image gives an ordinary switch
 - Fork navigation counts a relative request arriving less than 75 ms after the previous one as a key repeat, instead of 50 ms: repeats delayed on their way through skhd and the client counted as presses, and a held key went on for two Desktops after its release
 - Fork navigation keeps `next` and `prev` pressed after a Desktop number when ten switches already wait, as a jump from that Desktop, instead of refusing them
