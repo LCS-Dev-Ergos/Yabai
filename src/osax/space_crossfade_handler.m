@@ -1,4 +1,4 @@
-// Fork: SA_OPCODE_SPACE_FOCUS_CROSSFADE, the Desktop switch of do_space_focus
+// SA_OPCODE_SPACE_FOCUS_CROSSFADE, the Desktop switch of do_space_focus
 // with a crossfade (see space_crossfade.c). It replies 'k' once the
 // destination is current, or 'e' when the daemon should switch without an
 // effect.

@@ -3,7 +3,7 @@
 # Runs the clang static analyzer over the three translation units.
 #
 # The scripting-addition payload and loader run inside or next to Dock.app and
-# must stay free of warnings. The yabai unity build inherits upstream findings
+# must stay free of warnings. The yabai unity build carries older findings
 # that are mostly ownership-naming false positives, so its warnings are
 # compared with tools/analyzer-baseline.txt instead: a warning that is not in
 # the baseline, or appears more often than recorded, fails the run.

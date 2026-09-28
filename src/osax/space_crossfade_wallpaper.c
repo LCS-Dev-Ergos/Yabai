@@ -1,4 +1,4 @@
-// Fork: the destination's wallpaper during a crossfade; see space_crossfade.c.
+// The destination's wallpaper during a crossfade; see space_crossfade.c.
 //
 // WindowServer applies a Desktop's alpha to each of its windows, not to the
 // Desktop as a whole. While the destination fades in, its windows are

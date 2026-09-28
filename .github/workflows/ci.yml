@@ -1,7 +1,7 @@
 # Builds and tests every push and pull request to dev, once more with ASan and
 # UBSan, runs the static analyzer and fuzzes both socket parsers.
 # Tags named v<version>-lcs.<n>
-# additionally produce a signed release tarball with the upstream layout
+# additionally produce a signed release tarball with yabai's archive layout
 # (archive/bin, archive/doc, archive/examples).
 
 name: CI

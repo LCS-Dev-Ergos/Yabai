@@ -1,4 +1,4 @@
-// Fork: paces Desktop navigation, one Desktop at a time.
+// Paces Desktop navigation, one Desktop at a time.
 //
 // Requests can arrive faster than a switch completes: a held key repeats every
 // 30 ms, and a busy Edge or VS Code handles an activation hundreds of

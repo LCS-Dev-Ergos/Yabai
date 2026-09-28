@@ -1,4 +1,4 @@
-// Fork: reports the events that hold up the event loop.
+// Reports the events that hold up the event loop.
 //
 // One thread handles every event in order, so an event that takes long
 // delays everything queued behind it, paced navigation steps included. Each

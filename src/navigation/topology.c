@@ -1,4 +1,4 @@
-// Fork: answers a navigation's questions about Desktops from one WindowServer reply.
+// Answers a navigation's questions about Desktops from one WindowServer reply.
 //
 // SLSCopyManagedDisplayForSpace, behind space_display_id and space_is_visible,
 // asks WindowServer for the state of every Desktop on each call. Profiling

@@ -1,4 +1,5 @@
-// Fork navigation: one event-loop request, no shell queries or global config edits.
+// Navigation runs within one event-loop request, without shell queries or
+// global configuration edits.
 static uint64_t space_navigation_last_time;
 
 // The space the last navigation switched to. For a moment after a switch,

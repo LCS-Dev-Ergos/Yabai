@@ -1014,7 +1014,7 @@ static void handle_message(int sockfd, char *message)
 {
     enum sa_opcode op = *message++;
 
-    // Fork: other Desktop operations first end any crossfade at its target.
+    // Other Desktop operations first end any crossfade at its target.
     if (op == SA_OPCODE_SPACE_FOCUS || op == SA_OPCODE_SPACE_CREATE
         || op == SA_OPCODE_SPACE_DESTROY || op == SA_OPCODE_SPACE_MOVE) {
         space_crossfade_finish_all();
@@ -1193,7 +1193,7 @@ void load_payload(void)
         NSLog(@"[yabai-sa] failed to spawn thread..");
     }
 
-    // Fork: Desktops an earlier crossfade left transparent become opaque again.
+    // Desktops an earlier crossfade left transparent become opaque again.
     int restored = space_crossfade_restore();
     if (restored) NSLog(@"[yabai-sa] restored %d desktops after an unfinished crossfade..", restored);
 }

@@ -1,4 +1,4 @@
-// Fork: starts or redirects a crossfade, see space_crossfade.c.
+// Starts or redirects a crossfade, see space_crossfade.c.
 
 static void space_crossfade_animate(struct space_crossfade *fade, float from, float to,
                                     double duration, double interval)

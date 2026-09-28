@@ -1,4 +1,4 @@
-// Fork: coalesces relative space navigation requests.
+// Coalesces relative space navigation requests.
 //
 // A navigation waits on WindowServer and applications for tens of
 // milliseconds, while a held key repeats every 30 ms. Queuing every request

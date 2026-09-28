@@ -1,17 +1,17 @@
-// Fork: focuses a window of the already active application without blocking
-// the event loop.
+// Focuses a window of the already active application without blocking the
+// event loop.
 //
 // window_manager_focus_window_without_raise posts a deactivation to the
 // focused window, sleeps 40 ms because some applications miss a focus change
-// whose two events arrive together (upstream #2694), then activates the new
+// whose two events arrive together (yabai issue #2694), then activates the new
 // window. The sleep held the event loop, and with it the reply and every
 // queued request, on each switch between two windows of one application.
 // Navigation posts the deactivation, then finishes 10 ms later as an event,
 // unless a newer navigation, another command or a focus change came first.
 //
 // The destination window shows inactive until the activation lands, which
-// reads as a title-bar flash. Upstream used 10 ms from 2019 until #2694, so
-// navigation keeps that shorter spacing.
+// reads as a title-bar flash. The spacing was 10 ms from 2019 until #2694, so
+// navigation keeps that shorter one.
 
 #define SPACE_NAVIGATION_FOCUS_DELAY_NS 10000000ULL
 

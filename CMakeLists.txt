@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 # Builds the same artifacts as the makefile: the scripting-addition payload and
-# loader, embedded into the yabai binary. The makefile remains the upstream
+# loader, embedded into the yabai binary. The makefile remains the original
 # build; this file adds out-of-tree builds and a compile_commands.json that
 # language servers can use despite the unity build in src/manifest.m.
 
@@ -86,8 +86,8 @@ if(YABAI_CODESIGN_IDENTITY)
         VERBATIM)
 endif()
 
-# Upstream unit tests. tests.m includes the whole unity build with -DTESTS and
-# stubs the embedded payload and loader.
+# Unit tests of the core. tests.m includes the whole unity build with -DTESTS
+# and stubs the embedded payload and loader.
 enable_testing()
 add_executable(yabai_tests tests/src/tests.m)
 set_target_properties(yabai_tests PROPERTIES

@@ -1,4 +1,4 @@
-// Fork: cross-fades one Desktop into another, as Dock animates its own Space
+// Cross-fades one Desktop into another, as Dock animates its own Space
 // transitions.
 //
 // One transaction shows the destination at its ordinary level and alpha 0,

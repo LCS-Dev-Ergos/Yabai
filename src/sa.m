@@ -437,7 +437,7 @@ static bool scripting_addition_send_bytes(char *bytes, int length)
     bool result = false;
 
     if (socket_open(&sockfd)) {
-        // Fork: a Dock that stops answering must not hold the event loop.
+        // A Dock that stops answering must not hold the event loop.
         struct timeval timeout = { .tv_sec = 1 };
         setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 

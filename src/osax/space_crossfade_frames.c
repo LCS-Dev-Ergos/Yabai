@@ -1,4 +1,4 @@
-// Fork: crossfade frames, written by the fade worker with the lock held; see
+// Crossfade frames, written by the fade worker with the lock held; see
 // space_crossfade.c.
 
 // Marks the crossfades whose display delivered a frame since the worker last
