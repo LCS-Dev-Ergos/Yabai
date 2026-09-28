@@ -58,11 +58,12 @@ Consequences:
 - Each navigation and effects module declares what other files use in its
   header, which also states its threads, the state it owns, its callers and
   what it calls. `hooks.h` declares every module function the core calls,
-  grouped by the calling file and handler, and the core's file-static
-  functions the modules call.
-- The include order still carries a dependency the headers do not:
-  `navigation/command.c` follows `message.c`, whose token and selector parser
-  it uses.
+  grouped by the calling file and handler. What the modules call in the core
+  is declared in the core's headers: the command vocabulary, tokens and
+  selectors in `message.h`, Mission Control's mode in `mission_control.h`,
+  focus in `window_manager.h`.
+- The core's globals are declared by `extern` lines at the top of the core
+  files that use them, so a source that uses one must follow such a file.
 - Tests include a module's header and source directly and replace its
   dependencies with macros and stubs (`tests/navigation/*.c`).
 

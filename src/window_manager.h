@@ -142,6 +142,7 @@ struct window *window_manager_find_second_nephew_for_managed_window(struct windo
 struct window *window_manager_find_uncle_for_managed_window(struct window_manager *wm, struct window *window);
 struct window *window_manager_find_first_cousin_for_managed_window(struct window_manager *wm, struct window *window);
 struct window *window_manager_find_second_cousin_for_managed_window(struct window_manager *wm, struct window *window);
+static void window_manager_make_key_window(ProcessSerialNumber *window_psn, uint32_t window_id);
 void window_manager_focus_window_without_raise(ProcessSerialNumber *window_psn, uint32_t window_id);
 void window_manager_focus_window_with_raise(ProcessSerialNumber *window_psn, uint32_t window_id, AXUIElementRef window_ref);
 struct window *window_manager_focused_window(struct window_manager *wm);

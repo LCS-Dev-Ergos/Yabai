@@ -63,6 +63,7 @@
 #include "view.h"
 #include "sa.h"
 #include "event_loop.h"
+#include "mission_control.h"
 #include "event_signal.h"
 #include "workspace.h"
 #include "rule.h"
@@ -96,8 +97,7 @@
 #include "rule.c"
 #include "message.c"
 
-// Navigation and effects. command.c uses message.c's token and selector
-// parser, so it follows message.c.
+// Navigation and effects.
 #include "navigation/admission.c"
 #include "navigation/topology.c"
 #include "navigation/activation.c"

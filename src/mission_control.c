@@ -26,15 +26,6 @@ static CONNECTION_CALLBACK(connection_handler)
 }
 #pragma clang diagnostic pop
 
-enum mission_control_mode
-{
-    MISSION_CONTROL_MODE_INACTIVE           = 0,
-    MISSION_CONTROL_MODE_SHOW               = 1,
-    MISSION_CONTROL_MODE_SHOW_ALL_WINDOWS   = 2,
-    MISSION_CONTROL_MODE_SHOW_FRONT_WINDOWS = 3,
-    MISSION_CONTROL_MODE_SHOW_DESKTOP       = 4
-};
-
 static const char *mission_control_mode_str[] = {
     [MISSION_CONTROL_MODE_INACTIVE]           = "inactive",
     [MISSION_CONTROL_MODE_SHOW]               = "show",

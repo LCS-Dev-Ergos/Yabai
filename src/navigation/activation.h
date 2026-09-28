@@ -13,8 +13,7 @@
 // Callers: step focuses or raises; step and command cancel. Resuming is a
 // hook, see hooks.h.
 // Calls: space_navigation_focus_schedule in command.c for the delay, and the
-// focus functions of window_manager.c, including its file-static
-// window_manager_make_key_window.
+// focus functions of window_manager.h.
 
 static void space_navigation_focus_cancel(void);
 static void space_navigation_focus_window(ProcessSerialNumber *psn, uint32_t window_id);

@@ -67,11 +67,4 @@ static void space_navigation_note_message(char *message);
 // one waiting and is answered here instead of being posted.
 static bool space_navigation_accept(int sockfd);
 
-// The other direction: file-static functions of the core that the modules
-// call. window_manager.c comes after the navigation sources. message.c's
-// parser (get_token, token_equals, token_to_value, parse_space_selector,
-// daemon_fail), mission_control_is_active and event_loop.c's
-// window_did_receive_focus precede their callers.
-static void window_manager_make_key_window(ProcessSerialNumber *window_psn, uint32_t window_id);
-
 #endif

@@ -11,8 +11,7 @@
 // and each queued step, and asks admission for the claimed steps.
 // Callers: the schedule runs steps and requests wakes; activation requests
 // its delay. The command handler calls its entry points, see hooks.h.
-// manifest.m includes command.c after message.c, whose file-static token and
-// selector parser command.c uses.
+// Parses with the token and selector functions declared in message.h.
 
 struct space_navigation_request;
 
