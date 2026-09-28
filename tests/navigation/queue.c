@@ -12,6 +12,20 @@
 
 static bool fail_allocation;
 static uint64_t accept_time;
+static double key_up_seconds = 1000.0;
+
+enum
+{
+    kCGEventSourceStateHIDSystemState = 1,
+    kCGEventKeyUp = 11
+};
+
+// When a key was last released, as the HID system reports it.
+static double CGEventSourceSecondsSinceLastEventType(int state, int type)
+{
+    assert(state == kCGEventSourceStateHIDSystemState && type == kCGEventKeyUp);
+    return key_up_seconds;
+}
 
 static uint64_t read_os_timer(void)
 {
@@ -78,6 +92,30 @@ static void test_repeat_groups(void)
     space_navigation_queue_claim(45);
     assert(g_space_navigation_claim.active && g_space_navigation_claim.repeat);
     assert(!g_space_navigation_queue.first && !g_space_navigation_queue.last);
+
+    // A key released since the last request makes a press of one that came
+    // as soon as a repeat, as load can make it; so does a release shortly
+    // before that request, which a slow client delivered late. A release
+    // before that leaves it a repeat.
+    uint64_t at = now + 1000000000;
+    assert(!space_navigation_queue_join(48, 1, at));
+    space_navigation_queue_claim(48);
+
+    key_up_seconds = 0.03;
+    assert(!space_navigation_queue_join(49, 1, at + 60000000));
+    space_navigation_queue_claim(49);
+    assert(g_space_navigation_claim.active && !g_space_navigation_claim.repeat);
+
+    key_up_seconds = 0.2;
+    assert(!space_navigation_queue_join(50, 1, at + 120000000));
+    space_navigation_queue_claim(50);
+    assert(g_space_navigation_claim.active && !g_space_navigation_claim.repeat);
+
+    key_up_seconds = 0.25;
+    assert(!space_navigation_queue_join(51, 1, at + 150000000));
+    space_navigation_queue_claim(51);
+    assert(g_space_navigation_claim.active && g_space_navigation_claim.repeat);
+    key_up_seconds = 1000.0;
 }
 
 // Frames a request as the yabai client sends it.

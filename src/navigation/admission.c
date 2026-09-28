@@ -17,8 +17,18 @@
 // more than 50 ms apart, counted as presses, and a held key went on for two
 // Desktops after its release. Presses a person makes in a row are at least
 // about 100 ms apart, so the bound sits between the two.
+//
+// Load compresses the gaps between presses too: two presses 100 ms apart
+// can arrive 70 ms apart, and the second would count as a repeat and be lost.
+// A held key is not released between its repeats, so a key released since
+// shortly before the previous request makes a request a press however soon
+// it came. The previous request may have reached us after its own key was
+// released, when skhd, the shell or the client was slow, by up to
+// SPACE_NAVIGATION_RELEASE_NS. Requests sent without a key, as by a script,
+// only have the timing.
 
-#define SPACE_NAVIGATION_REPEAT_NS 75000000ULL
+#define SPACE_NAVIGATION_REPEAT_NS  75000000ULL
+#define SPACE_NAVIGATION_RELEASE_NS 150000000ULL
 
 struct space_navigation_group
 {
@@ -97,18 +107,27 @@ static int space_navigation_request_direction(const char *bytes, int length)
     return 0;
 }
 
+// Seconds since a key was last released, anywhere.
+static double space_navigation_seconds_since_key_up(void)
+{
+    return CGEventSourceSecondsSinceLastEventType(kCGEventSourceStateHIDSystemState, kCGEventKeyUp);
+}
+
 // Accept thread. Returns true when the request joined the waiting one, and
 // must be answered instead of posted. Any other request closes the group, so
 // requests still run in the order they arrived.
 static bool space_navigation_queue_join(int sockfd, int direction, uint64_t now)
 {
     bool joined = false;
+    double key_up = direction ? space_navigation_seconds_since_key_up() : 0.0;
 
     pthread_mutex_lock(&g_space_navigation_queue.lock);
 
     struct space_navigation_group *last = g_space_navigation_queue.last;
+    uint64_t since = now - g_space_navigation_queue.time;
+    bool released = key_up * 1e9 < (double) (since + SPACE_NAVIGATION_RELEASE_NS);
     bool repeat = direction && direction == g_space_navigation_queue.direction
-               && now - g_space_navigation_queue.time < SPACE_NAVIGATION_REPEAT_NS;
+               && since < SPACE_NAVIGATION_REPEAT_NS && !released;
 
     if (direction) {
         g_space_navigation_queue.direction = direction;

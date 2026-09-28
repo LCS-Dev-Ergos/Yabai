@@ -5,8 +5,9 @@
 // requests that arrive while one waits for the event loop join it and are
 // answered at once.
 //
-// Threads: the accept thread recognises and joins requests; the event loop
-// claims a request's group before reading the request.
+// Threads: the accept thread recognises and joins requests, and asks the HID
+// system when a key was last released; the event loop claims a request's
+// group before reading the request.
 // State: g_space_navigation_queue, the groups waiting, under its mutex, and
 // g_space_navigation_claim, the steps of the request the event loop handles,
 // which only the event loop touches.

@@ -155,7 +155,12 @@ separate key press adds one, and the other direction takes one back. Each
 request reaches the daemon through skhd, a shell and the yabai client, whose
 start varies with load: with a 50 ms bound, repeats sent 30 ms apart during a
 switch counted as presses and a held key went on for two Desktops after its
-release. Presses a person makes in a row are at least about 100 ms apart. A group
+release. Presses a person makes in a row are at least about 100 ms apart, but
+load compresses those gaps too: two presses 100 ms apart arrived 70 ms apart
+and the second was lost as a repeat. A held key is not released between its
+repeats, so a request after a key release, up to 150 ms before the previous
+request since that one can reach the daemon late, is a press however soon it
+came. Requests sent without a key, as by a script, only have the timing. A group
 that a repeat starts is marked, and the pacing queue keeps at most one such
 step pending, so a held key moves one Desktop per step and stops within one
 step of its release, while three quick presses still move three Desktops.

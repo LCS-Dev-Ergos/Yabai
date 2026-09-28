@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Navigation counts a request as a key press, not a repeat, when a key was released since shortly before the previous request, however soon it arrived: presses 100 ms apart that load delivered 70 ms apart were taken for a held key, and navigation ended a Desktop short
 - Payload no longer contains the Space-alpha crossfade, which the daemon stopped using when the snapshot crossfade replaced it; opcode `0x16` stays reserved, and payload version is now *2.1.31-lcs.13*
 - Daemon queues events in a ring that grows when the event loop falls behind, instead of a pool that wrapped over events not yet handled, and handles only the latest of consecutive mouse moves
 - Scripting-addition requests that do not fit the payload's 4 KiB message size are refused instead of overflowing the daemon's stack, and signals beyond their storage are dropped with a warning instead of written past it
