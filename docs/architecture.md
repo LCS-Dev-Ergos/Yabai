@@ -250,9 +250,11 @@ Diagnostics: signposts in subsystem `com.lcs.yabai`, categories
 `master` mirrors asmvik/yabai. From now on its changes are not merged
 wholesale: new commits by Åsmund Vikane (`koekeishiya`, `Åsmund Vikane`) are
 reviewed and ported when they add something the fork lacks. Upstream releases
-are rare. This frees the refactor from preserving upstream's file layout; the
-`sync-upstream` workflow still opens a merge pull request and should instead
-report the new commits for review.
+are rare. This frees the refactor from preserving upstream's file layout. Every
+Monday the `sync-upstream` workflow fast-forwards `master` and lists the
+author's new commits, oldest first, in the open issue labelled `upstream`
+(creating it when none is open); close the issue once every commit is
+handled. Commits by other contributors are not reported.
 
 ## Refactor plan
 
@@ -284,8 +286,8 @@ lands as its own commits.
 6. **Upstream files where it pays**: `message.c` by command domain,
    `window_manager.c` by concern (table and rules, focus, frames, animation),
    and the Space-change revalidation that holds the event loop.
-7. **Workflow**: `sync-upstream` reports new commits by the author instead of
-   proposing a merge.
+7. Done. **Workflow**: `sync-upstream` reports new commits by the author in
+   an issue instead of proposing a merge.
 
 Order: 1 and 3 first (mechanical, low risk), then 2 with the asynchronous
 capture, then 4 and 5, then 6 as findings justify.

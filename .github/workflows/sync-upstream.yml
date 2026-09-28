@@ -1,11 +1,13 @@
-# Keeps this fork's master a pure mirror of asmvik/yabai and proposes each new
-# upstream release to the work branch through a pull request.
+# Keeps this repository's master a pure mirror of asmvik/yabai and reports
+# the new commits by yabai's author for review. Nothing is merged into the
+# work branch: each reported commit is read and ported by hand when it adds
+# something we lack. Commits by other contributors are not reported.
 #
 # master only ever fast-forwards: the push fails instead of forcing when master
 # has diverged. Scheduled workflows run from the default branch, so this file
 # must live on the work branch, which must be the repository default.
 
-name: Sync upstream release
+name: Sync upstream
 
 on:
   schedule:
@@ -14,7 +16,7 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
+  issues: write
 
 concurrency:
   group: sync-upstream
@@ -23,8 +25,10 @@ concurrency:
 env:
   UPSTREAM: asmvik/yabai
   MIRROR_BRANCH: master
-  WORK_BRANCH: dev
   GH_TOKEN: ${{ github.token }}
+  # Names and address yabai's author commits under.
+  AUTHOR_PATTERN: koekeishiya|vikane|aasvi93@hotmail[.]com
+  LABEL: upstream
 
 jobs:
   sync:
@@ -35,38 +39,51 @@ jobs:
           ref: ${{ env.MIRROR_BRANCH }}
           fetch-depth: 0
 
-      - name: Check for a new upstream release
-        id: release
+      - name: Find the new upstream commits
+        id: upstream
         run: |
-          tag=$(gh release view --repo "$UPSTREAM" --json tagName --jq .tagName)
           git fetch --no-tags "https://github.com/$UPSTREAM.git" \
             "+refs/heads/$MIRROR_BRANCH:refs/remotes/upstream/$MIRROR_BRANCH" \
             "+refs/tags/*:refs/tags/*"
-          if git merge-base --is-ancestor "$tag" "origin/$MIRROR_BRANCH"; then
-            echo "Latest upstream release $tag is already on $MIRROR_BRANCH."
-            echo "new=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "New upstream release: $tag."
-            echo "new=true" >> "$GITHUB_OUTPUT"
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          range="origin/$MIRROR_BRANCH..upstream/$MIRROR_BRANCH"
+          total=$(git rev-list --count "$range")
+          echo "Upstream $MIRROR_BRANCH has $total new commits."
+          echo "total=$total" >> "$GITHUB_OUTPUT"
 
+          # Oldest first, as they would be ported.
+          git log --reverse --no-merges --date=short \
+            --format='%H%x09%an%x09%ae%x09%ad%x09%s' "$range" |
+            awk -F '\t' -v pattern="$AUTHOR_PATTERN" 'tolower($2 " " $3) ~ pattern' > author.tsv
+          author=$(wc -l < author.tsv)
+          echo "$author of them by yabai's author."
+          echo "author=$author" >> "$GITHUB_OUTPUT"
+
+      - name: Report the author's commits
+        if: steps.upstream.outputs.author != '0'
+        run: |
+          {
+            echo "New commits by yabai's author on [$UPSTREAM]($GITHUB_SERVER_URL/$UPSTREAM) \`$MIRROR_BRANCH\`, oldest first. Review each and port what we lack; close this issue when all are handled."
+            echo
+            while IFS=$'\t' read -r sha _ _ date subject; do
+              echo "- [ ] [\`${sha:0:7}\`]($GITHUB_SERVER_URL/$UPSTREAM/commit/$sha) $date: $subject"
+            done < author.tsv
+          } > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+          gh label create "$LABEL" --color 5319e7 \
+            --description "Upstream commits to review" --force
+          # One open issue collects the reports until it is closed.
+          issue=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body-file report.md
+          else
+            gh issue create --title "Upstream commits to review" --label "$LABEL" --body-file report.md
+          fi
+
+      # After the report: when the push fails, the next run reports the same
+      # commits again rather than skipping them.
       - name: Fast-forward the mirror branch
-        if: steps.release.outputs.new == 'true'
+        if: steps.upstream.outputs.total != '0'
         run: |
           git push origin "refs/remotes/upstream/$MIRROR_BRANCH:refs/heads/$MIRROR_BRANCH"
           git push origin --tags
-
-      - name: Propose the release to the work branch
-        if: steps.release.outputs.new == 'true'
-        env:
-          TAG: ${{ steps.release.outputs.tag }}
-        run: |
-          open=$(gh pr list --base "$WORK_BRANCH" --head "$MIRROR_BRANCH" --state open --json number --jq length)
-          if [ "$open" -gt 0 ]; then
-            echo "A sync pull request is already open."
-            exit 0
-          fi
-          gh pr create --base "$WORK_BRANCH" --head "$MIRROR_BRANCH" \
-            --title "Sync upstream $TAG" \
-            --body "Upstream released [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG). Merge $MIRROR_BRANCH into $WORK_BRANCH and resolve any conflicts with local changes."
