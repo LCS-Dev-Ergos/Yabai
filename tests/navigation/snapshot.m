@@ -342,9 +342,12 @@ int main(void)
         CGContextRef ctx = bitmap();
         fixture_image = CGBitmapContextCreateImage(ctx);
         CGContextRelease(ctx);
+        // The endpoint releases the overlay, with actual timer callbacks. The
+        // fade lasts long enough for a tick to write alpha on a loaded runner:
+        // a tick past the deadline only releases.
         assert(prepare());
-        assert(space_navigation_snapshot_start(.03f, true));
-        expect_released(); // Endpoint releases the overlay, with actual timer callbacks.
+        assert(space_navigation_snapshot_start(.25f, true));
+        expect_released();
         assert(__atomic_load_n(&alpha_writes, __ATOMIC_SEQ_CST) > 0);
 
         assert(prepare());
