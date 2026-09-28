@@ -220,14 +220,25 @@ function(yabai_unity_sources unity_file target)
     file(STRINGS ${unity_file} lines)
     get_filename_component(unity_dir ${unity_file} DIRECTORY)
     set(prelude "")
+    # A source included inside a conditional, such as one payload per
+    # architecture, would leave its prelude unterminated; the prelude closes
+    # the conditionals still open.
+    set(depth 0)
     foreach(line IN LISTS lines)
+        if(line MATCHES "^[ \t]*#[ \t]*if")
+            math(EXPR depth "${depth} + 1")
+        elseif(line MATCHES "^[ \t]*#[ \t]*endif")
+            math(EXPR depth "${depth} - 1")
+        endif()
+
         if(line MATCHES "^#include \"([^\"]+\\.[cm])\"$")
             set(source ${unity_dir}/${CMAKE_MATCH_1})
             get_filename_component(source ${source} ABSOLUTE)
             file(RELATIVE_PATH id ${SRC} ${source})
             string(MAKE_C_IDENTIFIER ${id} id)
             set(header ${CMAKE_BINARY_DIR}/unity/${id}.h)
-            file(CONFIGURE OUTPUT ${header} CONTENT "${prelude}" @ONLY)
+            string(REPEAT "#endif\n" ${depth} closing)
+            file(CONFIGURE OUTPUT ${header} CONTENT "${prelude}${closing}" @ONLY)
             target_sources(${target} PRIVATE ${source})
             set_source_files_properties(${source} PROPERTIES
                 LANGUAGE OBJC
