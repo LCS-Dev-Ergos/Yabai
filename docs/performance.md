@@ -401,6 +401,39 @@ ended 6 of 6 right through `space.sh` and 6 of 6 through the socket, with no
 SketchyBar briefly disappears during a crossfade to an empty or an Edge
 Desktop; not measured yet. Raw evidence is in ignored `build/lcs21-*.log`.
 
+## Activated lcs.24: rapid navigation
+
+On 2026-09-28 lcs.24 ran with the snapshot crossfade (`crossfade 0.25`), on
+the MacBook display alone, while the screen was locked and nobody used the
+machine: switch and capture timing are representative, focus and presented
+frames were not checked. Requests went straight to the socket from Desktop 1:
+
+| Workload | Switches | Result |
+| --- | --- | --- |
+| 5 presses 80 ms apart | 5, one every 350–510 ms | right Desktop, the last 1.56 s after the last press |
+| key held 1.5 s (repeats every 30 ms) | 5, one every 380–405 ms | last switch 242 ms after the release |
+| 3 `next`, then 3 `prev`, 80 ms apart | 2 | back on Desktop 1 |
+| 14 presses 60 ms apart | 13 | 13th press refused (`navigation queue is full`), ended one Desktop short |
+
+Each crossfade step held the event loop for 117–261 ms, 130 ms typically.
+Every step's auxiliary Space then cost another 24–41 ms, when the daemon asked
+WindowServer for the type of the new Space, and macOS activating the
+destination's application on its own held the loop 40–227 ms in
+`APPLICATION_FRONT_SWITCHED`, as on earlier releases. The step itself waited
+for the whole 250 ms blend of the step before it.
+
+An isolated run of the production snapshot code on the same display timed its
+parts: capture 26–63 ms warm (76–150 ms for a process's first capture, one of
+them past the 150 ms deadline), window 2 ms, auxiliary Space 1–5 ms and
+drawing the 4112 × 2658 image 46–69 ms. The draw converted every pixel from the
+display's colour profile to the window's default space; with the window in the
+capture's own space it took 15–18 ms.
+
+The lcs.25 candidate draws in the capture's colour space, recognises its own
+auxiliary Spaces, blends steps queued behind others and held-key steps in
+125 ms, and turns presses beyond ten waiting switches into a jump instead of
+refusing them. Raw evidence is in ignored `build/lcs24-burst-*.log`.
+
 ## Remaining work
 
 The 40 ms same-application focus delay is kept for application compatibility
