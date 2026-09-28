@@ -45,6 +45,22 @@ struct space_snapshot
 static pthread_mutex_t space_snapshot_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct space_snapshot *space_snapshot_active;
 
+// A snapshot between its capture request and its overlay.
+struct space_snapshot_request
+{
+    uint32_t display;
+    uint64_t target;
+    float interval;
+    CGRect bounds;
+    uint64_t began;
+    int token;
+    struct space_snapshot_capture *capture;
+};
+
+// The asynchronous request waiting for its capture. Only the event loop
+// touches it.
+static struct space_snapshot_request space_snapshot_pending;
+
 // The auxiliary Spaces created most recently, with space_snapshot_lock held.
 // WindowServer announces each new Space to the daemon, whose handler asks for
 // its type: while a switch is under way that waited 24-41 ms on the event
@@ -97,11 +113,16 @@ static void space_snapshot_cancel_locked(void)
     dispatch_release(timer);
 }
 
+// Event loop. Ends the overlay and a capture still waited for; the step that
+// waits for that capture learns so when it asks to present it.
 static void space_navigation_snapshot_cancel(void)
 {
     pthread_mutex_lock(&space_snapshot_lock);
     space_snapshot_cancel_locked();
     pthread_mutex_unlock(&space_snapshot_lock);
+
+    if (space_snapshot_pending.capture) space_snapshot_capture_release(space_snapshot_pending.capture);
+    space_snapshot_pending = (struct space_snapshot_request) { 0 };
 }
 
 static void space_navigation_snapshot_space_changed(void)
@@ -133,10 +154,12 @@ static void space_snapshot_tick(struct space_snapshot *snapshot)
     pthread_mutex_unlock(&space_snapshot_lock);
 }
 
-// Called by the event thread. Capture permission is never requested here:
-// unavailable, over-budget or late captures fall back to an ordinary switch.
-// One snapshot at a time bounds both the capture and overlay memory.
-static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t target, float interval)
+// Event loop. Capture permission is never requested here: unavailable,
+// over-budget or late captures fall back to an ordinary switch. One snapshot
+// at a time bounds both the capture and overlay memory. False when no capture
+// started.
+static bool space_snapshot_request_start(struct space_snapshot_request *request, uint32_t display,
+                                         uint64_t target, float interval, int token)
 {
     space_navigation_snapshot_cancel();
     if (@available(macOS 15.2, *)) { } else return false;
@@ -163,15 +186,50 @@ static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t target,
         return false;
     }
 
-    CGImageRef image = space_snapshot_capture_image(bounds);
-    uint64_t captured = read_os_timer();
+    struct space_snapshot_capture *capture = space_snapshot_capture_start(bounds, token);
+    if (!capture) {
+        space_snapshot_trace("no capture", began, read_os_timer());
+        return false;
+    }
+
+    *request = (struct space_snapshot_request) {
+        .display = display,
+        .target = target,
+        .interval = interval,
+        .bounds = bounds,
+        .began = began,
+        .token = token,
+        .capture = capture
+    };
+
+    return true;
+}
+
+// Event loop. Shows the captured image in our overlay window, ready to fade,
+// and releases the request's capture. False when there is nothing to show.
+static bool space_snapshot_request_finish(struct space_snapshot_request *request, bool wait)
+{
+    uint32_t display = request->display;
+    uint64_t target = request->target;
+    float interval = request->interval;
+    CGRect bounds = request->bounds;
+    uint64_t began = request->began;
+
+    // An asynchronous request reports when the image arrived, not when the
+    // event loop came to it.
+    struct space_snapshot_capture *capture = request->capture;
+    CGImageRef image = space_snapshot_capture_take(capture, wait);
+    uint64_t captured = image && !wait ? capture->arrived : read_os_timer();
+    space_snapshot_capture_release(capture);
+    request->capture = NULL;
+
     if (!image) {
         space_snapshot_trace("no capture", began, captured);
         return false;
     }
 
-    width = CGImageGetWidth(image);
-    height = CGImageGetHeight(image);
+    size_t width = CGImageGetWidth(image);
+    size_t height = CGImageGetHeight(image);
     if (!width || !height || width > SPACE_SNAPSHOT_MAX_PIXELS / height
         || !CGRectEqualToRect(bounds, CGDisplayBounds(display))) {
         CGImageRelease(image);
@@ -250,6 +308,42 @@ static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t target,
     // This is a bounded presentation opportunity, not a presentation fence.
     if (success) usleep((useconds_t) (fminf(interval, 1.0f / 30.0f) * 1e6f));
     return success;
+}
+
+// Event loop: captures the display and shows the image before returning. The
+// capture can hold the event loop for SPACE_SNAPSHOT_CAPTURE_NS.
+static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t target, float interval)
+{
+    struct space_snapshot_request request;
+    if (!space_snapshot_request_start(&request, display, target, interval, 0)) return false;
+
+    return space_snapshot_request_finish(&request, true);
+}
+
+// Event loop: requests the capture and returns. The callback, and the
+// deadline in any case, call space_navigation_snapshot_captured(token); the
+// first of them to reach the event loop presents the snapshot. False when no
+// capture started.
+static bool space_navigation_snapshot_capture(uint32_t display, uint64_t target, float interval, int token)
+{
+    if (!space_snapshot_request_start(&space_snapshot_pending, display, target, interval, token)) return false;
+
+    dispatch_after(space_snapshot_pending.capture->deadline, dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+        space_navigation_snapshot_captured(token);
+    });
+
+    return true;
+}
+
+// Event loop: shows the snapshot the request for `token` captured.
+static enum space_snapshot_result space_navigation_snapshot_present(int token)
+{
+    if (!space_snapshot_pending.capture || space_snapshot_pending.token != token) return SPACE_SNAPSHOT_CANCELLED;
+
+    struct space_snapshot_request request = space_snapshot_pending;
+    space_snapshot_pending = (struct space_snapshot_request) { 0 };
+
+    return space_snapshot_request_finish(&request, false) ? SPACE_SNAPSHOT_READY : SPACE_SNAPSHOT_MISSING;
 }
 
 static bool space_navigation_snapshot_start(float duration, bool switched)

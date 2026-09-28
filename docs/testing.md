@@ -23,9 +23,12 @@ editor's root `compile_commands.json` symlink.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
   implementation with simulated OS calls, including rapid repeats, failure
   restoration, the starting Desktop of relative navigation, the raise for
-  applications with windows on two displays and the focus a burst's last step
-  gives a Desktop it finds current; numeric arguments are also covered by the
-  unity tests.
+  applications with windows on two displays, the focus a burst's last step
+  gives a Desktop it finds current, and a queued crossfade that switches when
+  its capture's event comes: with or without the image, stopped by a
+  cancellation, a click, Mission Control or a display animation, abandoned by
+  another command, or with its window gone; numeric arguments are also
+  covered by the unity tests.
 - `navigation_spaces_tests` reads a constructed Desktop snapshot: mission-control
   order across displays, visibility, fullscreen type, the Desktops visible on
   other displays, the fallback to WindowServer for unknown or unreadable data and
@@ -38,7 +41,9 @@ editor's root `compile_commands.json` symlink.
   and its confirmation, key repeats, reversals, Desktop numbers, the ten-switch
   limit with its jumps and replacement (every press reaching the destination),
   which step settles a Desktop, refused requests, clicks, other commands,
-  failed steps and early wakes.
+  failed steps, early wakes, and a step that waits for its capture: nothing
+  else starts meanwhile, and a late report after a cancellation changes
+  nothing.
 - `navigation_queue_tests` checks how relative requests are recognized and
   merged while one waits: repeats, separate presses, directions, interleaved
   queries, allocation failure and concurrent admission/consumption.
@@ -192,7 +197,9 @@ mocked capture/window dependencies and real timers. It checks endpoint release,
 cancellation, window/context/auxiliary-Space failures, late capture, a single in-flight
 request, a capture whose callback never comes (and then comes late), the
 window's colour space before drawing, the auxiliary Spaces the daemon
-recognises as its own and the watchdog. Debug, ASan/UBSan and TSan cover this target; presented
+recognises as its own and the watchdog; and the asynchronous capture: its
+callback and deadline reports, tokens, late and denied captures, a late
+request call, cancellation and retirement by a synchronous preparation. Debug, ASan/UBSan and TSan cover this target; presented
 frames still require the live probe and installed-release check.
 
 ## Static analysis

@@ -1662,6 +1662,13 @@ static EVENT_HANDLER(SPACE_NAVIGATION_DISPATCH)
 {
     space_navigation_schedule_timer();
 }
+
+// A navigation step's snapshot came back or reached its deadline, see
+// navigation/step.c.
+static EVENT_HANDLER(SPACE_NAVIGATION_CAPTURED)
+{
+    space_navigation_step_captured(param1);
+}
 #pragma clang diagnostic pop
 
 #include "event_loop_trace.c"

@@ -65,7 +65,7 @@ static uint32_t *space_window_list(uint64_t sid, int *count, bool minimized)
 
 static struct window *window_manager_find_window(void *wm, uint32_t id)
 {
-    return id > 0 && id <= 2 ? &windows[id-1] : NULL;
+    return id > 0 && id <= 2 && id != destroyed_id ? &windows[id-1] : NULL;
 }
 
 static uint64_t read_os_timer(void)
@@ -170,6 +170,30 @@ static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t sid, fl
     if (click_during_snapshot) { timestamp += 100000000; seconds_since_click = .01; }
     return crossfade_success;
 }
+// The asynchronous capture: whether it starts, and what presenting it finds.
+static bool space_navigation_snapshot_capture(uint32_t display, uint64_t sid, float interval, int token)
+{
+    (void) display; (void) sid; (void) interval;
+    ++capture_calls;
+    assert(focus_calls == 0); // Capture the source before switching.
+    capture_token = token;
+    return capture_starts;
+}
+
+static enum space_snapshot_result space_navigation_snapshot_present(int token)
+{
+    ++present_calls;
+    assert(token == capture_token && focus_calls == 0);
+    if (click_during_snapshot) { timestamp += 100000000; seconds_since_click = .01; }
+    return present_result;
+}
+
+static void space_navigation_schedule_completed(bool success)
+{
+    ++completed_calls;
+    completed_success = success;
+}
+
 static bool space_navigation_snapshot_start(float duration, bool success)
 {
     ++snapshot_starts;

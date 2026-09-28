@@ -102,7 +102,7 @@ flowchart LR
 | Main | `main` → `[NSApp run]` | Carbon process events (`process_handler`), NSWorkspace and distributed notifications and KVO (`workspace.m`), AX observers per application and for Dock (`application.c`, `mission_control.c`), the mouse event tap (`mouse_handler.c`), display reconfiguration (`display_manager.c`), SkyLight connection notifications (`mission_control.c` `connection_handler`), and retries dispatched to the main queue. | The process table (`g_process_manager`), `mouse_state` click flags, `__last_cmd_tab_time` (atomic). Everything else it only posts as events. |
 | Event loop | `event_loop_begin` | Every event handler and every daemon command, one at a time (`event_loop_run`). Signals are spawned at the end of each event (`event_signal_flush`). | All window, space, display, view and rule state; all fork navigation state; every SA request of commands and navigation. |
 | Message loop | `message_loop_begin` | `accept` on the daemon socket; the fork's grouping of `space --navigate focus next/prev` requests (`space_navigation_accept`). | `g_space_navigation_queue` (mutex). |
-| Global queues | `dispatch_after`, `dispatch_source` | Fork: navigation wake-ups and deferred focus (post events), the snapshot overlay's alpha timer and its cancel handler, ScreenCaptureKit completion. | Snapshot state under `space_snapshot_lock`; capture bookkeeping under its own mutex. |
+| Global queues | `dispatch_after`, `dispatch_source` | Navigation wake-ups, deferred focus and capture deadlines (post events), the snapshot overlay's alpha timer and its cancel handler, ScreenCaptureKit completion (posts an event for a queued step). | Snapshot state under `space_snapshot_lock`; capture bookkeeping under its own mutex. |
 | Animation | `window_manager_animate_window_list` | Upstream window animations: proxy windows built on short-lived threads, frames on a CVDisplayLink thread, which also asks Dock to swap proxies back. | Animation contexts and `window_animations_table` under `window_animations_lock`. |
 
 Startup order (`src/yabai.c`): the event loop thread starts first, then the
@@ -127,7 +127,7 @@ try the lock, so Dock's main thread never waits for the worker.
 
 Producers post with `event_loop_post`: a lock-free multi-producer list whose
 nodes come from a 512 KiB memory pool, and a semaphore wakes the consumer.
-The 44 event types (`src/event_loop.h`) come from:
+The 43 event types (`src/event_loop.h`) come from:
 
 | Producer | Events |
 | --- | --- |
@@ -139,7 +139,8 @@ The 44 event types (`src/event_loop.h`) come from:
 | Display reconfiguration (main) | `DISPLAY_ADDED/REMOVED/MOVED/RESIZED` |
 | Mouse tap (main) | `MOUSE_DOWN/UP/DRAGGED/MOVED` (moves only with `focus_follows_mouse`) |
 | Message loop | `DAEMON_MESSAGE` |
-| Fork timers (global queues) | `SPACE_NAVIGATION_FOCUS`, `SPACE_NAVIGATION_DISPATCH` |
+| Navigation timers (global queues) | `SPACE_NAVIGATION_FOCUS`, `SPACE_NAVIGATION_DISPATCH`, and `SPACE_NAVIGATION_CAPTURED` at a capture's deadline |
+| ScreenCaptureKit completion | `SPACE_NAVIGATION_CAPTURED` |
 | Handlers themselves | Directly: `APPLICATION_FRONT_SWITCHED` and `WINDOW_FOCUSED` that arrived before their application or window was known. Through the main queue, 100 ms later: `APPLICATION_LAUNCHED` retries, `MISSION_CONTROL_CHECK_FOR_EXIT`, `MISSION_CONTROL_EXIT`. |
 
 Ordering is FIFO. Object lifetimes rely on it: the main thread posts
@@ -160,6 +161,7 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 | `g_space_navigation_schedule`, `_focus`, `_anchor`, `_spaces` (fork) | Event loop | Timers only post events. |
 | Snapshot (`space_snapshot_active`, recent Spaces) | Event loop creates and cancels | Alpha timer on a global queue, under `space_snapshot_lock`; the timer's cancel handler frees the snapshot without the lock. |
 | Capture bookkeeping (`space_snapshot_captures`) | Event loop begins | ScreenCaptureKit completion ends it; own mutex, reference-counted capture. |
+| Capture a step waits for (`space_snapshot_pending`, `space_navigation_flight`) | Event loop | ScreenCaptureKit completion and the deadline timer only post `SPACE_NAVIGATION_CAPTURED`; the capture's image is handed over through its semaphore. |
 | `__pending_window_focus_id` (fork) | Event loop | Atomic. |
 
 ## Upstream subsystems
@@ -196,9 +198,12 @@ Navigation (`space --navigate`), in the order a request travels:
 3. **Schedule** (`navigation/schedule.c`, event loop, pure logic with
    injected clock and executor): bounded queue, rhythm, effect and activation
    waits, overflow jumps, which step activates or settles.
-4. **Step** (`navigation/step.c`, event loop): resolves the destination,
-   chooses the window, decides the raise, prepares the effect, asks Dock to
-   switch, starts the effect, activates.
+4. **Step** (`navigation/step.c`, event loop): plans (destination, window,
+   raise), prepares the effect, asks Dock to switch, starts the effect,
+   activates. A queued crossfade step returns after requesting its capture;
+   `SPACE_NAVIGATION_CAPTURED`, from the capture's callback or its 150 ms
+   deadline, switches and activates, and the schedule starts nothing else
+   meanwhile.
 5. **Activation** (`navigation/activation.c`, `window_focus_events.c`):
    focus without the upstream 40 ms sleep, raise for applications with windows
    on other displays, the observed focus that spares an AX query.
@@ -227,7 +232,7 @@ Diagnostics: signposts in subsystem `com.lcs.yabai`, categories
 | 1 | `space_snapshot_cancel_locked` | Read the snapshot after its cancel handler could free it; crashed lcs.25. | Fixed in lcs.26 |
 | 2 | `memory_pool_push` for events and signals | The pool wraps to its start without checking that the consumer is past it. If the event loop stalls while producers post more than about 21,000 events (24 bytes each), new events overwrite unread ones and their `next` links. Needs a long stall (each AX call may wait one second) and a busy producer, such as mouse moves with `focus_follows_mouse` (off here). | Latent; memory corruption if hit |
 | 3 | `sa.m` request builders | `pack` never checks the 4 KiB buffer. Requests with one entry per window (`move_window_list_to_space`, proxy swaps, `order_window_in`) overflow the stack past roughly 500 to 1,000 windows. The fork's opacity batch has a bound. | Latent; stack overflow if hit |
-| 4 | Event loop | Everything runs on one thread, and some calls wait for others: on a Space change upstream revalidates windows and sets frames over AX (about 1.1 s of busy time in a 45-second sample of bursts), activation waits for WindowServer (about 40 ms on average over 16 activations), a snapshot capture up to 150 ms, Dock up to 1 s. | Performance; bounded by timeouts |
+| 4 | Event loop | Everything runs on one thread, and some calls wait for others: on a Space change upstream revalidates windows and sets frames over AX (about 1.1 s of busy time in a 45-second sample of bursts), activation waits for WindowServer (about 40 ms on average over 16 activations), Dock up to 1 s. A paced crossfade no longer waits for its capture; drawing the image and one refresh (about 30 ms) remain, and with pacing off the capture (up to 150 ms) as well. | Performance; bounded by timeouts |
 | 5 | Daemon socket | A fixed name in the shared `/tmp`: another local user who creates it first stops the daemon from binding. It is made `0600` only after `bind`, which matters with a permissive umask. No peer authentication. | Security; local |
 | 6 | TCC | Grants of a bare binary follow its path; every store path asked again and ran without crossfades until restart. | Fixed in Dotfiles `9a8fb78` (switch pending) |
 | 7 | Upstream animations and navigation | The CVDisplayLink thread and the event loop both send Dock requests; Dock serialises them, but nothing orders a proxy swap against a navigation switch. | Unverified; watch |
@@ -255,10 +260,11 @@ lands as its own commits.
    (capture and overlay separately), `effects/window_fade`. Each header
    states its thread and the state it owns. Callers in upstream files go
    through one hook header instead of forward declarations.
-2. **Split the step** into plan, switch and activate. This is also what the
-   asynchronous capture needs: plan and capture start, the capture callback
-   posts an event, and switch and activation run from it, so the event loop no
-   longer waits for ScreenCaptureKit.
+2. Done. **Split the step** into plan, switch and activate. This is also what
+   the asynchronous capture needs: plan and capture start, the capture
+   callback posts an event, and switch and activation run from it, so the
+   event loop no longer waits for ScreenCaptureKit. Only paced steps capture
+   this way; with pacing off a request still waits.
 3. Done. **One header for private SkyLight and AX declarations**: the daemon's
    are in `misc/extern.h`; the payload keeps its own in `osax/payload.m`.
 4. **Fix risks 2 and 3**: a bounded event queue that reports overflow and

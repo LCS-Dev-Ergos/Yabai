@@ -230,7 +230,8 @@ static bool space_navigation_plan(uint64_t current, struct space_navigation_step
 }
 
 // After Dock switched, or failed to: the report to the schedule, the
-// activation and the anchor.
+// activation and the anchor. The window is looked up again, since an
+// asynchronous capture lets other events run after the plan.
 static void space_navigation_finish(struct space_navigation_plan *plan, bool success, float effect_duration)
 {
     if (success) {
@@ -327,4 +328,83 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
     }
 
     return space_navigation_switch_crossfade(&plan, prepared);
+}
+
+// The step waiting for its snapshot capture. Only the event loop touches it.
+static struct
+{
+    bool active;
+    int token;
+    uint64_t capture_started;
+    struct space_navigation_plan plan;
+} space_navigation_flight;
+
+// Starts a step. A crossfade requests its capture and returns
+// SPACE_NAVIGATION_PENDING; space_navigation_step_captured switches when the
+// capture comes back or its deadline passes, and reports the outcome to the
+// schedule. Any other step runs to its end here.
+static enum space_navigation_result space_navigation_begin_step(uint64_t current, struct space_navigation_step *step)
+{
+    if (current == step->sid || !step->crossfade) {
+        return space_navigation_run_step(current, step) ? SPACE_NAVIGATION_SWITCHED : SPACE_NAVIGATION_FAILED;
+    }
+
+    struct space_navigation_plan plan;
+    uint32_t *ids;
+    int count;
+    if (!space_navigation_plan(current, step, &plan, &ids, &count)) return SPACE_NAVIGATION_FAILED;
+
+    if (space_navigation_crossfades(current, step)) {
+        uint64_t capture_started = read_os_timer();
+        int token = ++space_navigation_flight.token;
+        if (!token) token = ++space_navigation_flight.token;
+
+        if (space_navigation_snapshot_capture(plan.display, plan.sid, space_navigation_frame_interval(plan.display), token)) {
+            space_navigation_flight.active = true;
+            space_navigation_flight.capture_started = capture_started;
+            space_navigation_flight.plan = plan;
+            return SPACE_NAVIGATION_PENDING;
+        }
+
+        if (space_navigation_clicked_since(capture_started)) {
+            space_navigation_snapshot_cancel();
+            return SPACE_NAVIGATION_FAILED;
+        }
+    }
+
+    return space_navigation_switch_crossfade(&plan, false) ? SPACE_NAVIGATION_SWITCHED : SPACE_NAVIGATION_FAILED;
+}
+
+// Event loop, when the capture of the step in flight came back or reached its
+// deadline. The step stops if the capture was cancelled meanwhile, or if a
+// click, Mission Control or a display animation came first; it switches
+// without the crossfade if the image is missing or came too late.
+static void space_navigation_step_captured(int token)
+{
+    if (!space_navigation_flight.active || token != space_navigation_flight.token) return;
+    space_navigation_flight.active = false;
+
+    struct space_navigation_plan plan = space_navigation_flight.plan;
+    enum space_snapshot_result result = space_navigation_snapshot_present(token);
+
+    bool stopped = result == SPACE_SNAPSHOT_CANCELLED
+        || space_navigation_clicked_since(space_navigation_flight.capture_started)
+        || mission_control_is_active() || display_manager_display_is_animating(plan.display);
+
+    bool success = false;
+
+    if (!stopped) {
+        success = space_navigation_switch_crossfade(&plan, result == SPACE_SNAPSHOT_READY);
+    } else if (result == SPACE_SNAPSHOT_READY) {
+        space_navigation_snapshot_cancel();
+    }
+
+    space_navigation_schedule_completed(success);
+}
+
+// The step in flight is abandoned: its capture, when it comes back, finds
+// nothing to switch, and the schedule is not told.
+static void space_navigation_step_cancel(void)
+{
+    space_navigation_flight.active = false;
 }

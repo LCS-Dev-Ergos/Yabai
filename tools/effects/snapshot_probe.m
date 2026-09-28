@@ -12,6 +12,13 @@ static uint64_t read_os_timer(void)
 {
     return clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
 }
+// The probe prepares synchronously; nothing waits for a capture's report.
+static void space_navigation_snapshot_captured(int token)
+{
+    (void) token;
+}
+
+#include "../../src/effects/snapshot.h"
 #include "../../src/effects/snapshot.m"
 
 int main(int argc, const char **argv)

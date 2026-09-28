@@ -24,10 +24,11 @@ static double space_navigation_seconds_since_click(void)
 #define debug(...)
 
 #include "../../src/navigation/schedule.h"
+#include "../../src/navigation/step.h"
 
 // The schedule's host, defined below: the step that runs and the wake it asks for.
-static bool space_navigation_execute(struct space_navigation_request *request, int steps,
-                                     bool activate, bool settle, float duration);
+static enum space_navigation_result space_navigation_execute(struct space_navigation_request *request, int steps,
+                                                             bool activate, bool settle, float duration);
 static void space_navigation_schedule_after(uint64_t delay_ns);
 
 #include "../../src/navigation/schedule.c"
@@ -44,21 +45,25 @@ static struct
 
 static int executed_count;
 static bool execute_success;
+static bool execute_pending;
 static uint32_t activate_window;
 static uint64_t execute_delay;
 
 // The window each activating step activates, if any, as navigation reports it.
-static bool space_navigation_execute(struct space_navigation_request *request, int steps,
-                                     bool activate, bool settle, float duration)
+// A pending step waits for its capture; the test ends it.
+static enum space_navigation_result space_navigation_execute(struct space_navigation_request *request, int steps,
+                                                             bool activate, bool settle, float duration)
 {
     assert(executed_count < 64);
     executed[executed_count++] = (typeof(executed[0])) { steps, request->sid, activate, settle, duration, now };
+    if (execute_pending) return SPACE_NAVIGATION_PENDING;
+
     now += execute_delay;
 
     if (execute_success) space_navigation_schedule_switched(request->crossfade ? duration : 0.0f);
 
     if (activate && activate_window) space_navigation_schedule_activated(activate_window);
-    return execute_success;
+    return execute_success ? SPACE_NAVIGATION_SWITCHED : SPACE_NAVIGATION_FAILED;
 }
 
 static uint64_t wakes[64];
@@ -110,6 +115,7 @@ static void reset(void)
     wake_count = 0;
     executed_count = 0;
     execute_success = true;
+    execute_pending = false;
     activate_window = 0;
     execute_delay = 0;
     click_seconds = 1000.0;
@@ -581,6 +587,70 @@ static void test_cancellation(void)
     assert(!space_navigation_schedule_pacing() && g_space_navigation_schedule.count == 0);
 }
 
+static void test_captured_step(void)
+{
+    // A step waiting for its capture holds back the next one, however long
+    // it waits, and the next one's pause counts from its end.
+    reset();
+    execute_pending = true;
+    press(1, false, true);
+    press(1, false, true);
+    assert(executed_count == 1 && g_space_navigation_schedule.running);
+    advance(500 * MS);
+    assert(executed_count == 1 && pending_wakes() == 0);
+
+    uint64_t ended = now;
+    execute_pending = false;
+    space_navigation_schedule_switched(SPACE_NAVIGATION_BURST_S);
+    space_navigation_schedule_completed(true);
+    assert(!g_space_navigation_schedule.running && executed[0].activate && !g_space_navigation_schedule.unsettled);
+    advance(124 * MS);
+    assert(executed_count == 1);
+    advance(MS);
+    assert(executed_count == 2 && executed[1].time == ended + 125 * MS && executed[1].activate);
+
+    // A report after the step ended changes nothing.
+    space_navigation_schedule_completed(false);
+    assert(g_space_navigation_schedule.count == 0 && !g_space_navigation_schedule.unsettled);
+
+    // A step that fails after its capture empties the queue.
+    reset();
+    execute_pending = true;
+    press(1, false, true);
+    press(1, false, true);
+    space_navigation_schedule_completed(false);
+    assert(!g_space_navigation_schedule.running && g_space_navigation_schedule.count == 0);
+    assert(pending_wakes() == 0);
+
+    // Another command abandons the step in flight with the queue; its late
+    // report is ignored, and the next press waits only for the rhythm.
+    reset();
+    execute_pending = true;
+    press(1, false, true);
+    press(1, false, true);
+    space_navigation_schedule_cancel();
+    assert(!g_space_navigation_schedule.running && g_space_navigation_schedule.count == 0);
+    space_navigation_schedule_completed(true);
+    assert(!g_space_navigation_schedule.unsettled);
+
+    execute_pending = false;
+    press(1, false, true);
+    assert(executed_count == 1);
+    advance(SPACE_NAVIGATION_RHYTHM_NS);
+    assert(executed_count == 2 && executed[1].activate && !executed[1].settle);
+
+    // A click during the capture: the step's own check fails it, and the
+    // queue stays empty.
+    reset();
+    execute_pending = true;
+    press(1, false, true);
+    click_seconds = 0.001;
+    press(1, false, true);
+    assert(executed_count == 1);
+    space_navigation_schedule_completed(false);
+    assert(g_space_navigation_schedule.count == 0);
+}
+
 int main(void)
 {
     test_isolated_and_burst();
@@ -592,7 +662,8 @@ int main(void)
     test_overflow();
     test_full_queue();
     test_cancellation();
+    test_captured_step();
 
-    puts("navigation schedule: rhythm, burst pace, activation wait, repeats, order, overflow and cancellation checks passed");
+    puts("navigation schedule: rhythm, burst pace, activation wait, repeats, order, overflow, cancellation and captured-step checks passed");
     return 0;
 }

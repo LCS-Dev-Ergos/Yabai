@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../../src/osax/common.h"
+#include "../../src/effects/snapshot.h"
 
 enum
 {
@@ -57,6 +58,11 @@ static bool crossfade_success;
 static float last_crossfade_duration;
 static int snapshot_prepares, snapshot_starts, snapshot_cancels;
 static bool click_during_snapshot;
+static bool capture_starts;
+static int capture_calls, present_calls, completed_calls, capture_token;
+static enum space_snapshot_result present_result;
+static bool completed_success;
+static uint32_t destroyed_id;
 static uint32_t activated_id;
 static int opacity_fail_at;
 static bool expect_fade_started;
@@ -127,6 +133,12 @@ static void reset(void)
     last_crossfade_duration = 0.0f;
     snapshot_prepares = snapshot_starts = snapshot_cancels = 0;
     click_during_snapshot = false;
+    capture_starts = true;
+    capture_calls = present_calls = completed_calls = capture_token = 0;
+    present_result = SPACE_SNAPSHOT_READY;
+    completed_success = false;
+    destroyed_id = 0;
+    space_navigation_step_cancel();
     activated_id = 0;
     focused_id = noted_id = 0;
     opacity_fail_at = 0;

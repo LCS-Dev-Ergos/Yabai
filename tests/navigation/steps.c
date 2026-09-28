@@ -11,6 +11,129 @@ static bool run_step(uint64_t sid, bool crossfade, bool activate)
     return space_navigation_run_step(active_space, &step);
 }
 
+static enum space_navigation_result begin_step(uint64_t sid, bool crossfade, bool activate)
+{
+    struct space_navigation_step step = {
+        .sid = sid,
+        .crossfade = crossfade,
+        .alpha = crossfade ? 1.0f : .95f,
+        .duration = .2f,
+        .activate = activate
+    };
+
+    return space_navigation_begin_step(active_space, &step);
+}
+
+// A queued crossfade returns while its capture is under way. The capture's
+// event switches, starts the crossfade, activates and reports to the schedule.
+static void test_captured_steps(void)
+{
+    reset();
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
+    assert(capture_calls == 1 && snapshot_prepares == 0 && focus_calls == 0);
+    assert(window_focus_calls == 0 && completed_calls == 0);
+
+    space_navigation_step_captured(capture_token);
+    assert(present_calls == 1 && focus_calls == 1 && snapshot_starts == 1 && switched_duration == .2f);
+    assert(window_focus_calls == 1 && focused_id == 1 && activated_id == 1 && noted_id == 1);
+    assert(completed_calls == 1 && completed_success && space_navigation_anchor.sid == 2);
+
+    // Only the first event for the step counts: the deadline after the
+    // callback, or an older step's event, finds nothing.
+    space_navigation_step_captured(capture_token);
+    space_navigation_step_captured(capture_token - 1);
+    assert(present_calls == 1 && focus_calls == 1 && completed_calls == 1);
+
+    // No usable image: the step switches without the crossfade.
+    reset();
+    present_result = SPACE_SNAPSHOT_MISSING;
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
+    space_navigation_step_captured(capture_token);
+    assert(focus_calls == 1 && snapshot_starts == 0 && switched_duration == 0.0f);
+    assert(window_focus_calls == 1 && completed_calls == 1 && completed_success);
+
+    // Cancelled while it was captured, by a click, Mission Control or a
+    // display change: nothing switches, and the step fails.
+    reset();
+    present_result = SPACE_SNAPSHOT_CANCELLED;
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
+    int cancels = snapshot_cancels;
+    space_navigation_step_captured(capture_token);
+    assert(focus_calls == 0 && window_focus_calls == 0 && completed_calls == 1 && !completed_success);
+    assert(snapshot_cancels == cancels); // Nothing of ours left to remove.
+
+    // A click the handlers have not seen yet stops the step as well, and
+    // removes the image it presented.
+    reset();
+    click_during_snapshot = true;
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
+    cancels = snapshot_cancels;
+    space_navigation_step_captured(capture_token);
+    assert(focus_calls == 0 && snapshot_cancels == cancels + 1);
+    assert(completed_calls == 1 && !completed_success);
+
+    // So does Mission Control, and a display animating, since the capture.
+    reset();
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
+    mission_control = true;
+    space_navigation_step_captured(capture_token);
+    assert(focus_calls == 0 && completed_calls == 1 && !completed_success);
+
+    reset();
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
+    animating = true;
+    space_navigation_step_captured(capture_token);
+    assert(focus_calls == 0 && completed_calls == 1 && !completed_success);
+
+    // Another command abandons the step: its event switches nothing and
+    // reports nothing, since the schedule has been emptied already.
+    reset();
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
+    space_navigation_step_cancel();
+    space_navigation_step_captured(capture_token);
+    assert(present_calls == 0 && focus_calls == 0 && completed_calls == 0);
+
+    // The window chosen before the capture can be gone after it: the step
+    // still switches, and activates nothing.
+    reset();
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
+    destroyed_id = 1;
+    space_navigation_step_captured(capture_token);
+    assert(focus_calls == 1 && window_focus_calls == 0 && activated_id == 0);
+    assert(completed_calls == 1 && completed_success);
+
+    // Dock fails after the image was presented: the crossfade is ended and
+    // nothing is activated.
+    reset();
+    focus_success = false;
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
+    space_navigation_step_captured(capture_token);
+    assert(snapshot_starts == 1 && window_focus_calls == 0 && completed_calls == 1 && !completed_success);
+
+    // No capture could start: the step switches at once, without crossfade.
+    reset();
+    capture_starts = false;
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_SWITCHED);
+    assert(capture_calls == 1 && focus_calls == 1 && snapshot_starts == 0 && window_focus_calls == 1);
+    assert(completed_calls == 0);
+
+    // Steps without a capture run to their end at once.
+    reset();
+    assert(begin_step(2, false, true) == SPACE_NAVIGATION_SWITCHED);
+    assert(capture_calls == 0 && batch_calls == 2 && focus_calls == 1 && window_focus_calls == 1);
+
+    reset();
+    visible = true;
+    assert(begin_step(3, true, true) == SPACE_NAVIGATION_SWITCHED);
+    assert(capture_calls == 0 && focus_calls == 1);
+
+    reset();
+    mission_control = true;
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_FAILED);
+    assert(capture_calls == 0 && focus_calls == 0);
+    assert(completed_calls == 0);
+}
+
 // A crossfade captures the source, asks Dock for an ordinary switch, then
 // fades only yabai's snapshot. No path may mutate Space alpha or levels.
 static void test_steps(void)

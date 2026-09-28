@@ -136,7 +136,8 @@ disabled the crossfade until yabai restarted; after two seconds that capture
 counts as lost and a new one may start. A 24-million-pixel limit bounds the
 accepted image size. The 150 ms deadline includes starting the capture, but
 cannot interrupt the framework's call itself; it is not a hard bound on the
-whole navigation request.
+whole navigation request. An image that arrived in time stays usable however
+late the event loop comes to it.
 
 The image is drawn into the window's backing before the window is shown: a
 Core Animation remote surface presented uninitialized white frames during
@@ -158,17 +159,24 @@ retires an overlay if Dock has not replied. This is not display-link
 synchronization or a presentation fence. Fading the CALayer's opacity itself
 was rejected after captured frames showed a luminosity dip on the test host.
 
-Preparation runs on the daemon's event loop and holds it: on the MacBook
-display, capture took 26–63 ms warm and 76–150 ms for a process's first
-capture (one of them past the deadline), and window, draw and Space together
-about 20 ms, before the one-frame presentation opportunity. A
-signpost in category `effects` records each snapshot's capture and preparation
-time and, when none was used, why.
+A queued step requests the capture and returns. The capture's callback, or
+its deadline, posts `SPACE_NAVIGATION_CAPTURED`; the event loop then draws the
+image, switches and activates. Other events run meanwhile, and the schedule
+starts no other step until this one ends. With pacing off a request still
+prepares synchronously and holds the event loop through the capture. On the
+MacBook display, capture took 26–63 ms warm and 76–150 ms for a process's
+first capture (one of them past the deadline); window, draw and Space
+together, about 20 ms, and the one-frame presentation opportunity still run
+on the event loop. A signpost in category `effects` records each snapshot's
+capture and preparation time and, when none was used, why.
 
 New navigation, mouse input, other non-query commands, display reconfiguration,
-Mission Control, Dock restart and wake cancel the overlay. A click during
-capture cancels the pending step before switching. One bounded refresh
-opportunity precedes the switch; it does not prove the image was presented.
+Mission Control, Dock restart and wake cancel the overlay, and the capture a
+step still waits for. That step then stops before switching, as it does after
+a click, Mission Control or a display animation since the capture, and the
+queue behind it is dropped; another command abandons it together with the
+queue. One bounded refresh opportunity precedes the switch; it does not prove
+the image was presented.
 The outgoing frame is a still image, so video and changing application content
 freeze within that image for the short blend.
 

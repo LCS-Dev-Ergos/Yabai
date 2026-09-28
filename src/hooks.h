@@ -41,10 +41,11 @@ static void space_navigation_snapshot_cancel(void);
 // the steps of the requests that joined it.
 static void space_navigation_queue_claim(int sockfd);
 
-// event_loop.c, the navigation events SPACE_NAVIGATION_FOCUS and
-// SPACE_NAVIGATION_DISPATCH.
+// event_loop.c, the navigation events SPACE_NAVIGATION_FOCUS,
+// SPACE_NAVIGATION_DISPATCH and SPACE_NAVIGATION_CAPTURED.
 static void space_navigation_focus_resume(int generation);
 static void space_navigation_schedule_timer(void);
+static void space_navigation_step_captured(int token);
 
 // event_loop.c, event_loop_run after each event: signposts slow events.
 static void event_loop_trace(enum event_type type, uint64_t started);

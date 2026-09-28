@@ -273,6 +273,16 @@ static void cancel_and_let_handler_run(dispatch_source_t source)
     if (pthread_main_np()) usleep(20000);
 }
 
+// The reports of asynchronous captures: from the callback, and at the
+// deadline.
+static int captured_reports, captured_token;
+
+static void space_navigation_snapshot_captured(int token)
+{
+    __atomic_store_n(&captured_token, token, __ATOMIC_SEQ_CST);
+    __atomic_add_fetch(&captured_reports, 1, __ATOMIC_SEQ_CST);
+}
+
 #define dispatch_source_cancel cancel_and_let_handler_run
 #define SCScreenshotManager SnapshotCaptureMock
 #define CGPreflightScreenCaptureAccess fake_access
@@ -284,6 +294,7 @@ static void cancel_and_let_handler_run(dispatch_source_t source)
 #define CGDisplayModeRelease fake_mode_release
 #define CGDisplayCreateUUIDFromDisplayID fake_uuid
 #define SPACE_SNAPSHOT_STALE_NS 400000000ULL
+#include "../../src/effects/snapshot.h"
 #include "../../src/effects/snapshot.m"
 
 static bool space_snapshot_capture_pending(void)
@@ -298,6 +309,20 @@ static bool space_snapshot_capture_pending(void)
 static bool prepare(void)
 {
     return space_navigation_snapshot_prepare(1, 2, 1.0f / 120.0f);
+}
+
+static void expect_reports(int count)
+{
+    uint64_t end = read_os_timer() + 2000000000ULL;
+    while (__atomic_load_n(&captured_reports, __ATOMIC_SEQ_CST) < count && read_os_timer() < end)
+        usleep(1000);
+    assert(__atomic_load_n(&captured_reports, __ATOMIC_SEQ_CST) == count);
+}
+
+static bool capture(int token)
+{
+    __atomic_store_n(&captured_reports, 0, __ATOMIC_SEQ_CST);
+    return space_navigation_snapshot_capture(1, 2, 1.0f / 120.0f, token);
 }
 
 static void expect_released(void)
@@ -402,12 +427,104 @@ int main(void)
             usleep(1000);
         capture_delay = 0;
 
+        // An asynchronous capture reports its callback, and presents its
+        // image; the deadline reports too and finds nothing left.
+        assert(capture(5));
+        expect_reports(1);
+        assert(captured_token == 5);
+        assert(space_navigation_snapshot_present(5) == SPACE_SNAPSHOT_READY);
+        assert(space_navigation_snapshot_start(.03f, true));
+        expect_released();
+        expect_reports(2);
+        assert(space_navigation_snapshot_present(5) == SPACE_SNAPSHOT_CANCELLED);
+
+        // Only the token of the request waiting presents.
+        assert(capture(6));
+        expect_reports(1);
+        assert(space_navigation_snapshot_present(7) == SPACE_SNAPSHOT_CANCELLED);
+        assert(space_navigation_snapshot_present(6) == SPACE_SNAPSHOT_READY);
+        space_navigation_snapshot_cancel();
+        expect_released();
+        expect_reports(2);
+
+        // A late callback: the deadline reports first and the image is
+        // missing; the callback reports later and releases its image.
+        capture_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
+        assert(capture(8));
+        expect_reports(1);
+        assert(space_navigation_snapshot_present(8) == SPACE_SNAPSHOT_MISSING);
+        expect_reports(2);
+        while (space_snapshot_capture_pending())
+            usleep(1000);
+        capture_delay = 0;
+        expect_released();
+
+        // A capture that arrived in time stays usable however late the event
+        // loop presents it.
+        assert(capture(9));
+        expect_reports(1);
+        usleep((useconds_t) (SPACE_SNAPSHOT_CAPTURE_NS * 2 / 1000));
+        assert(space_navigation_snapshot_present(9) == SPACE_SNAPSHOT_READY);
+        space_navigation_snapshot_cancel();
+        expect_released();
+        expect_reports(2);
+
+        // A request call that returns late is too late, like its callback.
+        capture_start_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
+        assert(capture(10));
+        capture_start_delay = 0;
+        expect_reports(2);
+        assert(space_navigation_snapshot_present(10) == SPACE_SNAPSHOT_MISSING);
+        expect_released();
+
+        // A denied capture has no image to present.
+        deny_capture = true;
+        assert(capture(11));
+        expect_reports(1);
+        deny_capture = false;
+        assert(space_navigation_snapshot_present(11) == SPACE_SNAPSHOT_MISSING);
+        expect_reports(2);
+
+        // Cancelled while captured: presenting finds it cancelled, and the
+        // callback still releases its image.
+        assert(capture(12));
+        space_navigation_snapshot_cancel();
+        assert(space_navigation_snapshot_present(12) == SPACE_SNAPSHOT_CANCELLED);
+        expect_reports(2);
+        expect_released();
+
+        // A synchronous preparation retires a capture still waited for.
+        capture_delay = SPACE_SNAPSHOT_CAPTURE_NS / 2;
+        assert(capture(13));
+        while (space_snapshot_capture_pending())
+            usleep(1000);
+        capture_delay = 0;
+        assert(prepare());
+        assert(space_navigation_snapshot_present(13) == SPACE_SNAPSHOT_CANCELLED);
+        space_navigation_snapshot_cancel();
+        expect_released();
+        expect_reports(2);
+
+        // No capture starts while another is in flight: the step switches
+        // without one and nothing reports.
+        capture_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
+        assert(capture(14));
+        expect_reports(1);
+        assert(space_navigation_snapshot_present(14) == SPACE_SNAPSHOT_MISSING);
+        assert(!capture(15));
+        expect_reports(0);
+        __atomic_store_n(&captured_reports, 1, __ATOMIC_SEQ_CST);
+        expect_reports(2);
+        while (space_snapshot_capture_pending())
+            usleep(1000);
+        capture_delay = 0;
+
         // The daemon recognises the auxiliary Spaces it created, and no other.
         assert(space_navigation_snapshot_owns_space(123));
         assert(!space_navigation_snapshot_owns_space(2) && !space_navigation_snapshot_owns_space(0));
 
         CGImageRelease(fixture_image);
-        puts("snapshot: endpoint, cancellation, allocation failures, late and lost capture, colour space and watchdog passed");
+        puts("snapshot: endpoint, cancellation, allocation failures, late and lost capture, asynchronous capture, colour space and watchdog passed");
     }
     return 0;
 }

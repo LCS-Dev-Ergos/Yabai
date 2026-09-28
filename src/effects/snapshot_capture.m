@@ -1,5 +1,7 @@
-// The outgoing frame: one ScreenCaptureKit screenshot of the display, which
-// the event loop waits for up to SPACE_SNAPSHOT_CAPTURE_NS.
+// The outgoing frame: one ScreenCaptureKit screenshot of the display, usable
+// when it arrives within SPACE_SNAPSHOT_CAPTURE_NS. A synchronous preparation
+// waits for it on the event loop; an asynchronous one learns of it, or of the
+// deadline, through space_navigation_snapshot_captured.
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 
 #define SPACE_SNAPSHOT_CAPTURE_NS 150000000ULL
@@ -13,7 +15,12 @@ struct space_snapshot_capture
 {
     int references;
     uint64_t generation;
+    int token;                  // Reported when the image arrives; 0 for none.
     dispatch_semaphore_t ready;
+    dispatch_time_t deadline;
+    uint64_t began;             // Before the capture was requested.
+    uint64_t returned;          // When the request call returned.
+    uint64_t arrived;           // When the callback stored the image.
     CGImageRef image;
 };
 
@@ -67,7 +74,9 @@ static void space_snapshot_capture_release(struct space_snapshot_capture *captur
     free(capture);
 }
 
-static CGImageRef space_snapshot_capture_image(CGRect bounds)
+// Requests a capture of `bounds`. NULL when the system cannot capture or a
+// capture is still in flight. The caller owns one reference.
+static struct space_snapshot_capture *space_snapshot_capture_start(CGRect bounds, int token)
 {
     if (@available(macOS 15.2, *)) { } else return NULL;
 
@@ -82,6 +91,7 @@ static CGImageRef space_snapshot_capture_image(CGRect bounds)
 
     capture->references = 2; // Caller and asynchronous completion.
     capture->generation = generation;
+    capture->token = token;
     capture->ready = dispatch_semaphore_create(0);
     if (!capture->ready) {
         free(capture);
@@ -89,23 +99,34 @@ static CGImageRef space_snapshot_capture_image(CGRect bounds)
         return NULL;
     }
 
-    uint64_t began = read_os_timer();
-    dispatch_time_t deadline = dispatch_time(DISPATCH_TIME_NOW, SPACE_SNAPSHOT_CAPTURE_NS);
+    capture->began = read_os_timer();
+    capture->deadline = dispatch_time(DISPATCH_TIME_NOW, SPACE_SNAPSHOT_CAPTURE_NS);
     if (@available(macOS 15.2, *)) {
         [SCScreenshotManager captureImageInRect:bounds completionHandler:^(CGImageRef image, NSError *error) {
             (void) error;
             capture->image = image ? CGImageRetain(image) : NULL;
+            capture->arrived = read_os_timer();
             space_snapshot_capture_end(capture->generation);
             dispatch_semaphore_signal(capture->ready);
+            if (capture->token) space_navigation_snapshot_captured(capture->token);
             space_snapshot_capture_release(capture);
         }];
     }
+    capture->returned = read_os_timer();
 
-    CGImageRef image = NULL;
-    if (dispatch_semaphore_wait(capture->ready, deadline) == 0
-        && read_os_timer() - began <= SPACE_SNAPSHOT_CAPTURE_NS) {
-        image = capture->image ? CGImageRetain(capture->image) : NULL;
-    }
-    space_snapshot_capture_release(capture);
-    return image;
+    return capture;
+}
+
+// The captured image, retained, or NULL when it is missing or came too late.
+// With `wait` this waits for it up to the deadline; otherwise the callback
+// must have come already, and counts as on time if both it and the request
+// call finished within SPACE_SNAPSHOT_CAPTURE_NS, however late we look.
+static CGImageRef space_snapshot_capture_take(struct space_snapshot_capture *capture, bool wait)
+{
+    if (dispatch_semaphore_wait(capture->ready, wait ? capture->deadline : DISPATCH_TIME_NOW) != 0) return NULL;
+
+    uint64_t finished = wait ? read_os_timer() : capture->arrived > capture->returned ? capture->arrived : capture->returned;
+    if (finished - capture->began > SPACE_SNAPSHOT_CAPTURE_NS) return NULL;
+
+    return capture->image ? CGImageRetain(capture->image) : NULL;
 }

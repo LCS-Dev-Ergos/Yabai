@@ -46,6 +46,8 @@ static struct
     uint64_t activated_at;
     uint64_t confirmed_at;  // When the last activation reported focus.
     bool unsettled;         // The last step switched and left activation to the next.
+    bool running;           // The step the pump started has not ended, as while it waits for its capture.
+    bool running_activates; // That step activates.
 
     // When the earliest wake requested is due, 0 when none is.
     uint64_t timer;
@@ -219,7 +221,7 @@ static void space_navigation_schedule_wake(uint64_t delay_ns)
 // Runs the next step when it is due, or asks to be woken when it will be.
 static void space_navigation_schedule_pump(void)
 {
-    if (!g_space_navigation_schedule.count) return;
+    if (!g_space_navigation_schedule.count || g_space_navigation_schedule.running) return;
 
     uint64_t now = read_os_timer();
     struct space_navigation_request *head = &g_space_navigation_schedule.queue[0];
@@ -271,8 +273,21 @@ static void space_navigation_schedule_pump(void)
                                "steps %d sid %llu activate %d duration %.3f late %.1f ms",
                                steps, request.sid, activate, duration, late);
 
-    bool success = space_navigation_execute(&request, steps, activate, settle, duration);
-    g_space_navigation_schedule.unsettled = success && !activate;
+    g_space_navigation_schedule.running = true;
+    g_space_navigation_schedule.running_activates = activate;
+
+    enum space_navigation_result result = space_navigation_execute(&request, steps, activate, settle, duration);
+    if (result != SPACE_NAVIGATION_PENDING) space_navigation_schedule_completed(result == SPACE_NAVIGATION_SWITCHED);
+}
+
+// The step the pump started has ended: at once, or once its capture came
+// back. A step abandoned by space_navigation_schedule_cancel never reports.
+static void space_navigation_schedule_completed(bool success)
+{
+    if (!g_space_navigation_schedule.running) return;
+    g_space_navigation_schedule.running = false;
+
+    g_space_navigation_schedule.unsettled = success && !g_space_navigation_schedule.running_activates;
     // A slow WindowServer query or AX raise can consume the whole rhythm.
     // Admission of the next request must obey the same pause as our timer,
     // rather than immediately executing another step to catch up.
@@ -324,7 +339,14 @@ static void space_navigation_schedule_focused(uint32_t window_id)
     if (g_space_navigation_schedule.count) space_navigation_schedule_wake(0);
 }
 
+// Another command abandons the queue and the step in flight; command
+// abandons that step itself.
 static void space_navigation_schedule_cancel(void)
 {
     space_navigation_schedule_clear();
+
+    if (g_space_navigation_schedule.running) {
+        g_space_navigation_schedule.running = false;
+        os_signpost_interval_end(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "step", "cancelled");
+    }
 }

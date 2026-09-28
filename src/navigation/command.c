@@ -12,6 +12,13 @@ static void space_navigation_schedule_after(uint64_t delay_ns)
     });
 }
 
+// Called from the capture's queue and, at the capture's deadline, from a
+// global queue; see effects/snapshot.h.
+static void space_navigation_snapshot_captured(int token)
+{
+    event_loop_post(&g_event_loop, SPACE_NAVIGATION_CAPTURED, NULL, token);
+}
+
 static uint64_t space_navigation_active_space(void)
 {
     // Read WindowServer's active display directly; querying the focused
@@ -28,18 +35,20 @@ static void space_navigation_note_message(char *message)
     if (token_equals(domain, DOMAIN_QUERY)) return;
     if (token_equals(domain, DOMAIN_SPACE) && token_equals(get_token(&message), COMMAND_SPACE_NAVIGATE)) return;
 
+    space_navigation_step_cancel();
     space_navigation_snapshot_cancel();
     space_navigation_forget();
     space_navigation_focus_cancel();
     space_navigation_schedule_cancel();
 }
 
-// Runs one switch of a queued request: `steps` Desktops from where navigation
-// stands, one except for a jump, or the request's own Desktop when 0. A jump
-// from a Desktop number counts from that Desktop. A request handled at once
-// reuses its snapshot of the Desktops; a later one takes its own.
-static bool space_navigation_execute(struct space_navigation_request *request, int steps,
-                                     bool activate, bool settle, float duration)
+// Starts one switch of a queued request: `steps` Desktops from where
+// navigation stands, one except for a jump, or the request's own Desktop when
+// 0. A jump from a Desktop number counts from that Desktop. A request handled
+// at once reuses its snapshot of the Desktops; a later one takes its own. A
+// crossfade step returns while its capture is under way, see step.h.
+static enum space_navigation_result space_navigation_execute(struct space_navigation_request *request, int steps,
+                                                             bool activate, bool settle, float duration)
 {
     bool loaded = space_navigation_spaces_loaded();
     if (!loaded) space_navigation_spaces_read();
@@ -58,10 +67,11 @@ static bool space_navigation_execute(struct space_navigation_request *request, i
         .settle = settle
     };
 
-    bool success = current && sid && space_navigation_run_step(current, &step);
+    enum space_navigation_result result = current && sid ? space_navigation_begin_step(current, &step)
+                                                         : SPACE_NAVIGATION_FAILED;
 
     if (!loaded) space_navigation_spaces_unload();
-    return success;
+    return result;
 }
 
 static bool space_navigation_number(struct token token, float *number)

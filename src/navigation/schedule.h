@@ -6,13 +6,17 @@
 //
 // Thread: event loop. Its wakes arrive as SPACE_NAVIGATION_DISPATCH events.
 // State: g_space_navigation_schedule, the queued switches, when the last step
-// ended, the effect and activation guards and the earliest wake requested.
+// ended, the effect and activation guards, the earliest wake requested and
+// whether a step is still running.
+// A step that waits for its capture keeps the schedule running: no other
+// step starts until it reports its end.
 // Callers: command queues, pumps and cancels; the step reports the window it
-// activated and the effect Dock accepted. The wake, focus changes and the
-// pacing setting are hooks, see hooks.h.
+// activated, the effect Dock accepted and the end of a step that waited for
+// its capture. The wake, focus changes and the pacing setting are hooks, see
+// hooks.h.
 // Calls: space_navigation_execute and space_navigation_schedule_after in
-// command.c, which run a step and request a wake, and the time since the last
-// click from the step. Tests supply all three.
+// command.c, which start a step and request a wake, and the time since the
+// last click from the step. Tests supply all three.
 
 struct space_navigation_request
 {
@@ -32,5 +36,6 @@ static void space_navigation_schedule_pump(void);
 static void space_navigation_schedule_cancel(void);
 static void space_navigation_schedule_activated(uint32_t window_id);
 static void space_navigation_schedule_switched(float duration);
+static void space_navigation_schedule_completed(bool success);
 
 #endif

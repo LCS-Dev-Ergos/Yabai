@@ -185,8 +185,9 @@ int main(void)
     assert(space_navigation_current_space(3) == 3); // Failed switches set none.
 
     test_steps();
+    test_captured_steps();
 
-    puts("navigation: burst, restoration, custom opacity, display, move and crossfade checks passed");
+    puts("navigation: burst, restoration, custom opacity, display, move, crossfade and captured-step checks passed");
 
     return 0;
 }
