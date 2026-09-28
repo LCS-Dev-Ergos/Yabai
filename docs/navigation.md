@@ -150,8 +150,12 @@ milliseconds, while a held key repeats every 30 ms. The daemon's accept thread
 lets a `focus next|prev` request join the one already waiting in the event
 queue and answers it at once, so each uninterrupted group has one waiting
 request. A repeat, arriving
-less than 50 ms after the previous relative request, keeps the pending step; a
-separate key press adds one, and the other direction takes one back. A group
+less than 75 ms after the previous relative request, keeps the pending step; a
+separate key press adds one, and the other direction takes one back. Each
+request reaches the daemon through skhd, a shell and the yabai client, whose
+start varies with load: with a 50 ms bound, repeats sent 30 ms apart during a
+switch counted as presses and a held key went on for two Desktops after its
+release. Presses a person makes in a row are at least about 100 ms apart. A group
 that a repeat starts is marked, and the pacing queue keeps at most one such
 step pending, so a held key moves one Desktop per step and stops within one
 step of its release, while three quick presses still move three Desktops.

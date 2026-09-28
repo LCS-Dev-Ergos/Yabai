@@ -11,8 +11,14 @@
 // step, so pressing a key three times still moves three spaces. A group that
 // a repeat starts is marked, so that the navigation schedule, which queues
 // the steps of groups already handled, keeps at most one of them pending too.
+//
+// Each request reaches us through skhd, a shell and the yabai client, whose
+// start varies with load: during a switch, repeats sent 30 ms apart arrived
+// more than 50 ms apart, counted as presses, and a held key went on for two
+// Desktops after its release. Presses a person makes in a row are at least
+// about 100 ms apart, so the bound sits between the two.
 
-#define SPACE_NAVIGATION_REPEAT_NS 50000000ULL
+#define SPACE_NAVIGATION_REPEAT_NS 75000000ULL
 
 struct space_navigation_group
 {

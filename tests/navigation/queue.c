@@ -36,19 +36,29 @@ static void test_repeat_groups(void)
     assert(g_space_navigation_claim.active && g_space_navigation_claim.repeat);
     assert(g_space_navigation_claim.steps == 1);
 
+    // A repeat delayed on its way still counts as one; a press a person
+    // makes right after the last one does not.
+    assert(!space_navigation_queue_join(46, 1, now + 100000000));
+    space_navigation_queue_claim(46);
+    assert(g_space_navigation_claim.active && g_space_navigation_claim.repeat);
+
+    assert(!space_navigation_queue_join(47, 1, now + 190000000));
+    space_navigation_queue_claim(47);
+    assert(g_space_navigation_claim.active && !g_space_navigation_claim.repeat);
+
     // Another direction, or a pause, is a separate press.
-    assert(!space_navigation_queue_join(42, -1, now + 40000000));
+    assert(!space_navigation_queue_join(42, -1, now + 200000000));
     space_navigation_queue_claim(42);
     assert(g_space_navigation_claim.active && !g_space_navigation_claim.repeat);
 
-    assert(!space_navigation_queue_join(43, -1, now + 200000000));
+    assert(!space_navigation_queue_join(43, -1, now + 400000000));
     space_navigation_queue_claim(43);
     assert(g_space_navigation_claim.active && !g_space_navigation_claim.repeat);
 
     // A query between repeats of a held key does not make the next one a press.
-    assert(!space_navigation_queue_join(44, 0, now + 210000000));
+    assert(!space_navigation_queue_join(44, 0, now + 410000000));
     space_navigation_queue_claim(44);
-    assert(!space_navigation_queue_join(45, -1, now + 230000000));
+    assert(!space_navigation_queue_join(45, -1, now + 430000000));
     space_navigation_queue_claim(45);
     assert(g_space_navigation_claim.active && g_space_navigation_claim.repeat);
     assert(!g_space_navigation_queue.first && !g_space_navigation_queue.last);

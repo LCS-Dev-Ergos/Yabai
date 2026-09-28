@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Fork navigation counts a relative request arriving less than 75 ms after the previous one as a key repeat, instead of 50 ms: repeats delayed on their way through skhd and the client counted as presses, and a held key went on for two Desktops after its release
 - Fork navigation keeps `next` and `prev` pressed after a Desktop number when ten switches already wait, as a jump from that Desktop, instead of refusing them
 - Fork navigation gives the destination window focus when a burst's last step finds its Desktop current already, as a jump over a whole lap of Desktops does; focus stayed on a window of a Desktop left behind
 - Fork daemon no longer crashes when navigation cancels a running crossfade: the snapshot timer's cancel handler could free the snapshot on another thread before the timer was released through it
