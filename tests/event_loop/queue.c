@@ -119,13 +119,19 @@ static void test_allocation_failure(void)
 #define PRODUCERS 4
 #define PRODUCED 50000
 
+// Another producer can grow the ring again before this one looks at it, so
+// the capacity reported is checked for what it is, not against the ring.
 static void *produce(void *context)
 {
     struct event replaced;
     int producer = (int)(intptr_t) context;
 
     for (int i = 0; i < PRODUCED; ++i) {
-        push(DAEMON_MESSAGE + producer, i, false, &replaced);
+        uint32_t capacity = 0;
+        struct event event = { .type = DAEMON_MESSAGE + producer, .param1 = i, .context = (void *)(intptr_t) i };
+        enum event_queue_result result = event_queue_push(&queue, event, false, &replaced, &capacity);
+        assert(result == EVENT_QUEUE_ADDED || result == EVENT_QUEUE_GREW);
+        if (result == EVENT_QUEUE_GREW) assert(capacity >= 32 && !(capacity & (capacity - 1)));
     }
 
     return NULL;
