@@ -159,9 +159,31 @@ if it only fell back without animating. Its capture permission and process
 lifecycle differ from the signed daemon, so passing this probe does not certify
 installed integration, rapid queued navigation or keyboard focus.
 
+Bar visibility alone does **not** validate a crossfade. On lcs.23 it passed
+while the destination appeared, the outgoing image returned and the transition
+then finished. For a static occupied-to-empty pair with distinct central content,
+record without PNG encoding and use the separate progression check:
+
+```sh
+python3 tools/effects/check_bar.py 4 1 \
+  --capture build/effects-frame-capture --effects crossfade \
+  --output build/blend-check --blend
+```
+
+Add `--snapshot-probe build/snapshot-crossfade --effects snapshot` to test the
+candidate helper. `--snapshot-warm` also exposes prepare/cancel flashes.
+`tools/effects/check_blend.py CAPTURE_DIRECTORY` can analyze saved `frames.txt`
+and `result.json`. It projects central RGB along the static source-to-target
+change, rejecting backward progress or overshoot above 0.08 and fewer than four
+intermediate frames. It is a bounded regression check, not an FPS benchmark or
+a proof of perceptual smoothness. Changing content and nearly identical endpoints
+invalidate this check; empty-to-empty icon visibility needs the separate
+`--images --static-desktop` check. PNG capture can hide timing defects by slowing
+the recorder, so it must not be used for progression acceptance.
+
 `navigation_snapshot_tests` exercises the actual asynchronous renderer with
 mocked capture/window dependencies and real timers. It checks endpoint release,
-cancellation, window/context/surface failures, late capture, a single in-flight
+cancellation, window/context/auxiliary-Space failures, late capture, a single in-flight
 request and the watchdog. Debug, ASan/UBSan and TSan cover this target; presented
 frames still require the live probe and installed-release check.
 

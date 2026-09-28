@@ -2,7 +2,6 @@
 // switch. Space alpha affects shared Finder windows and Space levels reorder
 // global windows; this path changes only a window owned by yabai.
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
-#import <QuartzCore/QuartzCore.h>
 
 #define SPACE_SNAPSHOT_CAPTURE_NS 150000000ULL
 #define SPACE_SNAPSHOT_MAX_PIXELS 24000000ULL
@@ -67,9 +66,8 @@ static CGImageRef space_snapshot_capture_image(CGRect bounds)
 struct space_snapshot
 {
     uint32_t window;
-    uint32_t surface;
-    id render_context;
-    CALayer *layer;
+    int overlay_space;
+    CGContextRef backing;
     CFStringRef uuid;
     uint64_t target;
     uint64_t started;
@@ -91,6 +89,7 @@ static void space_snapshot_cancel_locked(void)
     space_snapshot_active = NULL;
     space_snapshot_surface_destroy(snapshot);
     if (snapshot->window) SLSReleaseWindow(SLSMainConnectionID(), snapshot->window);
+    if (snapshot->overlay_space) SLSSpaceDestroy(SLSMainConnectionID(), snapshot->overlay_space);
     if (snapshot->uuid) CFRelease(snapshot->uuid);
     dispatch_source_cancel(snapshot->timer);
     dispatch_release(snapshot->timer);
@@ -201,9 +200,9 @@ static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t target,
     CFTypeRef region = NULL;
     CFTypeRef empty = CGRegionCreateEmptyRegion();
     CGSNewRegionWithRect(&bounds, &region);
-    // No activation, no mouse events, present on all Desktops. These are the
-    // same event tags as yabai's insertion feedback, plus its sticky tag.
-    uint64_t tags = (1ULL << 1) | (1ULL << 9) | (1ULL << 11);
+    // No activation or mouse events. An auxiliary Space, rather than the
+    // sticky tag, keeps the image visible while Dock hides the source Space.
+    uint64_t tags = (1ULL << 1) | (1ULL << 9);
     bool success = region && empty && snapshot->uuid
         && SLSNewWindowWithOpaqueShapeAndContext(cid, 2, region, empty, 13, &tags, 0, 0, 64,
                                                 &snapshot->window, NULL) == kCGErrorSuccess
@@ -217,6 +216,7 @@ static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t target,
     }
     if (success) {
         success = space_snapshot_surface_create(snapshot, image, bounds)
+            && space_snapshot_space_create(snapshot)
             && SLSOrderWindow(cid, snapshot->window, 1, 0) == kCGErrorSuccess;
     }
     CGImageRelease(image);

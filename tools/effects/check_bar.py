@@ -29,6 +29,7 @@ def main():
     parser.add_argument("--snapshot-probe", type=Path, help="Opt-in helper compiled from snapshot_probe.m")
     parser.add_argument("--snapshot-warm", action="store_true", help="Measure three preparations before the helper's switch")
     parser.add_argument("--static-desktop", action="store_true", help="Empty-to-empty Desktop/icon regression; requires --images and Pillow")
+    parser.add_argument("--blend", action="store_true", help="Check monotonic progress between distinct static Desktops; use without --images or --static-desktop")
     parser.add_argument("--duration", type=float, default=0.25)
     parser.add_argument("--images", action="store_true", help="Save PNGs for visual inspection; affects capture performance")
     args = parser.parse_args()
@@ -38,6 +39,8 @@ def main():
         parser.error("snapshot requires --snapshot-probe and a positive duration")
     if args.static_desktop and not args.images:
         parser.error("--static-desktop requires --images")
+    if args.blend and (args.images or args.static_desktop):
+        parser.error("--blend requires distinct static content and capture without PNGs")
 
     cg = ctypes.CDLL("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
     since = cg.CGEventSourceSecondsSinceLastEventType
@@ -184,6 +187,15 @@ def main():
                     result["verdict"] = "FAIL"
             (folder / "frames.txt").write_text(output)
             (folder / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+            if args.blend:
+                from check_blend import analyze
+                try:
+                    result["blend"] = analyze(rows, request)
+                except ValueError as error:
+                    raise RuntimeError(f"blend check invalid: {error}") from error
+                if result["blend"]["verdict"] != "PASS":
+                    result["verdict"] = "FAIL"
+                (folder / "result.json").write_text(json.dumps(result, indent=2) + "\n")
             print(json.dumps(result), flush=True)
             result_code = max(result_code, int(result["verdict"] == "FAIL"))
     except InterruptedError as error:

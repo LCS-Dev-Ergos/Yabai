@@ -27,6 +27,7 @@ int main(int argc, const char **argv)
     if (argc == 5 && strcmp(argv[4], "--warm") != 0) return 64;
     bool warm = argc == 5;
 
+    NSApplicationLoad(); // Match the daemon's AppKit/WindowServer setup.
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
         @autoreleasepool {
             float interval = space_navigation_frame_interval(display);

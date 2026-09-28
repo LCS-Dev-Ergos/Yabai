@@ -2,7 +2,6 @@
 // dependencies. No real Desktop is captured and no window is opened.
 #import <Cocoa/Cocoa.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
-#import <QuartzCore/QuartzCore.h>
 #include <assert.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -12,10 +11,11 @@ static uint64_t read_os_timer(void)
     return clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
 }
 
-static int live_windows, live_surfaces, alpha_writes;
-static bool deny_capture, fail_create, fail_context, fail_order, fail_bind, fail_alpha;
+static int live_windows, live_spaces, alpha_writes;
+static bool deny_capture, fail_create, fail_context, fail_order, fail_attach, fail_alpha;
 static uint64_t capture_delay, capture_start_delay;
 static uint64_t active_sid = 2;
+static bool overlay_attached;
 static CGImageRef fixture_image;
 static CGRect fixture_bounds = {{0, 0}, {16, 16}};
 
@@ -33,35 +33,6 @@ static CGRect fixture_bounds = {{0, 0}, {16, 16}};
     if (capture_start_delay) usleep((useconds_t)(capture_start_delay / 1000));
 }
 @end
-
-@interface SnapshotRenderContext : NSObject
-@property(nonatomic, retain) CALayer *layer;
-+ (instancetype)contextWithCGSConnection:(uint32_t)c options:(NSDictionary *)options;
-- (uint32_t)contextId;
-- (void)invalidate;
-@end
-@implementation SnapshotRenderContext
-@synthesize layer;
-+ (instancetype)contextWithCGSConnection:(uint32_t)c options:(NSDictionary *)options
-{
-    (void)c;
-    (void)options;
-    return fail_context ? nil : [[[self alloc] init] autorelease];
-}
-- (uint32_t)contextId
-{
-    return 1;
-}
-- (void)invalidate
-{
-}
-- (void)dealloc
-{
-    [layer release];
-    [super dealloc];
-}
-@end
-#define SPACE_SNAPSHOT_CONTEXT_CLASS SnapshotRenderContext
 
 static int SLSMainConnectionID(void)
 {
@@ -92,6 +63,7 @@ static CGError SLSNewWindowWithOpaqueShapeAndContext(int c, int t, CFTypeRef r, 
     (void)y;
     (void)n;
     (void)ctx;
+    assert(!(*tags & (1ULL << 11))); // Sticky source membership must not return.
     assert(*tags & (1ULL << 9)); // Overlay must never intercept clicks.
     if (fail_create) return kCGErrorFailure;
     *w = 77;
@@ -146,6 +118,7 @@ static CGError SLSOrderWindow(int c, uint32_t w, int mode, uint32_t rel)
     (void)w;
     (void)mode;
     (void)rel;
+    assert(overlay_attached); // Attach before presenting the outgoing image.
     return fail_order ? kCGErrorFailure : 0;
 }
 
@@ -157,79 +130,68 @@ static CGContextRef bitmap(void)
     return ctx;
 }
 
-static CGError SLSAddSurface(int c, uint32_t w, uint32_t *s)
+static CGContextRef SLWindowContextCreate(int c, uint32_t w, void *options)
 {
     (void)c;
     (void)w;
-    *s = 1;
-    __atomic_add_fetch(&live_surfaces, 1, __ATOMIC_SEQ_CST);
+    (void)options;
+    return fail_context ? NULL : bitmap();
+}
+
+static bool fail_space;
+
+static int SLSSpaceCreate(int c, int type, int options)
+{
+    (void)c;
+    (void)options;
+    assert(type == 1);
+    if (fail_space) return 0;
+    assert(__atomic_add_fetch(&live_spaces, 1, __ATOMIC_SEQ_CST) == 1);
+    return 123;
+}
+
+static CGError SLSSpaceDestroy(int c, int sid)
+{
+    (void)c;
+    assert(sid == 123);
+    assert(__atomic_sub_fetch(&live_spaces, 1, __ATOMIC_SEQ_CST) == 0);
+    overlay_attached = false;
     return 0;
 }
 
-static CGError SLSRemoveSurface(int c, uint32_t w, uint32_t s)
+static void SLSSpaceSetAbsoluteLevel(int c, int sid, int level)
 {
     (void)c;
-    (void)w;
-    (void)s;
-    assert(__atomic_sub_fetch(&live_surfaces, 1, __ATOMIC_SEQ_CST) == 0);
-    return 0;
+    assert(sid == 123 && level == 0);
 }
 
-static CGError SLSBindSurface(int c, uint32_t w, uint32_t s, int m, int f, uint32_t ctx)
+static void SLSShowSpaces(int c, CFArrayRef spaces)
 {
     (void)c;
-    (void)w;
-    (void)s;
-    (void)m;
-    (void)f;
-    (void)ctx;
-    return fail_bind ? kCGErrorFailure : 0;
+    assert(CFArrayGetCount(spaces) == 1);
 }
 
-static CGError SLSSetSurfaceBounds(int c, uint32_t w, uint32_t s, CGRect b)
+static void SLSSpaceAddWindowsAndRemoveFromSpaces(int c, int sid, CFArrayRef windows, int mask)
 {
     (void)c;
-    (void)w;
-    (void)s;
-    (void)b;
-    return 0;
+    assert(sid == 123 && mask == 7 && CFArrayGetCount(windows) == 1);
+    overlay_attached = !fail_attach;
 }
 
-static CGError SLSSetSurfaceResolution(int c, uint32_t w, uint32_t s, CGFloat scale)
+static CFArrayRef SLSCopyWindowsWithOptionsAndTags(int c, uint32_t owner, CFArrayRef spaces,
+                                                uint32_t options, uint64_t *set, uint64_t *clear)
 {
     (void)c;
-    (void)w;
-    (void)s;
-    (void)scale;
-    return 0;
-}
-
-static CGError SLSSetSurfaceOpacity(int c, uint32_t w, uint32_t s, bool o)
-{
-    (void)c;
-    (void)w;
-    (void)s;
-    (void)o;
-    return 0;
-}
-
-static CGError SLSSetSurfaceColorSpace(int c, uint32_t w, uint32_t s, CGColorSpaceRef cs)
-{
-    (void)c;
-    (void)w;
-    (void)s;
-    (void)cs;
-    return 0;
-}
-
-static CGError SLSOrderSurface(int c, uint32_t w, uint32_t s, int m, uint32_t rel)
-{
-    (void)c;
-    (void)w;
-    (void)s;
-    (void)m;
-    (void)rel;
-    return 0;
+    (void)owner;
+    (void)spaces;
+    (void)set;
+    (void)clear;
+    assert(options == 7);
+    int wid = overlay_attached ? 77 : 0;
+    CFNumberRef number = CFNumberCreate(NULL, kCFNumberIntType, &wid);
+    CFArrayRef result = CFArrayCreate(NULL, (const void **)&number, 1, &kCFTypeArrayCallBacks);
+    CFRelease(number);
+    return result;
 }
 
 static uint64_t SLSManagedDisplayGetCurrentSpace(int c, CFStringRef uuid)
@@ -297,10 +259,11 @@ static bool prepare(void)
 static void expect_released(void)
 {
     uint64_t end = read_os_timer() + 2000000000ULL;
-    while (__atomic_load_n(&live_windows, __ATOMIC_SEQ_CST) && read_os_timer() < end)
+    while ((__atomic_load_n(&live_windows, __ATOMIC_SEQ_CST)
+            || __atomic_load_n(&live_spaces, __ATOMIC_SEQ_CST)) && read_os_timer() < end)
         usleep(1000);
     assert(!__atomic_load_n(&live_windows, __ATOMIC_SEQ_CST));
-    assert(!__atomic_load_n(&live_surfaces, __ATOMIC_SEQ_CST));
+    assert(!__atomic_load_n(&live_spaces, __ATOMIC_SEQ_CST));
 }
 
 int main(void)
@@ -340,9 +303,13 @@ int main(void)
         assert(!prepare());
         fail_context = false;
         expect_released();
-        fail_bind = true;
+        fail_space = true;
         assert(!prepare());
-        fail_bind = false;
+        fail_space = false;
+        expect_released();
+        fail_attach = true;
+        assert(!prepare());
+        fail_attach = false;
         expect_released();
         fail_order = true;
         assert(!prepare());
