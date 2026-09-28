@@ -1,5 +1,13 @@
+#ifndef NOTIFY_H
+#define NOTIFY_H
+
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
+#include <stdarg.h>
+
+void notify(const char *subtitle, const char *format, ...);
+
+#ifdef YABAI_DEFINE_CORE
 
 static bool g_notify_init;
 static NSImage *g_notify_img;
@@ -26,7 +34,7 @@ static bool notify_init(void)
     return true;
 }
 
-static void notify(const char *subtitle, const char *format, ...)
+void notify(const char *subtitle, const char *format, ...)
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
@@ -48,3 +56,5 @@ static void notify(const char *subtitle, const char *format, ...)
 }
 
 #pragma clang diagnostic pop
+#endif
+#endif

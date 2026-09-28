@@ -1,6 +1,8 @@
 #ifndef NAVIGATION_TOPOLOGY_H
 #define NAVIGATION_TOPOLOGY_H
 
+#include "../core_types.h"
+
 // Navigation topology (topology.c): a navigation's questions about Desktops
 // and displays, answered from one WindowServer reply.
 //

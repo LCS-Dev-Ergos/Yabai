@@ -20,6 +20,10 @@
 #define HELP_OPT_LONG           "--help"
 #define HELP_OPT_SHRT           "-h"
 
+const CFStringRef kAXFullscreenAttribute = CFSTR("AXFullScreen");
+mach_port_t (* CGSGetConnectionPortById)(int);
+int64_t (* SLSPerformAsynchronousBridgedWindowManagementOperation)(void *);
+
 #define MAJOR  7
 #define MINOR  1
 #define PATCH 25

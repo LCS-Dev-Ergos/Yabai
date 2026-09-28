@@ -1,6 +1,8 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 
+#include "../core_types.h"
+
 // Area: message.c parses tokens and selectors; commands/*.c handles domains;
 // message_loop.c accepts socket clients and dispatches their messages.
 // Threads: the accept thread owns the socket; the event loop runs commands.
@@ -314,18 +316,18 @@ struct properties
     uint64_t flags;
 };
 
-static struct token get_token(char **message);
-static bool token_equals(struct token token, char *match);
+struct token get_token(char **message);
+bool token_equals(struct token token, char *match);
 static inline bool token_is_valid(struct token token);
-static struct token_value token_to_value(struct token token);
-static inline void daemon_fail(FILE *rsp, char *fmt, ...);
+struct token_value token_to_value(struct token token);
+void daemon_fail(FILE *rsp, char *fmt, ...);
 static void parse_key_value_pair(char *token, char **key, char **value, bool *exclusion);
 static uint8_t parse_value_type(char *type);
 static uint8_t parse_resize_handle(char *handle);
 static bool parse_label(FILE *rsp, struct token token, enum label_type type, char **label);
 static struct properties parse_properties(FILE *rsp, struct token token, uint64_t *property_val, char **property_str, int property_count);
 static struct selector parse_display_selector(FILE *rsp, char **message, uint32_t acting_did, bool optional);
-static struct selector parse_space_selector(FILE *rsp, char **message, uint64_t acting_sid, bool optional);
+struct selector parse_space_selector(FILE *rsp, char **message, uint64_t acting_sid, bool optional);
 static struct selector parse_window_selector(FILE *rsp, char **message, struct window *acting_window, bool optional);
 static struct selector parse_insert_selector(FILE *rsp, char **message);
 

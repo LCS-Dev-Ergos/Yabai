@@ -1,7 +1,7 @@
 // Directional area tests and ranked node lookup.
 // Runs on the event-loop thread.
 
-static inline bool area_is_in_direction(struct area *r1, CGPoint r1_max, struct area *r2, CGPoint r2_max, int direction)
+bool area_is_in_direction(struct area *r1, CGPoint r1_max, struct area *r2, CGPoint r2_max, int direction)
 {
     if (direction == DIR_NORTH && r1_max.y <= r2->y) return false;
     if (direction == DIR_EAST  && r2_max.x <= r1->x) return false;
@@ -23,7 +23,7 @@ static inline bool area_is_in_direction(struct area *r1, CGPoint r1_max, struct 
     return false;
 }
 
-static inline int area_distance_in_direction(struct area *r1, CGPoint r1_max, struct area *r2, CGPoint r2_max, int direction)
+int area_distance_in_direction(struct area *r1, CGPoint r1_max, struct area *r2, CGPoint r2_max, int direction)
 {
     switch (direction) {
     case DIR_NORTH: {

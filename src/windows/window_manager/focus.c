@@ -44,7 +44,7 @@ void window_manager_center_mouse(struct window_manager *wm, struct window *windo
     CGWarpMouseCursorPosition(center);
 }
 
-static void window_manager_make_key_window(ProcessSerialNumber *window_psn, uint32_t window_id)
+void window_manager_make_key_window(ProcessSerialNumber *window_psn, uint32_t window_id)
 {
     //
     // :SynthesizedEvent

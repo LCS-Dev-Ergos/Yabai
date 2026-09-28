@@ -7,7 +7,7 @@ volatile bool __pending_gesture;
 volatile uint64_t __last_gesture_time;
 volatile uint64_t __last_cmd_tab_time;
 
-static void update_window_notifications(void)
+void update_window_notifications(void)
 {
     int window_count = 0;
     uint32_t window_list[1024] = {0};

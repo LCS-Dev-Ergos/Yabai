@@ -1,6 +1,12 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <CoreFoundation/CoreFoundation.h>
+#include <CoreGraphics/CoreGraphics.h>
+
 // Area: display.c supplies display and Space facts and the display callback.
 // Threads: the main thread receives reconfiguration callbacks; the event loop
 // uses display queries while handling commands and events.

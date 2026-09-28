@@ -1,6 +1,12 @@
 #ifndef PROCESS_MANAGER_H
 #define PROCESS_MANAGER_H
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <sys/types.h>
+#include <Carbon/Carbon.h>
+#include "../misc/hashtable.h"
+
 // Area: process_manager.c tracks Carbon processes and frontmost application.
 // Threads: the main thread owns the process table and Carbon callback; the
 // event loop updates frontmost-process fields after receiving an event.

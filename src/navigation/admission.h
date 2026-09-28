@@ -1,6 +1,8 @@
 #ifndef NAVIGATION_ADMISSION_H
 #define NAVIGATION_ADMISSION_H
 
+#include "../core_types.h"
+
 // Navigation admission (admission.c): `space --navigate focus next|prev`
 // requests that arrive while one waits for the event loop join it and are
 // answered at once.

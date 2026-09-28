@@ -1,12 +1,12 @@
 // Area conversion and geometry for BSP splits.
 // Runs on the event-loop thread.
 
-static inline struct area area_from_cgrect(CGRect rect)
+struct area area_from_cgrect(CGRect rect)
 {
     return (struct area) { rect.origin.x, rect.origin.y, rect.size.width, rect.size.height };
 }
 
-static inline CGPoint area_max_point(struct area area)
+CGPoint area_max_point(struct area area)
 {
     return (CGPoint) { area.x + area.w - 1, area.y + area.h - 1 };
 }

@@ -1,6 +1,8 @@
 #ifndef EVENT_SIGNAL_H
 #define EVENT_SIGNAL_H
 
+#include "../core_types.h"
+
 // Area: event_signal.c and event_signal_process.c store and spawn signals.
 // Thread: the event loop mutates subscriptions and flushes pending signals.
 // State: g_signal_event and g_signal_storage.

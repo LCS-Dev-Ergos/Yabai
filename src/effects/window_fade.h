@@ -1,6 +1,8 @@
 #ifndef EFFECTS_WINDOW_FADE_H
 #define EFFECTS_WINDOW_FADE_H
 
+#include "../core_types.h"
+
 // Window fade (window_fade.c): the destination Desktop's windows start dimmed
 // and fade in, drawn by the Dock payload (osax/window_fade*.c). It is the
 // effect of a navigation step without a crossfade.

@@ -1,6 +1,8 @@
 #ifndef EVENT_LOOP_H
 #define EVENT_LOOP_H
 
+#include "../core_types.h"
+
 // Area: event_queue.c, event_loop.c, handlers/*.c, window_focus_events.c
 // and event_loop_trace.c queue, dispatch and trace daemon events.
 // Threads: producers post from the main, message and global-queue threads;
@@ -106,7 +108,7 @@ void event_loop_post(struct event_loop *event_loop, enum event_type type, void *
 struct window_manager;
 struct mouse_state;
 struct window;
-static void update_window_notifications(void);
+void update_window_notifications(void);
 static void window_did_receive_focus(struct window_manager *wm, struct mouse_state *ms, struct window *window);
 
 extern struct event_loop g_event_loop;

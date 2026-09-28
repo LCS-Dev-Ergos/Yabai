@@ -1,6 +1,8 @@
 #ifndef SPACE_H
 #define SPACE_H
 
+#include "../core_types.h"
+
 // Area: space.c supplies SkyLight Space queries and window lists.
 // Thread: the event loop uses these helpers; startup also reads Space facts.
 // State: no owned mutable state; returned lists belong to their callers.

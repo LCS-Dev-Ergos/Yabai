@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 # Builds the same artifacts as the makefile: the scripting-addition payload and
 # loader, embedded into the yabai binary. The makefile remains the original
 # build; this file adds out-of-tree builds and a compile_commands.json that
-# language servers can use despite the unity build in src/manifest.m.
+# language servers can use for the daemon's area translation units.
 
 # Must precede project() so the compiler checks already use it.
 set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum macOS version")
@@ -54,7 +54,17 @@ foreach(name payload loader)
         VERBATIM)
 endforeach()
 
-add_executable(yabai ${SRC}/manifest.m ${OSAX_OUT}/payload_bin.c ${OSAX_OUT}/loader_bin.c)
+add_executable(yabai
+    ${SRC}/yabai_main.m
+    ${SRC}/navigation/navigation_effects.m
+    ${SRC}/sa/sa_unity.m
+    ${SRC}/displays/displays.m
+    ${SRC}/applications/applications.m
+    ${SRC}/spaces/layout_unity.m
+    ${SRC}/events/events.m
+    ${SRC}/ipc/ipc.m
+    ${OSAX_OUT}/payload_bin.c
+    ${OSAX_OUT}/loader_bin.c)
 set_target_properties(yabai PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     OSX_ARCHITECTURES "${YABAI_ARCHITECTURES}"
@@ -86,7 +96,7 @@ if(YABAI_CODESIGN_IDENTITY)
         VERBATIM)
 endif()
 
-# Unit tests of the core. tests.m includes the whole unity build with -DTESTS
+# Unit tests of the core. tests.m includes the full manifest with -DTESTS
 # and stubs the embedded payload and loader.
 enable_testing()
 add_executable(yabai_tests tests/src/tests.m)
@@ -299,6 +309,13 @@ add_library(yabai_unity OBJECT EXCLUDE_FROM_ALL)
 target_include_directories(yabai_unity PRIVATE ${SRC} ${OSAX_OUT})
 target_compile_options(yabai_unity PRIVATE -std=c11 -fno-objc-arc -Wno-undefined-internal)
 set(yabai_unity_prelude "")
-yabai_unity_sources(${SRC}/manifest.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/yabai_main.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/navigation/navigation_effects.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/sa/sa_unity.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/displays/displays.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/applications/applications.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/spaces/layout_unity.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/events/events.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/ipc/ipc.m yabai_unity yabai_unity_prelude 0)
 yabai_unity_sources(${SRC}/osax/payload.m yabai_unity yabai_unity_prelude 0)
 set_property(SOURCE ${SRC}/osax/x64_payload.m APPEND PROPERTY COMPILE_OPTIONS -arch x86_64)

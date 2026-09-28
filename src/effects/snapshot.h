@@ -1,6 +1,8 @@
 #ifndef EFFECTS_SNAPSHOT_H
 #define EFFECTS_SNAPSHOT_H
 
+#include "../core_types.h"
+
 // Snapshot crossfade (snapshot.m, with snapshot_capture.m and
 // snapshot_surface.m): a capture of the outgoing Desktop, shown in a window
 // of our own above an ordinary Dock switch, fades out.

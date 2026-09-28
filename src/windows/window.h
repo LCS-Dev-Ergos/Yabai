@@ -1,6 +1,8 @@
 #ifndef WINDOW_H
 #define WINDOW_H
 
+#include "../core_types.h"
+
 // Area: window/*.c reads AX and SkyLight window facts and serializes windows.
 // Threads: the event loop owns window objects; the main thread observes AX
 // notifications through application.c and posts events.

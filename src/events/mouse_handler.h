@@ -1,6 +1,8 @@
 #ifndef MOUSE_H
 #define MOUSE_H
 
+#include "../core_types.h"
+
 // Area: mouse_handler.c translates event-tap input into window actions.
 // Threads: the main thread runs the tap; the event loop handles drag, drop
 // and focus actions after posted events.

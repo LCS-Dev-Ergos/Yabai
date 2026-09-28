@@ -1,6 +1,8 @@
 #ifndef NAVIGATION_STEP_H
 #define NAVIGATION_STEP_H
 
+#include "../core_types.h"
+
 // Navigation step (step.c): one Desktop switch with its effect and, on the
 // last step, the activation of a window.
 //

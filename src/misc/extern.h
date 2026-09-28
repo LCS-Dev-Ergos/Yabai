@@ -9,8 +9,8 @@ extern int g_connection;
 #define CONNECTION_CALLBACK(name) void name(uint32_t type, void *data, size_t data_length, void *context, int cid)
 typedef CONNECTION_CALLBACK(connection_callback);
 
-static mach_port_t (* CGSGetConnectionPortById)(int);
-static int64_t (* SLSPerformAsynchronousBridgedWindowManagementOperation)(void *);
+extern mach_port_t (* CGSGetConnectionPortById)(int);
+extern int64_t (* SLSPerformAsynchronousBridgedWindowManagementOperation)(void *);
 extern mach_port_t mig_get_special_reply_port(void);
 extern AXUIElementRef _AXUIElementCreateWithRemoteToken(CFDataRef data);
 extern AXError _AXUIElementGetWindow(AXUIElementRef ref, uint32_t *wid);
@@ -116,7 +116,7 @@ extern CGError SLSSetWindowListWorkspace(int cid, uint32_t *window_list, int win
 #define kCPSNoWindows     0x400
 
 // Accessibility attribute of AppKit windows, absent from the public headers.
-const CFStringRef kAXFullscreenAttribute = CFSTR("AXFullScreen");
+extern const CFStringRef kAXFullscreenAttribute;
 
 // System Integrity Protection configuration, see bsd/sys/csr.h in XNU.
 extern int csr_get_active_config(uint32_t *config);

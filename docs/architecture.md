@@ -1,9 +1,9 @@
 # Architecture
 
 This map describes the daemon, its client and the Dock payload as they stand
-on `dev` after lcs.28: which components exist, which thread runs what, how
-events flow and who owns each piece of state. It is the starting point for the
-refactor at the end, and it lists the risks found while drawing it. Details of
+on `dev` with the local translation-unit refactor: which components exist,
+which thread runs what, how events flow and who owns each piece of state.
+It also lists the risks found while drawing the original map. Details of
 the fork's own features are in [navigation](navigation.md),
 [effects](effects.md) and [scripting addition](osax.md).
 
@@ -11,7 +11,7 @@ the fork's own features are in [navigation](navigation.md),
 
 | Process | Code | Role |
 | --- | --- | --- |
-| `yabai` daemon | `src/manifest.m` (unity build) | Window manager: observes applications, windows, Spaces and displays, tiles, answers commands, runs signals. |
+| `yabai` daemon | `src/yabai_main.m` and the area units below | Window manager: observes applications, windows, Spaces and displays, tiles, answers commands, runs signals. |
 | `yabai -m` client | `src/yabai.c` (`client_send_message`) | Sends one command over the daemon socket and prints the reply. `skhd` and `space.sh` start one per key press. |
 | Dock payload | `src/osax/payload.m` and fork handlers | Injected into Dock by `yabai --load-sa` (root, `src/osax/loader.m`). Runs Dock-private operations: Space focus, create, move; window order, level, opacity and fades. |
 | Signal actions | `src/events/event_signal*.c` | Shell commands the daemon starts with `posix_spawn` when a subscribed event occurs. |
@@ -31,79 +31,50 @@ The two sockets:
 
 ## Build structure
 
-The daemon is one translation unit. `src/manifest.m` includes every header,
-the core's first and then those of navigation and effects (`effects/*.h`,
-`navigation/*.h` and `hooks.h`), then every source file in a fixed order;
-several sources include further sources:
+The daemon is built from separate Objective-C translation units. Each unit
+includes `core_prelude.h` for platform and area interfaces, then its own
+sources. `core_types.h` supplies platform types to area headers, which also
+compile on their own. The current area boundaries are:
 
 ```
-src/manifest.m
-├── navigation/admission.c, topology.c, activation.c
-├── effects/display.m, window_fade.c, snapshot.m ─ snapshot_capture.m, snapshot_surface.m
-├── navigation/step.c, schedule.c, command.c
-├── sa/sa.m ─ sa_opacity.c
-├── events/mission_control.c
-├── events/event_queue.c, event_loop.c ─ window_focus_events.c,
-│   handlers/{applications,windows,spaces,displays,mouse,mission_control,system,messages}.c,
-│   event_loop_trace.c
-├── events/event_signal.c ─ event_signal_process.c
-├── events/workspace.m
-├── windows/rule.c
-├── ipc/message.c
-├── ipc/commands/config.c, display.c, space.c, window.c, query.c, rule.c, signal.c
-├── ipc/message_loop.c
-├── displays/display.c, spaces/space.c
-├── spaces/view/{feedback,geometry,nodes,direction,operations,lifecycle}.c
-├── windows/window/{observation,space,serialize_nonax,serialize,attributes,
-│   properties,identity,lifecycle}.c
-├── applications/process_manager.c, application.c
-├── displays/display_manager.c
-├── spaces/space_manager/{views,labels,layout,selectors,window_moves,
-│   operations,state}.c
-├── windows/window_manager/tables.c, query.c, rules.c, frames.c, animation.c,
-│   appearance.c, lookup.c, focus.c, operations.c, scratchpad.c, spaces.c
-├── events/mouse_handler.c
-└── yabai.c (main)
+src/yabai_main.m                  global definitions, startup and shared helpers
+src/navigation/navigation_effects.m
+                                  navigation and display/window effects
+src/sa/sa_unity.m                 scripting-addition client
+src/displays/displays.m           display facts and manager
+src/applications/applications.m   process table and AX applications
+src/spaces/layout_unity.m         Spaces, BSP views, windows and managers
+src/events/events.m               event loop, handlers, signals and mouse input
+src/ipc/ipc.m                     message parser, seven domains and dispatch
 ```
 
-Each directory holds one concern, with its headers next to its sources:
-`applications/` (processes and their AX observers), `displays/`, `spaces/`
-(Spaces and their views), `windows/` (windows, rules and the window
-manager), `events/` (the event loop and queue, signals, and the sources of
-events: WindowServer notifications, NSWorkspace, the mouse), `ipc/` (the
-daemon socket, the message parser and one file of commands per domain) and
-`sa/` (the daemon's side of the scripting addition, whose payload is in
-`osax/`). `navigation/` and `effects/` hold the fork's modules and `misc/`
-the shared helpers and system declarations; `manifest.m`, `yabai.c` (main)
-and `hooks.h` stay at the top. The `#include` order in `manifest.m`, not
-the directory, decides what each file sees.
+`spaces/` and `windows/` remain one translation unit because their view and
+window-manager functions call each other heavily. This is a deliberate
+intermediate boundary within point 4. `navigation/` and `effects/` also share
+one unit because their callbacks and schedule state interact closely. Every
+other listed area compiles separately, so cross-unit calls use declarations
+in the owning headers and are checked by the compiler.
 
-Consequences:
+`src/manifest.m` still includes all production sources in the original order
+for `yabai_tests` and the daemon-message fuzzer. It is no longer a source of
+the production executable. `yabai_unity_sources()` derives language-server
+compile commands from the production units and the Dock payload. The Makefile
+uses the same daemon units as CMake.
 
-- Every function and global is visible to everything included after it.
-  The core's files call each other's file-static functions by include order.
-- Each shared global is declared in the header of the part that owns it.
-  The daemon's globals are defined together in `yabai.c` because startup
-  initializes several areas before their callbacks or the message loop can
-  run. `event_loop.c` defines its pending-event flags before the included
-  handlers.
-  Their writing threads and readers are listed below; the definition's file
-  does not imply ownership after startup.
-- Each navigation and effects module declares what other files use in its
-  header, which also states its threads, the state it owns, its callers and
-  what it calls. `hooks.h` declares every module function the core calls,
-  grouped by the calling file and handler. What the modules call in the core
-  is declared in the core's headers: the command vocabulary, tokens and
-  selectors in `message.h`, Mission Control's mode in `mission_control.h`,
-  focus in `window_manager.h`. The navigation and effects sources come before
-  every core source, so the compiler holds them to what the headers declare.
-- Tests include a module's header and source directly and replace its
-  dependencies with macros and stubs (`tests/navigation/*.c`).
+The shared helpers with external state or implementation have one definition:
+the hashtable, temporary storage, memory-pool initializer, notification
+delegate and Mach-O symbol lookup are emitted by `yabai_main.m`; their
+headers expose declarations to the other units. The scripting-addition client
+uses the same temporary storage and notification entry point. The process,
+display, Space and window globals remain defined in `yabai.c`, while their
+writing threads and readers are listed below. The definition's file does not
+imply ownership after startup.
 
-The payload is built separately for x86_64 and arm64
+The Dock payload is built separately for x86_64 and arm64
 (`src/osax/{x64,arm64}_payload.m`), then embedded in the daemon as
-`payload_bin.c` and `loader_bin.c`.
-
+`payload_bin.c` and `loader_bin.c`. Focused tests may include a source
+directly with stubs; a successful compile or unit test does not establish
+live Dock behavior.
 ## Threads
 
 ```mermaid

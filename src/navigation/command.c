@@ -19,7 +19,7 @@ static void space_navigation_snapshot_captured(int token)
     event_loop_post(&g_event_loop, SPACE_NAVIGATION_CAPTURED, NULL, token);
 }
 
-static uint64_t space_navigation_active_space(void)
+uint64_t space_navigation_active_space(void)
 {
     // Read WindowServer's active display directly; querying the focused
     // application's AX window during every switch can stall navigation.
@@ -29,7 +29,7 @@ static uint64_t space_navigation_active_space(void)
 // A command that can change focus ends the anchor: relative navigation then
 // starts from where that command left the user. It also wins over a deferred
 // navigation focus and over the navigation still queued.
-static void space_navigation_note_message(char *message)
+void space_navigation_note_message(char *message)
 {
     struct token domain = get_token(&message);
     if (token_equals(domain, DOMAIN_QUERY)) return;
@@ -213,7 +213,7 @@ static void space_navigation_run_request(FILE *rsp, char **message)
     space_navigation_schedule_pump();
 }
 
-static void space_navigation_command(FILE *rsp, char **message)
+void space_navigation_command(FILE *rsp, char **message)
 {
     space_navigation_spaces_read();
     space_navigation_run_request(rsp, message);

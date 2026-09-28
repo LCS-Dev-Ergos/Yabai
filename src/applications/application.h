@@ -1,6 +1,14 @@
 #ifndef APPLICATION_H
 #define APPLICATION_H
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <sys/types.h>
+#include <Carbon/Carbon.h>
+#include <ApplicationServices/ApplicationServices.h>
+
+struct process;
+
 // Area: application.c manages AX application objects and observers.
 // Threads: the main thread receives AX callbacks; the event loop creates,
 // observes and destroys application objects.

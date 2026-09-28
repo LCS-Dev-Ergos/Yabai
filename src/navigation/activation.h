@@ -1,6 +1,8 @@
 #ifndef NAVIGATION_ACTIVATION_H
 #define NAVIGATION_ACTIVATION_H
 
+#include "../core_types.h"
+
 // Navigation activation (activation.c): gives the destination window focus
 // without holding the event loop for the 40 ms that
 // window_manager_focus_window_without_raise sleeps, and raises windows of

@@ -242,14 +242,17 @@ frames still require the live probe and installed-release check.
 
 ```sh
 tools/analyze.sh
+python3 tools/check-area-headers.py
 ```
 
 The script uses Apple clang by default (`CLANG` overrides it). Payload and
-loader warnings fail the check on both arm64 and x86_64. The daemon's arm64
-unity build is compared with `tools/analyzer-baseline.txt`, keyed by source,
-diagnostic and checker, including the count of each finding. New findings or
-increased counts fail. Existing entries include upstream ownership warnings;
-the baseline is an allowance, not proof that a finding is harmless.
+loader warnings fail the check on both arm64 and x86_64. The test manifest's
+arm64 findings keep their historical `tools/analyzer-baseline.txt` allowance;
+the production translation units use `tools/analyzer-units-baseline.txt`.
+Paths are normalized before comparison, and a new finding or increased count
+fails either check. The separate units can expose additional paths through
+header-only helpers and narrower analyzer context. Both baselines are
+allowances for known diagnostics, not proof that they are harmless.
 
 Only run `tools/analyze.sh --update-baseline` after reviewing the diagnostics
 and the resulting diff. Do not refresh the baseline just to pass CI.

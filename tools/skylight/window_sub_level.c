@@ -30,7 +30,9 @@
 #define SKYLIGHT_PATH "/System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/SkyLight"
 
 static bool string_equals(const char *a, const char *b) { return a && b && strcmp(a, b) == 0; }
+#define MACHO_DLSYM_IMPLEMENTATION
 #include "../../src/misc/macho_dlsym.h"
+#undef MACHO_DLSYM_IMPLEMENTATION
 
 extern int SLSMainConnectionID(void);
 extern int SLSGetWindowSubLevel(int cid, uint32_t wid);

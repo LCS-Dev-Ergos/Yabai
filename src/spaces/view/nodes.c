@@ -328,7 +328,7 @@ struct window_node *window_node_fence(struct window_node *node, int dir)
     return NULL;
 }
 
-struct window_node *view_find_min_depth_leaf_node(struct window_node *node)
+static struct window_node *view_find_min_depth_leaf_node(struct window_node *node)
 {
     struct window_node *list[256] = { node };
 

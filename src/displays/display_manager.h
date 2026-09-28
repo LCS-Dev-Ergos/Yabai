@@ -1,6 +1,13 @@
 #ifndef DISPLAY_MANAGER_H
 #define DISPLAY_MANAGER_H
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <CoreFoundation/CoreFoundation.h>
+#include <CoreGraphics/CoreGraphics.h>
+#include "../spaces/space_op_error.h"
+
 // Area: display_manager.c owns display selection, labels and arrangement.
 // Threads: startup initializes it; the event loop owns later changes.
 // State: g_display_manager and its display labels and current display.

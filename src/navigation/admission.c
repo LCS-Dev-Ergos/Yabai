@@ -173,7 +173,7 @@ static bool space_navigation_queue_join(int sockfd, int direction, uint64_t now)
 // Event loop, before each daemon message is read. The waiting request takes
 // the steps of its group; its socket stays open until then, so no other
 // connection can reuse the descriptor.
-static void space_navigation_queue_claim(int sockfd)
+void space_navigation_queue_claim(int sockfd)
 {
     pthread_mutex_lock(&g_space_navigation_queue.lock);
 
@@ -205,7 +205,7 @@ static struct space_navigation_claim space_navigation_queue_claimed(void)
 
 // Accept thread. The client sends its whole request right after connecting;
 // a request that is not readable almost at once is posted as usual.
-static bool space_navigation_accept(int sockfd)
+bool space_navigation_accept(int sockfd)
 {
     char bytes[128];
     int direction = 0;

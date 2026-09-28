@@ -380,7 +380,7 @@ static enum space_navigation_result space_navigation_begin_step(uint64_t current
 // deadline. The step stops if the capture was cancelled meanwhile, or if a
 // click, Mission Control or a display animation came first; it switches
 // without the crossfade if the image is missing or came too late.
-static void space_navigation_step_captured(int token)
+void space_navigation_step_captured(int token)
 {
     if (!space_navigation_flight.active || token != space_navigation_flight.token) return;
     space_navigation_flight.active = false;

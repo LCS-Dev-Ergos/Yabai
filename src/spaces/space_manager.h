@@ -1,6 +1,11 @@
 #ifndef SPACE_MANAGER
 #define SPACE_MANAGER
 
+#include "../core_types.h"
+#include "view.h"
+
+#include "space_op_error.h"
+
 // Area: space_manager/*.c owns Space labels, views, layout and Space commands.
 // Threads: startup initializes it; the event loop owns later changes.
 // State: g_space_manager, its view table, layout defaults and labels.
@@ -33,21 +38,6 @@ struct space_manager
     uint32_t auto_balance;
     struct space_label *labels;
     bool skip_window_focus_animation;
-};
-
-enum space_op_error
-{
-    SPACE_OP_ERROR_SUCCESS              = 0,
-    SPACE_OP_ERROR_MISSING_SRC          = 1,
-    SPACE_OP_ERROR_MISSING_DST          = 2,
-    SPACE_OP_ERROR_INVALID_SRC          = 3,
-    SPACE_OP_ERROR_INVALID_DST          = 4,
-    SPACE_OP_ERROR_INVALID_TYPE         = 5,
-    SPACE_OP_ERROR_SAME_SPACE           = 6,
-    SPACE_OP_ERROR_SAME_DISPLAY         = 7,
-    SPACE_OP_ERROR_DISPLAY_IS_ANIMATING = 8,
-    SPACE_OP_ERROR_IN_MISSION_CONTROL   = 9,
-    SPACE_OP_ERROR_SCRIPTING_ADDITION   = 10,
 };
 
 bool space_manager_query_space(FILE *rsp, uint64_t sid, uint64_t flags);

@@ -159,14 +159,7 @@ static inline uint64_t read_os_freq(void)
     return 1000000000;
 }
 
-struct rgba_color
-{
-    uint32_t p;
-    float r;
-    float g;
-    float b;
-    float a;
-};
+#include "color.h"
 
 static const CFStringRef kAXEnhancedUserInterface = CFSTR("AXEnhancedUserInterface");
 
