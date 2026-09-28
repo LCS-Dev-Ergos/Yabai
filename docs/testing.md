@@ -35,7 +35,7 @@ editor's root `compile_commands.json` symlink.
 - `navigation_schedule_tests` runs the pacing queue on a simulated clock: the
   rhythm, the burst and held-key blend durations, the wait for an activation
   and its confirmation, key repeats, reversals, Desktop numbers, the ten-switch
-  limit with its jump and replacement (every press reaching the destination),
+  limit with its jumps and replacement (every press reaching the destination),
   which step settles a Desktop, refused requests, clicks, other commands,
   failed steps and early wakes.
 - `navigation_queue_tests` checks how relative requests are recognized and

@@ -22,8 +22,9 @@
 // At most SPACE_NAVIGATION_QUEUE_STEPS switches wait, which bounds how long
 // navigation goes on after the last press. No press is dropped for that:
 // relative steps beyond the bound join a jump at the end of the queue, one
-// switch over several Desktops, and a Desktop number takes the place of the
-// last switch. Navigation still ends where the presses asked.
+// switch over several Desktops, a Desktop number takes the place of the last
+// switch, and relative steps after a Desktop number jump on from it.
+// Navigation still ends where the presses asked.
 
 #include <os/signpost.h>
 
@@ -36,7 +37,7 @@ struct space_navigation_request
 {
     bool move;
     int steps;          // Desktops forward (positive) or back; 0 for `sid`.
-    bool jump;          // Moves all its steps in one switch.
+    bool jump;          // Moves all its steps in one switch, from `sid` if set.
     bool repeat;        // Queued by a held key.
     uint64_t sid;
     bool crossfade;
@@ -173,7 +174,10 @@ static bool space_navigation_schedule_add(struct space_navigation_request *reque
         joined.steps += entry.steps;
         --g_space_navigation_schedule.count;
 
-        if (joined.steps) {
+        // Steps that cancel out a jump from a Desktop number leave the number.
+        if (!joined.steps) joined.jump = false;
+
+        if (joined.steps || joined.sid) {
             int budget = SPACE_NAVIGATION_QUEUE_STEPS - space_navigation_schedule_steps();
             space_navigation_schedule_append(&joined, budget);
         }
@@ -198,6 +202,17 @@ static bool space_navigation_schedule_add(struct space_navigation_request *reque
             g_space_navigation_schedule.queue[g_space_navigation_schedule.count++] = entry;
         } else {
             *tail = entry;
+        }
+
+        return true;
+    }
+
+    // Relative steps after a Desktop number jump on from it. A held key's
+    // repeats wait, as they do behind any step.
+    if (entry.steps && same && !tail->steps && !entry.move) {
+        if (!repeat) {
+            tail->steps = entry.steps;
+            tail->jump = true;
         }
 
         return true;

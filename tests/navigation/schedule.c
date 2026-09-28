@@ -460,10 +460,34 @@ static void test_full_queue(void)
     assert(!space_navigation_schedule_add(&fade, false));
     assert(g_space_navigation_schedule.queue[1].sid == 6);
 
+    // Relative steps after it jump on from that Desktop, and cancel out back
+    // to it; a held key's repeats wait.
+    struct space_navigation_request one = relative(1, true);
+    struct space_navigation_request back = relative(-1, true);
+    assert(space_navigation_schedule_add(&one, false));
+    assert(g_space_navigation_schedule.queue[1].sid == 6 && g_space_navigation_schedule.queue[1].steps == 1);
+    assert(g_space_navigation_schedule.queue[1].jump && space_navigation_schedule_steps() == 10);
+    assert(space_navigation_schedule_add(&back, false));
+    assert(g_space_navigation_schedule.queue[1].sid == 6 && g_space_navigation_schedule.queue[1].steps == 0);
+    assert(!g_space_navigation_schedule.queue[1].jump && g_space_navigation_schedule.count == 2);
+    assert(space_navigation_schedule_add(&back, false) && space_navigation_schedule_add(&back, false));
+    assert(space_navigation_schedule_add(&back, true));
+    assert(g_space_navigation_schedule.queue[1].steps == -2 && g_space_navigation_schedule.queue[1].jump);
+
     space_navigation_schedule_pump();
     advance(5000 * MS);
-    assert(executed_count == 11 && executed[10].sid == 6 && executed[10].activate);
-    assert(executed[10].settle);
+    assert(executed_count == 11 && executed[10].sid == 6 && executed[10].steps == -2);
+    assert(executed[10].activate && executed[10].settle);
+
+    // A Desktop number after it takes its place again.
+    reset();
+    press(1, false, true);
+    assert(space_navigation_schedule_add(&ten, false));
+    assert(space_navigation_schedule_add(&six, false));
+    assert(space_navigation_schedule_add(&one, false));
+    assert(space_navigation_schedule_add(&four, false));
+    assert(g_space_navigation_schedule.queue[1].sid == 4 && !g_space_navigation_schedule.queue[1].steps);
+    assert(!g_space_navigation_schedule.queue[1].jump && space_navigation_schedule_steps() == 10);
 
     // A queued move is not replaced either.
     reset();

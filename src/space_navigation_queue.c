@@ -157,7 +157,7 @@ static void space_navigation_queue_claim(int sockfd)
 
     struct space_navigation_group *first = g_space_navigation_queue.first;
     g_space_navigation_claim.active = first && first->owner == sockfd;
-    g_space_navigation_claim.steps = g_space_navigation_claim.active ? first->steps : 0;
+    g_space_navigation_claim.steps  = g_space_navigation_claim.active ? first->steps : 0;
     g_space_navigation_claim.repeat = g_space_navigation_claim.active && first->repeat;
 
     if (g_space_navigation_claim.active) {

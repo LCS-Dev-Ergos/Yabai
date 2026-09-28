@@ -81,9 +81,10 @@ Desktop from a bounded queue, in the order requested:
 - At most ten switches wait, which bounds how long navigation goes on after
   the last press. No press is dropped for that: `next` or `prev` steps beyond
   the ten join a jump at the end of the queue, one switch over several
-  Desktops, and a Desktop number takes the place of the last switch. Only a
-  `move`, or a request with another effect, can still be refused when the
-  queue is full.
+  Desktops, a Desktop number takes the place of the last switch, and `next`
+  or `prev` after a Desktop number jump on from that Desktop. Only a `move`,
+  or a request with another effect, can still be refused when the queue is
+  full.
 - A click after a request, or any other command except queries, empties the
   queue. A failed step drops the rest.
 
