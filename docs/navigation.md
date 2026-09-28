@@ -57,19 +57,30 @@ Desktop from a bounded queue, in the order requested:
 
 - A step runs when at least 100 ms have passed since the previous step
   completed, including synchronous focus work. A crossfade also reserves its
-  full requested duration from Dock's acknowledgement. With `crossfade 0.25`,
-  this permits at most about four steps per second; slow system calls can
-  reduce that rate. This time guard does not establish frame presentation.
+  duration from Dock's acknowledgement, so a blend always ends before the next
+  one starts. This time guard does not establish frame presentation.
 - After a step that activated an application, the next one also waits until
   that application reports the window focused, or 150 ms have passed. A focus
   confirmation schedules the next step after its event handler finishes.
 - `next` and `prev` count from the Desktop the previous step switched to. Each
   Desktop number is one step; the same number twice in a row queues once.
 - Only the last queued step activates an application. The steps before it
-  switch Desktop and show their effect. Each crossfade keeps the requested
-  duration, including the first and last step of a burst, instead of changing
-  its duration according to when the next press arrives.
-- At most ten steps wait; a request that does not fit is refused.
+  switch Desktop and show their effect.
+- A step with more queued behind it, and a step a held key repeats, blend in
+  125 ms at most; the last of separate presses keeps the requested duration.
+  The first step of a burst keeps it too: it starts before the next press is
+  known, and a running blend is never shortened. Each crossfade step first
+  spends about 75 ms capturing and preparing the outgoing image (see
+  [effects](effects.md#desktop-crossfade)), so a burst is expected to run
+  about one step every 200 ms, against 380 ms measured on lcs.24, and a held
+  key one every 200 to 300 ms, depending on how soon each application reports
+  focus; see [performance](performance.md) for what has been measured.
+- At most ten switches wait, which bounds how long navigation goes on after
+  the last press. No press is dropped for that: `next` or `prev` steps beyond
+  the ten join a jump at the end of the queue, one switch over several
+  Desktops, and a Desktop number takes the place of the last switch. Only a
+  `move`, or a request with another effect, can still be refused when the
+  queue is full.
 - A click after a request, or any other command except queries, empties the
   queue. A failed step drops the rest.
 
@@ -81,9 +92,9 @@ several Desktops in one switch.
 Signposts in subsystem `com.lcs.yabai`, category `navigation`, mark each
 request, step, activation and the focus that confirms it.
 
-The pacing introduced in lcs.22 is retained. The [lcs.23 candidate](effects-lcs23-validation.md)
-changes the renderer; full live acceptance of that daemon remains separate
-from the isolated renderer checks.
+The client of a request that joins a full queue as a jump, or replaces its
+last switch, still gets success; only a refused request fails with
+`navigation queue is full.`
 
 ## Relative navigation
 

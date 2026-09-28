@@ -32,9 +32,10 @@ editor's root `compile_commands.json` symlink.
   application: the event sequence and its 10 ms spacing, and cancellation by a
   newer navigation, another command or a focus change; and both raise paths.
 - `navigation_schedule_tests` runs the pacing queue on a simulated clock: the
-  rhythm, the wait for an activation and its confirmation, key repeats,
-  reversals, Desktop numbers, the ten-step limit, clicks, other commands,
-  failed steps and early wakes.
+  rhythm, the burst and held-key blend durations, the wait for an activation
+  and its confirmation, key repeats, reversals, Desktop numbers, the ten-switch
+  limit with its jump and replacement (every press reaching the destination),
+  refused requests, clicks, other commands, failed steps and early wakes.
 - `navigation_queue_tests` checks how relative requests are recognized and
   merged while one waits: repeats, separate presses, directions, interleaved
   queries, allocation failure and concurrent admission/consumption.
@@ -83,7 +84,9 @@ The daemon and the payload emit signposts in subsystem `com.lcs.yabai`:
 category `navigation` for requests, steps (with how late each ran after it
 could), activations and the focus that confirms them; category `events` for
 every daemon event handled in more than 10 ms, which delays everything queued
-behind it; category `effects` for crossfades and every fade frame written.
+behind it; category `effects` for the daemon's snapshots (capture and
+preparation time, or why none was used), and the payload's crossfades and
+every fade frame it writes.
 Record them with Instruments' os_signpost instrument, for example by adding it
 to the Animation Hitches template, to see them against WindowServer's frames.
 The unified log keeps them as well, for a few minutes depending on how much
@@ -184,7 +187,9 @@ the recorder, so it must not be used for progression acceptance.
 `navigation_snapshot_tests` exercises the actual asynchronous renderer with
 mocked capture/window dependencies and real timers. It checks endpoint release,
 cancellation, window/context/auxiliary-Space failures, late capture, a single in-flight
-request and the watchdog. Debug, ASan/UBSan and TSan cover this target; presented
+request, a capture whose callback never comes (and then comes late), the
+window's colour space before drawing, the auxiliary Spaces the daemon
+recognises as its own and the watchdog. Debug, ASan/UBSan and TSan cover this target; presented
 frames still require the live probe and installed-release check.
 
 ## Static analysis

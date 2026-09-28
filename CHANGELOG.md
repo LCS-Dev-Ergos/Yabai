@@ -6,6 +6,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Fork navigation no longer drops presses when ten switches already wait: further `next`/`prev` steps join a jump at the end of the queue and a Desktop number takes the place of the last switch, so navigation still ends where the presses asked
+- Fork navigation blends the steps queued behind others, and those a held key repeats, in 125 ms at most; the last of separate presses keeps the requested duration
+- Fork crossfade snapshots are drawn in the capture's colour space, about four times faster and without clipping colours, and a capture whose callback never arrives no longer disables the crossfade until yabai restarts
+- Fork daemon recognises the crossfade's own auxiliary Spaces instead of asking WindowServer for their type during every switch, and records each snapshot's capture and preparation time in a signpost
+- Fork `crossfade` fades a still image of the outgoing display in a window owned by yabai over an ordinary Desktop switch, instead of changing Space alpha and levels in Dock, which hid Finder's Desktop icons, SketchyBar and parts of empty Desktops; it needs macOS 15.2 and existing Screen Recording permission, and falls back to an ordinary switch otherwise
+- Fork navigation waits for each crossfade's requested duration before the next step and at least 100 ms after a step's synchronous work, and runs the next step only after the focus event that confirmed an activation has been handled
+- Payload crossfades keep the destination at level 0, reserve their final transaction before changing any Desktop, measure window coverage as a union and only hide WindowManager's wallpaper; payload version is now *2.1.31-lcs.12*
 - Payload crossfades hide the destination Desktop's wallpaper window while it fades in, when its windows cover most of the display: WindowServer applies a Desktop's alpha to each window, so the wallpaper showed through them as it did through the window fade. The restore at load also makes wallpaper windows opaque again, and payload version is now *2.1.31-lcs.11*
 - Payload fades and crossfades write one frame per display interval while display callbacks stay late, instead of waiting half a frame before each
 - Payload crossfades no longer read `SLSTransactionCommit`'s value as a status: it is never 0 on macOS 27.2, so every crossfade of *2.1.31-lcs.9* switched without an effect and left its destination Desktop transparent. Fade frames are written one window at a time, and payload version is now *2.1.31-lcs.10*

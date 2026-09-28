@@ -131,19 +131,38 @@ permission. The navigation path never requests permission. Unsupported or
 refused capture, allocation failure and capture timeout all fall back to an
 ordinary Desktop switch. There is one capture in flight and one overlay
 globally, including across displays. A timed-out callback can only release its
-image; it cannot later create a window. A 24-million-pixel limit bounds the
+image; it cannot later create a window. A callback that never comes would have
+disabled the crossfade until yabai restarted; after two seconds that capture
+counts as lost and a new one may start. A 24-million-pixel limit bounds the
 accepted image size. The 150 ms deadline includes starting the capture, but
 cannot interrupt the framework's call itself; it is not a hard bound on the
 whole navigation request.
 
-A Core Animation remote surface holds the image directly, avoiding the measured
-Retina CGContext image copy. A bounded timer applies smoothstep to the owned
-window's alpha, using the display mode's reported interval (60 Hz when
-unspecified, capped at 240 Hz). The timer releases everything at the endpoint;
-a one-second watchdog also retires an overlay if Dock has not replied.
-This is not display-link synchronization or a presentation fence. Fading the
-CALayer's opacity itself was rejected after captured frames showed a luminosity
-dip on the test host.
+The image is drawn into the window's backing before the window is shown: a
+Core Animation remote surface presented uninitialized white frames during
+rapid preparation and cancellation (see the
+[lcs.24 report](effects-lcs24-validation.md)). The window takes the capture's
+colour space, the display's own profile, before its context is created.
+Without it every pixel was converted to the window's default space: the draw
+of a 4112 × 2658 capture took 46–69 ms, against 15–18 ms without conversion,
+and colours outside that space would have been clipped, so the image would
+not have matched the screen it covers. The auxiliary Space that holds the
+window is created for each snapshot; the daemon recognises its own Spaces when
+WindowServer announces them, instead of asking for their type while a switch
+is under way (24–41 ms on the event loop for every step of a burst).
+
+A bounded timer applies smoothstep to the owned window's alpha, using the
+display mode's reported interval (60 Hz when unspecified, capped at 240 Hz).
+The timer releases everything at the endpoint; a one-second watchdog also
+retires an overlay if Dock has not replied. This is not display-link
+synchronization or a presentation fence. Fading the CALayer's opacity itself
+was rejected after captured frames showed a luminosity dip on the test host.
+
+Preparation runs on the daemon's event loop and holds it: on the MacBook
+display, capture took 37–63 ms warm and up to 93 ms cold, and window, draw and
+Space together about 20 ms, before the one-frame presentation opportunity. A
+signpost in category `effects` records each snapshot's capture and preparation
+time and, when none was used, why.
 
 New navigation, mouse input, other non-query commands, display reconfiguration,
 Mission Control, Dock restart and wake cancel the overlay. A click during
@@ -152,9 +171,10 @@ opportunity precedes the switch; it does not prove the image was presented.
 The outgoing frame is a still image, so video and changing application content
 freeze within that image for the short blend.
 
-The existing pacing reserves the requested effect duration before the next
-step. With pacing disabled, interruption discards the previous image; seamless
-retargeting in that mode is not promised. Reduce Motion retains this nonspatial
+The pacing lets each blend end before the next step starts; steps queued
+behind others, and those a held key repeats, blend in 125 ms at most (see
+[navigation](navigation.md#pacing)). With pacing disabled, interruption
+discards the previous image; seamless retargeting in that mode is not promised. Reduce Motion retains this nonspatial
 blend. Fullscreen Desktops and already-visible destinations switch without it.
 No blur is applied. The payload's legacy crossfade opcode remains for protocol
 compatibility, but this daemon no longer calls it.
@@ -163,7 +183,6 @@ compatibility, but this daemon no longer calls it.
 
 The following describes the retained payload implementation, not the current
 daemon renderer.
-
 
 Payload `2.1.31-lcs.10` can crossfade the whole display, requested with
 `crossfade` in place of the starting opacity (see [navigation](navigation.md)).
