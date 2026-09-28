@@ -15,10 +15,17 @@ editor's root `compile_commands.json` symlink.
 
 ## CTest and sanitizers
 
-- `yabai_tests` runs the core's unit tests against the unity build, plus
-  navigation argument, opacity-policy protocol, signal dispatch and storage
-  bound, scripting-addition request size and query string escaping
-  regressions. The signal tests launch
+- `yabai_tests` runs the core's unit tests against the unity build. Synthetic
+  views cover BSP insertion and removal, geometry, rotation, mirroring,
+  balancing, equalizing, traversal and directional lookup. Layout tests run
+  the actual Space commands with fixed display geometry and visibility;
+  window tests cover rule matching and effects and managed-window relations.
+  NUL-separated requests check dispatch and replies in all seven command
+  domains, plus state changes in the mutating domains. A single case runs with
+  `build/debug/tests/yabai_tests <test-name>`; the regular CTest run selects
+  every case. These tests also cover navigation arguments, opacity-policy
+  protocol, signal dispatch and storage bounds, scripting-addition request
+  size and query string escaping. The signal tests launch
   harmless local shell actions and check socket lifetime, isolated event
   variables and retained standard output/error. They do not run the daemon.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
