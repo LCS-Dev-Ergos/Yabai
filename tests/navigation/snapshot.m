@@ -284,7 +284,7 @@ static void cancel_and_let_handler_run(dispatch_source_t source)
 #define CGDisplayModeRelease fake_mode_release
 #define CGDisplayCreateUUIDFromDisplayID fake_uuid
 #define SPACE_SNAPSHOT_STALE_NS 400000000ULL
-#include "../../src/space_navigation_snapshot.m"
+#include "../../src/effects/snapshot.m"
 
 static bool space_snapshot_capture_pending(void)
 {

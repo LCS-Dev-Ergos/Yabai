@@ -54,7 +54,7 @@ extern bool g_verbose;
 #define COMMAND_CONFIG_SKIP_SPACE_ANIMATION  "skip_window_focus_animation"
 #define COMMAND_CONFIG_NAVIGATION_PACING     "space_navigation_pacing"
 
-// Fork: see space_navigation_schedule.c.
+// Fork: see navigation/schedule.c.
 static bool space_navigation_schedule_pacing(void);
 static void space_navigation_schedule_set_pacing(bool pacing);
 
@@ -1776,7 +1776,7 @@ static void handle_domain_display(FILE *rsp, struct token domain, char *message)
     }
 }
 
-#include "space_navigation_command.c"
+#include "navigation/command.c"
 
 static void handle_domain_space(FILE *rsp, struct token domain, char *message)
 {

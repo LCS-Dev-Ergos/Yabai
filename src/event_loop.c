@@ -72,7 +72,7 @@ static void window_did_receive_focus(struct window_manager *wm, struct mouse_sta
 }
 
 #include "window_focus_events.c"
-#include "space_navigation_queue.c"
+#include "navigation/admission.c"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -950,7 +950,7 @@ static EVENT_HANDLER(SLS_WINDOW_DESTROYED)
 static EVENT_HANDLER(SLS_SPACE_CREATED)
 {
     uint64_t sid = (uint64_t)(intptr_t) context;
-    // Fork: the crossfade's own Space, see space_navigation_snapshot.m.
+    // Fork: the crossfade's own Space, see effects/snapshot.m.
     if (space_navigation_snapshot_owns_space(sid)) return;
 
     int type = SLSSpaceGetType(g_connection, sid);
@@ -1665,7 +1665,7 @@ static EVENT_HANDLER(DAEMON_MESSAGE)
 }
 
 // Fork: the second half of a navigation's focus change between two windows of
-// one application, see space_navigation_focus.c.
+// one application, see navigation/activation.c.
 static void space_navigation_focus_resume(int generation);
 
 static EVENT_HANDLER(SPACE_NAVIGATION_FOCUS)
@@ -1673,7 +1673,7 @@ static EVENT_HANDLER(SPACE_NAVIGATION_FOCUS)
     space_navigation_focus_resume(param1);
 }
 
-// Fork: the next step of queued navigation, see space_navigation_schedule.c.
+// Fork: the next step of queued navigation, see navigation/schedule.c.
 static void space_navigation_schedule_timer(void);
 
 static EVENT_HANDLER(SPACE_NAVIGATION_DISPATCH)

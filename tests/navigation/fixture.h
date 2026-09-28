@@ -78,7 +78,7 @@ static struct
 #define SPACE_NAVIGATION_WINDOWS_MAX 256
 
 #include "stubs.h"
-#include "../../src/space_navigation.c"
+#include "../../src/navigation/step.c"
 
 // A single activating step with the window fade, as before the schedule.
 static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, float alpha, float duration)

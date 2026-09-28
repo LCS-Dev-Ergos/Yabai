@@ -118,7 +118,7 @@ static bool space_navigation_needs_raise(struct window *window, uint32_t display
     return false;
 }
 
-#include "space_navigation_effects.c"
+#include "../effects/window_fade.c"
 
 // One Desktop switch of a navigation. Its effect is either the fade of the
 // destination's windows from `alpha`, or a crossfade of the whole display. A

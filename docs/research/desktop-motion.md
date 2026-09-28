@@ -65,7 +65,7 @@ do not turn it into a presentation fence or add an arbitrary waiting timer.
 
 The subsequent implementation and its verification limits are in [effects.md](../effects.md).
 
-The [navigation path](../../src/space_navigation.c) dims destination windows,
+The [navigation path](../../src/navigation/step.c) dims destination windows,
 switches Space, focuses/possibly raises a window, then submits fades one by
 one. The [worker](../../src/osax/window_fade.c) assigns each request its own start
 time and uses `1 - (1 - t)^3`; its timer runs up to 120 Hz without display sync.

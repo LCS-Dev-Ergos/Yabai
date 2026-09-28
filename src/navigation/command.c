@@ -1,9 +1,9 @@
-#include "space_navigation_display.m"
-#include "space_navigation_spaces.c"
-#include "space_navigation_other_displays.c"
-#include "space_navigation_focus.c"
-#include "space_navigation.c"
-#include "space_navigation_schedule.c"
+#include "../effects/display.m"
+#include "topology.c"
+#include "topology_other_displays.c"
+#include "activation.c"
+#include "step.c"
+#include "schedule.c"
 
 static void space_navigation_focus_schedule(int generation, uint64_t delay_ns)
 {

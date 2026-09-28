@@ -61,8 +61,8 @@ static CFArrayRef SLSCopyWindowsWithOptionsAndTags(int cid, uint32_t owner, CFAr
     return window_reply ? CFRetain(window_reply) : NULL;
 }
 
-#include "../../src/space_navigation_spaces.c"
-#include "../../src/space_navigation_other_displays.c"
+#include "../../src/navigation/topology.c"
+#include "../../src/navigation/topology_other_displays.c"
 
 static CFDictionaryRef space(uint64_t sid, int type)
 {

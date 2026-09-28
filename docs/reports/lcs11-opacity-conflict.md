@@ -80,7 +80,7 @@ of these values were scanned out by either monitor.
    Changing cubic to spring, or merely lowering the timer rate, would leave
    this ownership conflict in place.
 
-Source pointers: [navigation](../../src/space_navigation.c),
+Source pointers: [navigation](../../src/navigation/step.c),
 [focus handling](../../src/event_loop.c), [opacity dispatch](../../src/window_manager.c),
 [fade state](../../src/osax/window_fade.c).
 

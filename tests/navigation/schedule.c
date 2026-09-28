@@ -23,7 +23,7 @@ static double space_navigation_seconds_since_click(void)
 
 #define debug(...)
 
-#include "../../src/space_navigation_schedule.c"
+#include "../../src/navigation/schedule.c"
 
 static struct
 {

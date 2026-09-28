@@ -38,15 +38,15 @@ sources:
 manifest.m
 ├── sa.m ─ sa_opacity.c
 ├── mission_control.c
-├── space_navigation_snapshot.m ─ space_navigation_snapshot_surface.m
-├── event_loop.c ─ window_focus_events.c, space_navigation_queue.c, event_loop_trace.c
+├── effects/snapshot.m ─ snapshot_surface.m
+├── event_loop.c ─ window_focus_events.c, navigation/admission.c, event_loop_trace.c
 ├── event_signal.c ─ event_signal_process.c
 ├── workspace.m, rule.c
-├── message.c ─ space_navigation_command.c
-│                ├── space_navigation_display.m, _spaces.c, _other_displays.c
-│                ├── space_navigation_focus.c
-│                ├── space_navigation.c ─ space_navigation_effects.c
-│                └── space_navigation_schedule.c
+├── message.c ─ navigation/command.c
+│                ├── effects/display.m, navigation/topology.c, topology_other_displays.c
+│                ├── navigation/activation.c
+│                ├── navigation/step.c ─ effects/window_fade.c
+│                └── navigation/schedule.c
 ├── display.c, space.c, view.c, window.c, process_manager.c, application.c
 ├── display_manager.c, space_manager.c, window_manager.c, mouse_handler.c
 └── yabai.c (main)
@@ -184,31 +184,33 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 
 Navigation (`space --navigate`), in the order a request travels:
 
-1. **Admission** (`space_navigation_queue.c`, message loop): recognises
+1. **Admission** (`navigation/admission.c`, message loop): recognises
    `focus next|prev` from the raw bytes, groups requests that arrive while one
    waits, tells repeats (under 75 ms) from presses, answers joined requests at
    once.
-2. **Command** (`space_navigation_command.c`, event loop): parses the request,
+2. **Command** (`navigation/command.c`, event loop): parses the request,
    takes one snapshot of the Desktops, claims the group's steps and queues.
-3. **Schedule** (`space_navigation_schedule.c`, event loop, pure logic with
+3. **Schedule** (`navigation/schedule.c`, event loop, pure logic with
    injected clock and executor): bounded queue, rhythm, effect and activation
    waits, overflow jumps, which step activates or settles.
-4. **Step** (`space_navigation.c`, event loop): resolves the destination,
+4. **Step** (`navigation/step.c`, event loop): resolves the destination,
    chooses the window, decides the raise, prepares the effect, asks Dock to
    switch, starts the effect, activates.
-5. **Activation** (`space_navigation_focus.c`, `window_focus_events.c`):
+5. **Activation** (`navigation/activation.c`, `window_focus_events.c`):
    focus without the upstream 40 ms sleep, raise for applications with windows
    on other displays, the observed focus that spares an AX query.
-6. **Topology** (`space_navigation_spaces.c`, `_other_displays.c`,
-   `_display.m`): one WindowServer snapshot per request answers order,
-   display, visibility and type.
+6. **Topology** (`navigation/topology.c`, `topology_other_displays.c`): one
+   WindowServer snapshot per request answers order, display, visibility and
+   type.
 
 Effects:
 
-- **Snapshot crossfade** (`space_navigation_snapshot*.m`): capture,
+- **Snapshot crossfade** (`effects/snapshot*.m`): capture,
   owned overlay window in an auxiliary Space, alpha timer, cancellation.
-- **Window fade** (`space_navigation_effects.c`, `sa_opacity.c`, payload
+- **Window fade** (`effects/window_fade.c`, `sa_opacity.c`, payload
   `window_fade*.c`): the older per-window fade and the opacity policy.
+- **Display facts** (`effects/display.m`): the refresh interval effects are
+  timed with, and Reduce Motion.
 - **Legacy Space crossfade** (payload `space_crossfade*.c`, about 630 lines):
   kept for protocol compatibility; the daemon no longer calls it.
 

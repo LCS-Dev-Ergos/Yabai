@@ -83,7 +83,7 @@ static void window_manager_focus_window_with_raise(ProcessSerialNumber *psn, uin
     record('r', psn, window_id, 0);
 }
 
-#include "../../src/space_navigation_focus.c"
+#include "../../src/navigation/activation.c"
 
 static void window_manager_make_key_window(ProcessSerialNumber *psn, uint32_t window_id)
 {

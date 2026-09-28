@@ -181,7 +181,7 @@ static bool space_navigation_snapshot_owns_space(uint64_t sid)
     return owned;
 }
 
-#include "space_navigation_snapshot_surface.m"
+#include "snapshot_surface.m"
 
 // Lock held. Timer cancellation keeps its captured pointer alive until all
 // queued handlers have returned; its cancel handler owns the final free. That

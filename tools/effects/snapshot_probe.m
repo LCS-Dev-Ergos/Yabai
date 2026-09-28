@@ -7,12 +7,12 @@
 #include <unistd.h>
 #include <math.h>
 #include "../../src/misc/extern.h"
-#include "../../src/space_navigation_display.m"
+#include "../../src/effects/display.m"
 static uint64_t read_os_timer(void)
 {
     return clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
 }
-#include "../../src/space_navigation_snapshot.m"
+#include "../../src/effects/snapshot.m"
 
 int main(int argc, const char **argv)
 {
