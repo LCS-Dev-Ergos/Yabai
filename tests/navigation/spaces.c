@@ -62,7 +62,6 @@ static CFArrayRef SLSCopyWindowsWithOptionsAndTags(int cid, uint32_t owner, CFAr
 }
 
 #include "../../src/navigation/topology.c"
-#include "../../src/navigation/topology_other_displays.c"
 
 static CFDictionaryRef space(uint64_t sid, int type)
 {

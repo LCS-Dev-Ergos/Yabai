@@ -38,12 +38,12 @@ sources:
 manifest.m
 ├── sa.m ─ sa_opacity.c
 ├── mission_control.c
-├── effects/snapshot.m ─ snapshot_surface.m
+├── effects/snapshot.m ─ snapshot_capture.m, snapshot_surface.m
 ├── event_loop.c ─ window_focus_events.c, navigation/admission.c, event_loop_trace.c
 ├── event_signal.c ─ event_signal_process.c
 ├── workspace.m, rule.c
 ├── message.c ─ navigation/command.c
-│                ├── effects/display.m, navigation/topology.c, topology_other_displays.c
+│                ├── effects/display.m, navigation/topology.c
 │                ├── navigation/activation.c
 │                ├── navigation/step.c ─ effects/window_fade.c
 │                └── navigation/schedule.c
@@ -199,14 +199,14 @@ Navigation (`space --navigate`), in the order a request travels:
 5. **Activation** (`navigation/activation.c`, `window_focus_events.c`):
    focus without the upstream 40 ms sleep, raise for applications with windows
    on other displays, the observed focus that spares an AX query.
-6. **Topology** (`navigation/topology.c`, `topology_other_displays.c`): one
-   WindowServer snapshot per request answers order, display, visibility and
-   type.
+6. **Topology** (`navigation/topology.c`): one WindowServer snapshot per
+   request answers order, display, visibility and type.
 
 Effects:
 
-- **Snapshot crossfade** (`effects/snapshot*.m`): capture,
-  owned overlay window in an auxiliary Space, alpha timer, cancellation.
+- **Snapshot crossfade** (`effects/snapshot*.m`): the capture
+  (`snapshot_capture.m`), the owned overlay window in an auxiliary Space
+  (`snapshot_surface.m`), its alpha timer and cancellation (`snapshot.m`).
 - **Window fade** (`effects/window_fade.c`, `sa_opacity.c`, payload
   `window_fade*.c`): the older per-window fade and the opacity policy.
 - **Display facts** (`effects/display.m`): the refresh interval effects are

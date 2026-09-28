@@ -1,6 +1,5 @@
 #include "../effects/display.m"
 #include "topology.c"
-#include "topology_other_displays.c"
 #include "activation.c"
 #include "step.c"
 #include "schedule.c"
