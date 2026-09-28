@@ -75,8 +75,12 @@ Consequences:
 
 - Every function and global is visible to everything included after it.
   The core's files call each other's file-static functions by include order.
-- Each global is declared once, in the header of the part that owns it, and
-  defined in `yabai.c` or `event_loop.c`.
+- Each shared global is declared in the header of the part that owns it.
+  The daemon's globals are defined together in `yabai.c` because startup
+  initializes several areas before their callbacks or the message loop can
+  run. `event_loop.c` defines its pending-event flags beside their handlers.
+  Their writing threads and readers are listed below; the definition's file
+  does not imply ownership after startup.
 - Each navigation and effects module declares what other files use in its
   header, which also states its threads, the state it owns, its callers and
   what it calls. `hooks.h` declares every module function the core calls,
@@ -177,13 +181,26 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 
 | State | Owner | Other access |
 | --- | --- | --- |
-| `g_window_manager` (windows, applications, focus, opacity, animation settings) | Event loop | Animation threads read their own contexts; `window_animations_table` is locked. |
-| `g_space_manager`, views and their BSP trees | Event loop | — |
-| `g_display_manager` | Event loop | Display reconfiguration callback only posts. |
+| `g_window_manager` (windows, applications, focus, opacity, animation settings) | Startup initializes; event loop writes | Animation threads read their own contexts; `window_animations_table` is locked. |
+| `g_space_manager`, views and their BSP trees | Startup initializes; event loop writes | — |
+| `g_display_manager` | Startup initializes; event loop writes | Display reconfiguration callback only posts. |
 | `g_process_manager.process` (table) | Main thread | Event loop receives `struct process *` through events; main-queue retries look processes up on the main thread. |
-| `g_mouse_state` | Split: settings written by commands on the event loop, click state by the tap on the main thread | The tap reads `modifier` without synchronization (a benign race upstream). |
-| `g_event_loop.queue` | Event loop takes events | Every producer adds them; mutex. |
-| `g_signal_storage` | Event loop | — |
+| `g_process_manager` frontmost-process and switch fields | Event loop | Main-thread process callbacks use the process table, not these fields. |
+| `g_mouse_state` | Settings: event loop; click flags: main-thread tap | The tap reads `modifier` without synchronization; this race remains open for step 5. |
+| `g_event_loop` and its queue | Startup initializes; event loop consumes | Main, message and global-queue producers add events under the queue mutex. |
+| `g_signal_event` | Event loop | Signal subscriptions and pending actions. |
+| `g_signal_storage` | Event loop | Memory backing signal actions. |
+| `g_workspace_context` | Main-thread startup | Event handlers and process management use it to observe or unobserve applications. |
+| `g_mission_control_mode` | Event loop | Main-thread callbacks only post Mission Control events. |
+| `g_cv_host_clock_frequency` | Startup | Animation threads and event-loop window operations read it. |
+| `g_layer_normal_window_level`, `g_layer_below_window_level`, `g_layer_above_window_level` | Startup | Window and view code read these display levels. |
+| `g_event_bytes` | Startup allocates; event loop writes | Window-focus operations reuse this event buffer. |
+| `g_sa_socket_file` | Startup and scripting-addition load set it | Event-loop commands and animation workers read it for Dock requests. |
+| `g_socket_file`, `g_config_file`, `g_lock_file` | Startup/client option parsing | The daemon uses these paths during initialization and command acceptance. |
+| `g_bs_port` | Startup | Animation notification code reads the bootstrap port. |
+| `g_connection` | Startup | Event loop and main-thread callbacks read the SkyLight connection. |
+| `g_verbose` | Client option parsing and event-loop config command | Logging on other threads reads it without synchronization. |
+| `g_pid` | Startup | Used to acquire the daemon lock. |
 | `g_space_navigation_queue` (fork) | Message loop and event loop | Mutex. |
 | `g_space_navigation_schedule`, `_focus`, `_anchor`, `_spaces` (fork) | Event loop | Timers only post events. |
 | Snapshot (`space_snapshot_active`, recent Spaces) | Event loop creates and cancels | Alpha timer on a global queue, under `space_snapshot_lock`; the timer's cancel handler frees the snapshot without the lock. |
