@@ -29,8 +29,9 @@ This bounds the *number* of notification calls on a `CannotComplete` attempt
 and limits their intended per-element timeout; it is not a 250 ms bound on the
 whole launch handler. Earlier successful additions can require up to six AX
 removals, each subject to the same timeout, and `AXObserverCreate` is a
-separate call. AX may also fail to honor a requested timeout. No live latency
-gain has been measured for this candidate.
+separate call. AX may also fail to honor a requested timeout. The bounded live
+comparison below measures helper-query responsiveness, not a general or
+AX-isolated application-launch speedup.
 
 ## Missing capture callbacks
 
@@ -149,4 +150,6 @@ aborted socket-fixture attempt is preserved separately at
 `build/live-hardening/session-1790692809617318000/`. The runner and screen
 recordings are local fixtures, not part of the PR. Representative cold-app
 latency, long-duration port behavior, intentionally missing live callbacks,
-and signed-candidate acceptance remain open.
+and signed-candidate acceptance remain open. Further live port attribution
+and other new measurements are deferred at the user's request until a fresh
+reboot with few active processes.
