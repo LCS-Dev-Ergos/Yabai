@@ -1,5 +1,19 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+#include <os/signpost.h>
+static void application_ax_diag(const char *phase, pid_t pid, int notification,
+                                AXError result, uint64_t duration)
+{
+    static os_log_t log;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ log = os_log_create("com.lcs.yabai", "effects"); });
+    os_signpost_event_emit(log, OS_SIGNPOST_ID_EXCLUSIVE, "ax_diag",
+                           "%{public}s pid %d notification %d result %d duration_ns %llu ns %llu",
+                           phase, pid, notification, result, (unsigned long long)duration,
+                           (unsigned long long)clock_gettime_nsec_np(CLOCK_UPTIME_RAW));
+}
+#endif
 static OBSERVER_CALLBACK(application_notification_handler)
 {
     if (CFEqual(notification, kAXCreatedNotification)) {
@@ -41,9 +55,24 @@ static OBSERVER_CALLBACK(application_notification_handler)
 
 bool application_observe(struct application *application)
 {
-    if (AXObserverCreate(application->pid, application_notification_handler, &application->observer_ref) == kAXErrorSuccess) {
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+    uint64_t create_begin = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+#endif
+    AXError create_result = AXObserverCreate(application->pid, application_notification_handler, &application->observer_ref);
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+    application_ax_diag("observer_create", application->pid, -1, create_result,
+                        clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - create_begin);
+#endif
+    if (create_result == kAXErrorSuccess) {
         for (int i = 0; i < array_count(ax_application_notification); ++i) {
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+            uint64_t add_begin = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+#endif
             AXError result = AXObserverAddNotification(application->observer_ref, application->ref, ax_application_notification[i], application);
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+            application_ax_diag("notification_add", application->pid, i, result,
+                                clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - add_begin);
+#endif
             if (result == kAXErrorSuccess || result == kAXErrorNotificationAlreadyRegistered) {
                 application->notification |= 1 << i;
             } else {
