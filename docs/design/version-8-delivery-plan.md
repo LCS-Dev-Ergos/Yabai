@@ -1,8 +1,9 @@
 # Version 8: integration and acceptance plan
 
 Status, 2026-09-29: foundation, corrected capture, the GPU feasibility
-dossier and AX/callback hardening are integrated in `dev`. IPC fixes remain
-in progress. No version 8 release or installation has been performed.
+dossier and AX/callback hardening are integrated in `dev`. The IPC candidate
+is under separate review and temporarily included in the dependent release
+preparation PR. No version 8 release or installation has been performed.
 
 ## Authorization and ownership
 
@@ -70,9 +71,10 @@ establish a leak or ownership by Yabai. Compare per-process counts across
 controlled transitions, a client-alive hold and daemon exit. Review found a
 separate missing send-right release in JankyBorders notification lookup, an
 unchecked 512-entry notification capacity, and a stale event-tap pointer on
-failed setup. Assign their narrow corrections and regression tests to GPT-6
-Sol after the prototype dossier is preserved; do not attribute these defects
-to the WindowServer total without evidence.
+failed setup. The candidate in `0960819` corrects these with focused tests and
+is awaiting separate integration; its dependency is merged into the release
+preparation branch so combined CI can run. Do not attribute these defects to
+the WindowServer total without evidence.
 
 A cherry-pick copies a commit; fast-forward advances a branch without copying
 commits. These are different operations. Use PR review and preserve the

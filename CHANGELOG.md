@@ -5,11 +5,22 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [8.0.0-lcs.1] - 2026-09-29
 ### Changed
-- Prepare the next fork release as `8.0.0-lcs.1`; the scripting-addition handshake remains `2.1.31-lcs.14`
-- Build the daemon from area translation units with explicit ownership boundaries and broader core behavior coverage
-- Authenticate local socket peers against the signed daemon requirement, with unsigned local clients available only in explicit development builds
-- Capture Desktop snapshots with `captureScreenshotWithRect` on supported macOS versions, avoiding the retained frame memory measured with `captureImageInRect`
+- Build the daemon from area translation units with explicit ownership boundaries and broader core behavior coverage; report version `8.0.0` and keep the scripting-addition handshake at `2.1.31-lcs.14`
+- Authenticate local socket peers against the signed daemon requirement; unsigned local clients require an explicit development build and are disabled in the signed release
+- Capture Desktop snapshots with `captureScreenshotWithRect` on macOS 26 and later, avoiding the retained frame memory measured with `captureImageInRect`
+
+### Fixed
+- Bound repeated Accessibility notification attempts after `CannotComplete` with a short per-element timeout and retry backoff, while allowing a responsive application to recover
+- Admit at most two ScreenCaptureKit requests whose callbacks have not returned; further navigation proceeds without the optional effect until an admission slot returns
+- Release each acquired JankyBorders bootstrap send right, split notifications within the 512-pair receiver limit, and clear a failed event-tap pointer before retry
+
+### Verification and limits
+- Bounded SDR capture and navigation evidence comes from macOS 27.2; the corrected capture API path targets macOS 26 and later. HDR, moving cursor, display reconfiguration, and broad application coverage remain unverified
+- The buffer/GPU work is an experimental feasibility prototype and is not used by the production renderer; no general smoothness or WindowServer resource improvement is claimed
+- New visual, performance, and WindowServer attribution tests are deferred until the user reboots with a fresh system; signed installed-daemon acceptance is still required
 
 ## Fork history through v7.1.25-lcs.32
 ### Changed
@@ -871,7 +882,8 @@ The *window_destroyed* signal is now triggered for windows that are implicitly d
 ### Added
 - First official release
 
-[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v7.1.25-lcs.32...HEAD
+[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.1...HEAD
+[8.0.0-lcs.1]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v7.1.25-lcs.32...v8.0.0-lcs.1
 [7.1.25]: https://github.com/asmvik/yabai/compare/v7.1.24...v7.1.25
 [7.1.24]: https://github.com/asmvik/yabai/compare/v7.1.23...v7.1.24
 [7.1.23]: https://github.com/asmvik/yabai/compare/v7.1.22...v7.1.23
