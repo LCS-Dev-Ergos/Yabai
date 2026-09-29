@@ -1,7 +1,8 @@
 # Version 8: integration and acceptance plan
 
-Status: implementation delegated, 2026-09-29. No version 8 release or
-installation has been performed.
+Status, 2026-09-29: foundation, corrected capture, the GPU feasibility
+dossier and AX/callback hardening are integrated in `dev`. IPC fixes remain
+in progress. No version 8 release or installation has been performed.
 
 ## Authorization and ownership
 
@@ -48,13 +49,20 @@ Build, sanitizers, fuzzing and analysis passed on both PR heads. The capture
 merge tree equals its tested head `6690ded`. These integrations did not change
 the installed daemon or publish a release.
 
+[GPU dossier PR #4](https://github.com/LCS-Dev-Ergos/Yabai/pull/4) was
+integrated at `c7e76a2` after complete CI. It preserves the feasibility data
+and prototype; the production renderer still uses corrected rectangle capture.
+[AX/callback hardening PR #3](https://github.com/LCS-Dev-Ergos/Yabai/pull/3)
+was integrated at `7cbcf5a` after review and complete CI. Its bounded live
+checks passed before the request to defer new live campaigns until reboot.
+
 The buffer/GPU feasibility experiment remains experimental. Its full-resolution
 headless requests succeeded, but the user reported Space navigation during the
 ABBA campaign with the legacy installed daemon, followed by a daemon restart.
 Those timings and WindowServer memory deltas cannot rank the backends. Keep the
 corrected rectangle renderer for this release unless later controlled,
 presented-frame evidence justifies replacing it. See
-`docs/reports/effects-buffer-gpu-spike-2026-09-29.md` in the prototype branch.
+`docs/reports/effects-buffer-gpu-spike-2026-09-29.md` in `dev`.
 
 The user's subsequent report of more than 15,000 WindowServer ports adds a
 Mach-port lifecycle check to live acceptance. A high total alone does not
