@@ -16,6 +16,10 @@ overlay windows or Space changes. Alternative capture APIs did not show that
 same pattern in bounded trials. See the [diagnostic report](../reports/windowserver-capture-retention-2026-09-29.md).
 Replacing or containing this capture path is a prerequisite for the two
 workstreams below; a GPU renderer alone would not address the measured trigger.
+The focused replacement and bounded live measurements are recorded in the
+[decision-data report](../reports/capture-decision-data-2026-09-29.md); its
+long memory gate remains open, and GPU crossfade and first-Space visuals were
+not completed.
 
 ## Problem and boundaries
 

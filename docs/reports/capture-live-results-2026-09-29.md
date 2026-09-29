@@ -1,5 +1,14 @@
 # Capture replacement: live results and next decision
 
+**Follow-up on the same date:**
+[capture-decision-data-2026-09-29.md](capture-decision-data-2026-09-29.md)
+supersedes the next-experiment plan below. The longer 50-effect client-alive
+gate stopped at 20 on a conservative WindowServer memory threshold. A later
+short block showed an even larger transient peak that returned to baseline
+while the daemon remained alive, and an exact-configuration headless control
+remained bounded for 30 captures. The long gate and first-Space/GPU acceptance
+are still open; do not extrapolate the 12-effect pass below to them.
+
 Date: 2026-09-29. Candidate `2131b94`, based on `9a56727`, branch
 `lcs-code/crossfade-capture-retention`. The user authorized local unsigned
 validation and continuing work in this worktree. No release was created.
