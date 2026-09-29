@@ -1,13 +1,18 @@
 // Window moves to Spaces through SkyLight or the Dock payload.
 // Runs on the event-loop thread.
 
+// The private class is loaded at runtime. Its initializer follows the usual
+// Objective-C init ownership rule, which a raw objc_msgSend cast obscures.
+@protocol YabaiBridgedMoveOperation
+- (id)initWithWindows:(id)windows spaceID:(uint64_t)sid;
+@end
+
 void space_manager_move_window_list_to_space(uint64_t sid, uint32_t *window_list, int window_count)
 {
     if (SLSPerformAsynchronousBridgedWindowManagementOperation) {
         CFArrayRef window_list_ref = cfarray_of_cfnumbers(window_list, sizeof(uint32_t), window_count, kCFNumberSInt32Type);
         Class cls = objc_getClass("SLSBridgedMoveWindowsToManagedSpaceOperation");
-        SEL sel = sel_registerName("initWithWindows:spaceID:");
-        id operation = ((id (*)(id, SEL, id, uint64_t))objc_msgSend)([cls alloc], sel, (__bridge id)window_list_ref, sid);
+        id operation = [(id<YabaiBridgedMoveOperation>)[cls alloc] initWithWindows:(__bridge id)window_list_ref spaceID:sid];
         SLSPerformAsynchronousBridgedWindowManagementOperation(operation);
         [operation release];
         CFRelease(window_list_ref);
@@ -27,8 +32,7 @@ void space_manager_move_window_to_space(uint64_t sid, struct window *window)
     if (SLSPerformAsynchronousBridgedWindowManagementOperation) {
         CFArrayRef window_list_ref = cfarray_of_cfnumbers(&window->id, sizeof(uint32_t), 1, kCFNumberSInt32Type);
         Class cls = objc_getClass("SLSBridgedMoveWindowsToManagedSpaceOperation");
-        SEL sel = sel_registerName("initWithWindows:spaceID:");
-        id operation = ((id (*)(id, SEL, id, uint64_t))objc_msgSend)([cls alloc], sel, (__bridge id)window_list_ref, sid);
+        id operation = [(id<YabaiBridgedMoveOperation>)[cls alloc] initWithWindows:(__bridge id)window_list_ref spaceID:sid];
         SLSPerformAsynchronousBridgedWindowManagementOperation(operation);
         [operation release];
         CFRelease(window_list_ref);
