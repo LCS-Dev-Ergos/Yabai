@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 
 #
-# This script will install the latest pre-built yabai release from GitHub.
+# This script installs the pinned upstream asmvik release from GitHub.
+# The signed LCS fork is packaged separately through nix-darwin.
 # Depends on curl, shasum, tar, cp, cut.
 #
 # ARG1:   Directory in which to store the yabai binary; must be an absolutepath.

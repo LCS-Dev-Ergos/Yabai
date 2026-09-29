@@ -6,6 +6,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Changed
+- Prepare the next fork release as `8.0.0-lcs.1`; the scripting-addition handshake remains `2.1.31-lcs.14`
+- Build the daemon from area translation units with explicit ownership boundaries and broader core behavior coverage
+- Authenticate local socket peers against the signed daemon requirement, with unsigned local clients available only in explicit development builds
+- Capture Desktop snapshots with `captureScreenshotWithRect` on supported macOS versions, avoiding the retained frame memory measured with `captureImageInRect`
+
+## Fork history through v7.1.25-lcs.32
+### Changed
 - Navigation switches without an effect once `next` or `prev` come within 400 ms of each other, for the rest of that burst, instead of capturing and blending every Desktop on the way
 - Navigation keeps at most four switches waiting instead of ten: further `next` and `prev` presses join the jump at the end, so a quick burst ends about 1.5 s after the last press on two 4K displays instead of 3.7 s
 - Navigation counts a request as a key press, not a repeat, when a key was released since shortly before the previous request, however soon it arrived: presses 100 ms apart that load delivered 70 ms apart were taken for a held key, and navigation ended a Desktop short
@@ -864,7 +871,7 @@ The *window_destroyed* signal is now triggered for windows that are implicitly d
 ### Added
 - First official release
 
-[Unreleased]: https://github.com/asmvik/yabai/compare/v7.1.25...HEAD
+[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v7.1.25-lcs.32...HEAD
 [7.1.25]: https://github.com/asmvik/yabai/compare/v7.1.24...v7.1.25
 [7.1.24]: https://github.com/asmvik/yabai/compare/v7.1.23...v7.1.24
 [7.1.23]: https://github.com/asmvik/yabai/compare/v7.1.22...v7.1.23
