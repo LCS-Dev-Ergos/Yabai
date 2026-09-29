@@ -10,6 +10,7 @@
 #ifndef SPACE_SNAPSHOT_STALE_NS
 #define SPACE_SNAPSHOT_STALE_NS 2000000000ULL
 #endif
+#define SPACE_SNAPSHOT_MAX_UNRESOLVED 2
 
 struct space_snapshot_capture
 {
@@ -25,17 +26,17 @@ struct space_snapshot_capture
     CGImageRef image;
 };
 
-// A timed-out capture remains the only request in flight until its callback
-// arrives, so slow WindowServer responses cannot build a backlog. A callback
-// that never arrived would disable the crossfade until yabai restarts: after
-// SPACE_SNAPSHOT_STALE_NS the request counts as lost and another may start.
-// Its callback, if it still comes, only releases its own image.
+// One request normally runs at a time. A request still missing after the stale
+// interval permits one replacement, but both retain a callback-owned context.
+// Once two callbacks are unresolved, further effects are omitted until one
+// actually returns. A timeout never releases framework-owned context.
 static struct
 {
     pthread_mutex_t lock;
     uint64_t generation;
     uint64_t pending;       // The capture in flight, 0 when none.
     uint64_t started;
+    unsigned unresolved;    // Includes stale generations awaiting callbacks.
 } space_snapshot_captures = { .lock = PTHREAD_MUTEX_INITIALIZER };
 
 static uint64_t space_snapshot_capture_begin(void)
@@ -45,10 +46,12 @@ static uint64_t space_snapshot_capture_begin(void)
 
     pthread_mutex_lock(&space_snapshot_captures.lock);
 
-    if (!space_snapshot_captures.pending || now - space_snapshot_captures.started >= SPACE_SNAPSHOT_STALE_NS) {
+    if (space_snapshot_captures.unresolved < SPACE_SNAPSHOT_MAX_UNRESOLVED &&
+        (!space_snapshot_captures.pending || now - space_snapshot_captures.started >= SPACE_SNAPSHOT_STALE_NS)) {
         generation = ++space_snapshot_captures.generation;
         space_snapshot_captures.pending = generation;
         space_snapshot_captures.started = now;
+        ++space_snapshot_captures.unresolved;
     }
 
     pthread_mutex_unlock(&space_snapshot_captures.lock);
@@ -60,6 +63,8 @@ static void space_snapshot_capture_end(uint64_t generation)
 {
     pthread_mutex_lock(&space_snapshot_captures.lock);
 
+    assert(space_snapshot_captures.unresolved > 0);
+    --space_snapshot_captures.unresolved;
     if (space_snapshot_captures.pending == generation) {
         space_snapshot_captures.pending = 0;
     }

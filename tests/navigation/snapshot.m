@@ -26,9 +26,10 @@ static CGImageRef fixture_image;
 static CGImageRef wrong_image;
 static CGRect fixture_bounds = {{0, 0}, {16, 16}};
 
-// A capture whose callback does not arrive until the test delivers it.
+// Captures whose callbacks do not arrive until the test delivers them.
 static bool capture_lost;
-static void (^lost_handler)(SCScreenshotOutput *, NSError *);
+static void (^lost_handlers[8])(SCScreenshotOutput *, NSError *);
+static int lost_count;
 static int modern_capture_calls, legacy_capture_calls;
 
 @interface SnapshotOutputMock : NSObject
@@ -60,8 +61,8 @@ static int modern_capture_calls, legacy_capture_calls;
     assert(config.width == 16 && config.height == 16 && config.showsCursor);
     ++modern_capture_calls;
     if (capture_lost) {
-        assert(!lost_handler);
-        lost_handler = Block_copy(handler);
+        assert(lost_count < (int)(sizeof(lost_handlers) / sizeof(lost_handlers[0])));
+        lost_handlers[lost_count++] = Block_copy(handler);
         return;
     }
 
@@ -337,6 +338,14 @@ static bool space_snapshot_capture_pending(void)
     return pending;
 }
 
+static unsigned space_snapshot_capture_unresolved(void)
+{
+    pthread_mutex_lock(&space_snapshot_captures.lock);
+    unsigned unresolved = space_snapshot_captures.unresolved;
+    pthread_mutex_unlock(&space_snapshot_captures.lock);
+    return unresolved;
+}
+
 static bool prepare(void)
 {
     return space_navigation_snapshot_prepare(1, 2, 1.0f / 120.0f);
@@ -364,6 +373,17 @@ static void expect_released(void)
         usleep(1000);
     assert(!__atomic_load_n(&live_windows, __ATOMIC_SEQ_CST));
     assert(!__atomic_load_n(&live_spaces, __ATOMIC_SEQ_CST));
+}
+
+static void deliver_lost(int index)
+{
+    assert(index >= 0 && index < lost_count && lost_handlers[index]);
+    void (^handler)(SCScreenshotOutput *, NSError *) = lost_handlers[index];
+    lost_handlers[index] = NULL;
+    SnapshotOutputMock *output = [[SnapshotOutputMock alloc] init];
+    handler((SCScreenshotOutput *)output, nil);
+    [output release];
+    Block_release(handler);
 }
 
 int main(void)
@@ -461,16 +481,62 @@ int main(void)
         // newer capture in flight alone.
         capture_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
         assert(!prepare() && space_snapshot_capture_pending());
-        assert(lost_handler);
-        SnapshotOutputMock *output = [[SnapshotOutputMock alloc] init];
-        lost_handler((SCScreenshotOutput *)output, nil);
-        [output release];
-        Block_release(lost_handler);
-        lost_handler = NULL;
+        deliver_lost(0);
         assert(space_snapshot_capture_pending());
         while (space_snapshot_capture_pending())
             usleep(1000);
         capture_delay = 0;
+
+        // Two callbacks may remain missing across the stale retry. A third
+        // request must fall back without retaining another capture context.
+        capture_lost = true;
+        int first_lost = lost_count;
+        assert(!prepare());
+        usleep((useconds_t)(SPACE_SNAPSHOT_STALE_NS / 1000));
+        assert(!prepare());
+        usleep((useconds_t)(SPACE_SNAPSHOT_STALE_NS / 1000));
+        int calls_at_bound = modern_capture_calls;
+        assert(space_snapshot_capture_unresolved() == SPACE_SNAPSHOT_MAX_UNRESOLVED);
+        assert(!prepare());
+        assert(!capture(50)); // Navigation proceeds with no effect.
+        assert(modern_capture_calls == calls_at_bound);
+        assert(space_snapshot_capture_unresolved() == SPACE_SNAPSHOT_MAX_UNRESOLVED);
+
+        // The newer callback returns first. Its slot is reusable; an older
+        // callback must not clear the third generation's pending marker.
+        deliver_lost(first_lost + 1);
+        assert(!space_snapshot_capture_pending());
+        assert(space_snapshot_capture_unresolved() == 1);
+        assert(!prepare());
+        assert(modern_capture_calls == calls_at_bound + 1);
+        deliver_lost(first_lost);
+        assert(space_snapshot_capture_pending());
+        deliver_lost(first_lost + 2);
+        assert(!space_snapshot_capture_pending());
+        assert(space_snapshot_capture_unresolved() == 0);
+        capture_lost = false;
+        assert(prepare());
+        space_navigation_snapshot_cancel();
+        expect_released();
+
+        // Concurrent completions return both slots exactly once.
+        capture_lost = true;
+        int parallel_lost = lost_count;
+        assert(!prepare());
+        usleep((useconds_t)(SPACE_SNAPSHOT_STALE_NS / 1000));
+        assert(!prepare());
+        assert(space_snapshot_capture_unresolved() == 2);
+        dispatch_group_t group = dispatch_group_create();
+        dispatch_group_async(group, dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{ deliver_lost(parallel_lost + 1); });
+        dispatch_group_async(group, dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{ deliver_lost(parallel_lost); });
+        dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+        dispatch_release(group);
+        assert(space_snapshot_capture_unresolved() == 0);
+        assert(!space_snapshot_capture_pending());
+        capture_lost = false;
+        assert(prepare());
+        space_navigation_snapshot_cancel();
+        expect_released();
 
         // An asynchronous capture reports its callback, and presents its
         // image; the deadline reports too and finds nothing left.
