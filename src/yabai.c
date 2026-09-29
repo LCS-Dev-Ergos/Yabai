@@ -22,9 +22,9 @@ const CFStringRef kAXFullscreenAttribute = CFSTR("AXFullScreen");
 mach_port_t (* CGSGetConnectionPortById)(int);
 int64_t (* SLSPerformAsynchronousBridgedWindowManagementOperation)(void *);
 
-#define MAJOR  7
-#define MINOR  1
-#define PATCH 25
+#define MAJOR  8
+#define MINOR  0
+#define PATCH 0
 
 struct signal *g_signal_event[SIGNAL_TYPE_COUNT];
 struct process_manager g_process_manager;

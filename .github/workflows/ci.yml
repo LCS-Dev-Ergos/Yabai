@@ -53,7 +53,8 @@ jobs:
         run: |
           identity=""
           if [ "$RELEASE" = "true" ]; then identity="$SIGNING_IDENTITY"; fi
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DYABAI_CODESIGN_IDENTITY="$identity"
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DYABAI_CODESIGN_IDENTITY="$identity" -DYABAI_ALLOW_UNSIGNED_LOCAL=OFF
           cmake --build build --parallel
 
       - name: Verify
@@ -62,7 +63,10 @@ jobs:
           test "$(lipo -archs build/bin/yabai)" = "x86_64 arm64"
           test "$(lipo -archs build/src/osax/payload)" = "x86_64 arm64e"
           if [ "$RELEASE" = "true" ]; then
-            codesign --verify --strict build/bin/yabai
+            version="${GITHUB_REF_NAME#v}"
+            test "$(build/bin/yabai --version)" = "yabai-v${version%-lcs.*}"
+            grep -qx 'YABAI_ALLOW_UNSIGNED_LOCAL:BOOL=OFF' build/CMakeCache.txt
+            codesign --verify --strict --all-architectures build/bin/yabai
             codesign -dvv build/bin/yabai 2>&1 | grep -qx "Authority=$SIGNING_IDENTITY"
           fi
 
