@@ -7,6 +7,17 @@ unsigned int __src_osax_loader_len;
 #define YABAI_TEST_DIRECTION_WINDOWS
 #define YABAI_TEST_RULE_EFFECTS
 #define YABAI_TEST_COMMAND_STATE
+#define YABAI_TEST_AX_OBSERVATION
+#import <ApplicationServices/ApplicationServices.h>
+static AXError test_ax_set_messaging_timeout(AXUIElementRef element, float timeout);
+static AXError test_ax_observer_create(pid_t pid, AXObserverCallback callback, AXObserverRef *observer);
+static AXError test_ax_observer_add_notification(AXObserverRef observer, AXUIElementRef element, CFStringRef notification, void *context);
+static AXError test_ax_observer_remove_notification(AXObserverRef observer, AXUIElementRef element, CFStringRef notification);
+static CFRunLoopSourceRef test_ax_observer_get_run_loop_source(AXObserverRef observer);
+struct process;
+static void test_ax_retry_dispatch(uint64_t delay, dispatch_block_t block);
+static struct process *test_ax_retry_find(ProcessSerialNumber *psn);
+static void test_ax_retry_post(struct process *process);
 #include "../../src/manifest.m"
 
 static struct window test_command_window = { .id = 501 };
@@ -100,9 +111,11 @@ typedef TEST_SIG(function);
 #include "opacity_policy.c"
 #include "string_escape.c"
 #include "sa_request.c"
+#include "application_observation.c"
 
 #define TEST_ENTRY(name) { #name, test_##name },
 #define TEST_LIST                                              \
+    TEST_ENTRY(application_observation)                        \
     TEST_ENTRY(opacity_policy)                                 \
     TEST_ENTRY(string_escape)                                  \
     TEST_ENTRY(signal_socket_lifetime)                         \
