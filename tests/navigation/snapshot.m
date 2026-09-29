@@ -6,6 +6,11 @@
 #include <pthread.h>
 #include <unistd.h>
 
+// The test runs its 26+ mock only after the runtime guard in main. Keep the
+// target at macOS 11 so the unsupported-system fallback can also be checked.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
+
 static uint64_t read_os_timer(void)
 {
     return clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
@@ -13,23 +18,47 @@ static uint64_t read_os_timer(void)
 
 static int live_windows, live_spaces, alpha_writes, color_space_writes;
 static bool deny_capture, fail_create, fail_context, fail_order, fail_attach, fail_alpha;
+static bool wrong_capture_size;
 static uint64_t capture_delay, capture_start_delay;
 static uint64_t active_sid = 2;
 static bool overlay_attached;
 static CGImageRef fixture_image;
+static CGImageRef wrong_image;
 static CGRect fixture_bounds = {{0, 0}, {16, 16}};
 
 // A capture whose callback does not arrive until the test delivers it.
 static bool capture_lost;
-static void (^lost_handler)(CGImageRef, NSError *);
+static void (^lost_handler)(SCScreenshotOutput *, NSError *);
+static int modern_capture_calls, legacy_capture_calls;
+
+@interface SnapshotOutputMock : NSObject
+- (CGImageRef)sdrImage;
+@end
+@implementation SnapshotOutputMock
+- (CGImageRef)sdrImage { return wrong_capture_size ? wrong_image : fixture_image; }
+@end
 
 @interface SnapshotCaptureMock : NSObject
 + (void)captureImageInRect:(CGRect)rect completionHandler:(void (^)(CGImageRef, NSError *))handler;
++ (void)captureScreenshotWithRect:(CGRect)rect configuration:(SCScreenshotConfiguration *)config
+               completionHandler:(void (^)(SCScreenshotOutput *, NSError *))handler;
 @end
 @implementation SnapshotCaptureMock
 + (void)captureImageInRect:(CGRect)rect completionHandler:(void (^)(CGImageRef, NSError *))handler
 {
     (void)rect;
+    ++legacy_capture_calls;
+    (void)handler;
+    assert(!"legacy rectangle capture must not run");
+}
++ (void)captureScreenshotWithRect:(CGRect)rect configuration:(SCScreenshotConfiguration *)config
+               completionHandler:(void (^)(SCScreenshotOutput *, NSError *))handler
+{
+    assert(CGRectEqualToRect(rect, fixture_bounds));
+    assert(config.dynamicRange == SCScreenshotDynamicRangeSDR);
+    assert(config.displayIntent == SCScreenshotDisplayIntentLocal);
+    assert(config.width == 16 && config.height == 16 && config.showsCursor);
+    ++modern_capture_calls;
     if (capture_lost) {
         assert(!lost_handler);
         lost_handler = Block_copy(handler);
@@ -38,7 +67,9 @@ static void (^lost_handler)(CGImageRef, NSError *);
 
     bool denied = deny_capture;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, capture_delay), dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
-        handler(denied ? NULL : fixture_image, nil);
+        SnapshotOutputMock *output = denied ? nil : [[SnapshotOutputMock alloc] init];
+        handler((SCScreenshotOutput *)output, nil);
+        [output release];
     });
     if (capture_start_delay) usleep((useconds_t)(capture_start_delay / 1000));
 }
@@ -339,9 +370,14 @@ int main(void)
 {
     @autoreleasepool
     {
+        if (@available(macOS 26.0, *)) { } else {
+            assert(!prepare()); // Older systems switch without the effect.
+            return 0;
+        }
         CGContextRef ctx = bitmap();
         fixture_image = CGBitmapContextCreateImage(ctx);
         CGContextRelease(ctx);
+        wrong_image = CGImageCreateWithImageInRect(fixture_image, CGRectMake(0, 0, 8, 8));
         // The endpoint releases the overlay, with actual timer callbacks. The
         // fade lasts long enough for a tick to write alpha on a loaded runner:
         // a tick past the deadline only releases.
@@ -395,6 +431,9 @@ int main(void)
         deny_capture = true;
         assert(!prepare());
         deny_capture = false;
+        wrong_capture_size = true;
+        assert(!prepare()); // A logical-size image must not be stretched to the display.
+        wrong_capture_size = false;
         capture_start_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
         assert(!prepare()); // A callback signaled during a slow API call is still too late.
         capture_start_delay = 0;
@@ -422,7 +461,10 @@ int main(void)
         // newer capture in flight alone.
         capture_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
         assert(!prepare() && space_snapshot_capture_pending());
-        lost_handler(fixture_image, nil);
+        assert(lost_handler);
+        SnapshotOutputMock *output = [[SnapshotOutputMock alloc] init];
+        lost_handler((SCScreenshotOutput *)output, nil);
+        [output release];
         Block_release(lost_handler);
         lost_handler = NULL;
         assert(space_snapshot_capture_pending());
@@ -526,8 +568,11 @@ int main(void)
         assert(space_navigation_snapshot_owns_space(123));
         assert(!space_navigation_snapshot_owns_space(2) && !space_navigation_snapshot_owns_space(0));
 
+        assert(modern_capture_calls > 0 && legacy_capture_calls == 0);
+        CGImageRelease(wrong_image);
         CGImageRelease(fixture_image);
         puts("snapshot: endpoint, cancellation, allocation failures, late and lost capture, asynchronous capture, colour space and watchdog passed");
     }
     return 0;
 }
+#pragma clang diagnostic pop

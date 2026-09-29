@@ -23,8 +23,11 @@ static bool space_snapshot_surface_create(struct space_snapshot *snapshot, CGIma
     bounds.origin = CGPointZero;
     CGContextSetInterpolationQuality(snapshot->backing, kCGInterpolationNone);
     CGContextSetBlendMode(snapshot->backing, kCGBlendModeCopy);
+    SNAP_DIAG("context_draw_begin", snapshot->generation, 0);
     CGContextDrawImage(snapshot->backing, bounds, image);
+    SNAP_DIAG("context_draw_end", snapshot->generation, 0);
     CGContextFlush(snapshot->backing);
+    SNAP_DIAG("context_flush_end", snapshot->generation, 0);
     return true;
 }
 

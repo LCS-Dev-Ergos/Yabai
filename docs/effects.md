@@ -126,8 +126,15 @@ wallpaper, SketchyBar or application windows. The installed lcs.22 Space-based
 path reproduced both disappearing Finder icons and a black transition into
 Desktop 1; the [lcs.23 report](reports/lcs23-snapshot-crossfade.md) records the comparison.
 
-ScreenCaptureKit capture requires macOS 15.2+ and existing Screen Recording
-permission. The navigation path never requests permission. Unsupported or
+Snapshot capture now uses the macOS 26+ `captureScreenshotWithRect` API, with
+SDR output in the local display's colour space and explicit physical pixel
+dimensions. It requests the cursor, whose visual match with the previous
+API still needs a live check. Earlier macOS versions omit this optional
+effect: the prior rectangle API produced cumulative WindowServer memory growth
+on the tested macOS 27.2 host, and no older-system replacement has been
+validated. See the [capture backend report](reports/crossfade-capture-backend-2026-09-29.md).
+Existing Screen Recording permission is required; the navigation path never
+requests permission. Unsupported or
 refused capture, allocation failure and capture timeout all fall back to an
 ordinary Desktop switch. There is one capture in flight and one overlay
 globally, including across displays. A timed-out callback can only release its

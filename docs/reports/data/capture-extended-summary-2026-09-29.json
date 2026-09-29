@@ -1,0 +1,37 @@
+{
+  "date": "2026-09-29",
+  "candidate_sha256": "7bbdd822f38c0cce1398341c097e152d6e98896d6122fcfa62a04e6fc653d227",
+  "ordinary_sha256": "b4bc68c8319503020ac4ba3b1615178f460ead41c013815528c0c01d4b5aafef",
+  "signed_restored_sha256": "8968238444932a59f078c91eb6f8cb2a6d7c843f21a6ea0e9e59a829466f5283",
+  "raw_relative_roots": ["build/live-validation/extended-session", "build/live-validation/extended-continuation", "build/live-validation/extended-final"],
+  "long_same_daemon": {
+    "pid": 77700,
+    "windowserver_pid": 453,
+    "none_switches": 50,
+    "none_ws_mib": [1939, 1886, 1983, 1889, 1888, 1887],
+    "stabilized_ws_mib": 1881,
+    "crossfade_attempts": 110,
+    "crossfade_ready": 108,
+    "crossfade_callbacks": 110,
+    "crossfade_checkpoint_attempts": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+    "crossfade_checkpoint_ws_mib": [1897, 1992, 1994, 1898, 1992, 1994, 1994, 1992, 1994, 1994, 1994],
+    "hold_nominal_s": [0, 15, 30, 60, 120],
+    "hold_elapsed_from_end_of_load_marker_s": [11.1, 26.1, 41.1, 71.1, 131.2],
+    "hold_ws_mib": [1888, 1886, 1886, 1982, 1891],
+    "after_exit_ws_mib": 1888,
+    "footprint_total_mb": {"baseline": 1896, "ready50_load": 1893, "ready50_hold30": 1896, "crossfade_end": 1896, "hold30": 1994, "hold60": 1893, "hold120": 1896},
+    "daemon_rss_mib": {"baseline": 62.86, "crossfade_end": 63.34, "hold120": 63.25},
+    "pressure_level": 1,
+    "swap_mb_stable": 458.31
+  },
+  "gpu_blocks": [
+    {"name": "none_A", "switches": 12, "trimmed_samples": 6, "gpu_mean_mw": 72.8, "wall_s": 7.58, "daemon_cpu_s": 0.02, "ws_cpu_s": 3.17},
+    {"name": "crossfade_A", "switches": 12, "ready": 11, "trimmed_samples": 5, "gpu_mean_mw": 1132.6, "wall_s": 7.73, "daemon_cpu_s": 0.29, "ws_cpu_s": 3.52},
+    {"name": "crossfade_B", "switches": 12, "ready": 12, "trimmed_samples": 6, "gpu_mean_mw": 1132.2, "wall_s": 7.77, "daemon_cpu_s": 0.30, "ws_cpu_s": 3.60},
+    {"name": "none_B", "switches": 12, "trimmed_samples": 4, "gpu_mean_mw": 62.0, "wall_s": 7.54, "daemon_cpu_s": 0.02, "ws_cpu_s": 3.27}
+  ],
+  "gpu_measurement": "System-wide powermetrics 1-second samples trimmed 1.1 seconds at each block edge; not per-process.",
+  "visual": {"first_space_bar_pass": 4, "first_space_cases": 4, "portrait_bar_pass": 2, "portrait_cases": 2, "first_space_near_black_fraction_max": 0, "portrait_near_black_fraction_max": 0.036, "portrait_restored": true, "recorder": "PNG recording demonstrates captured blend/black absence, not pacing."},
+  "cold_helper": {"confirmed_osascript_pid": 74962, "failed_ax_add_calls": 147, "summed_ms": 145864.8, "maximum_one_ms": 1109.8},
+  "signed_restore": {"pid": 79476, "legacy_payload": "2.1.31-lcs.13", "legacy_attribute": "0x5D", "space_index": 1, "focused_window_id": 2222}
+}

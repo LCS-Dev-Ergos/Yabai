@@ -19,6 +19,18 @@ static os_log_t space_snapshot_log(void)
     return log;
 }
 
+// Local measurement build only. CLOCK_UPTIME_RAW nanoseconds are included in
+// each event so callback, event-loop and recorder clocks align directly.
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+#define SNAP_DIAG(phase, generation, token) \
+    os_signpost_event_emit(space_snapshot_log(), OS_SIGNPOST_ID_EXCLUSIVE, "diag", \
+                           "%{public}s gen %llu token %d ns %llu", phase, \
+                           (unsigned long long)(generation), (int)(token), \
+                           (unsigned long long)clock_gettime_nsec_np(CLOCK_UPTIME_RAW))
+#else
+#define SNAP_DIAG(phase, generation, token) ((void)0)
+#endif
+
 static void space_snapshot_trace(const char *result, uint64_t began, uint64_t captured)
 {
     uint64_t now = read_os_timer();
@@ -40,10 +52,24 @@ struct space_snapshot
     uint64_t started;
     uint64_t deadline;
     dispatch_source_t timer;
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+    uint64_t generation;
+    bool first_alpha_logged;
+#endif
 };
 
 static pthread_mutex_t space_snapshot_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct space_snapshot *space_snapshot_active;
+
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+static uint64_t space_snapshot_diag_active_generation(void)
+{
+    pthread_mutex_lock(&space_snapshot_lock);
+    uint64_t generation = space_snapshot_active ? space_snapshot_active->generation : 0;
+    pthread_mutex_unlock(&space_snapshot_lock);
+    return generation;
+}
+#endif
 
 // A snapshot between its capture request and its overlay.
 struct space_snapshot_request
@@ -102,6 +128,10 @@ static void space_snapshot_cancel_locked(void)
 {
     struct space_snapshot *snapshot = space_snapshot_active;
     if (!snapshot) return;
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+    uint64_t generation = snapshot->generation;
+#endif
+    SNAP_DIAG("teardown_begin", generation, 0);
     space_snapshot_active = NULL;
     space_snapshot_surface_destroy(snapshot);
     if (snapshot->window) SLSReleaseWindow(SLSMainConnectionID(), snapshot->window);
@@ -111,6 +141,7 @@ static void space_snapshot_cancel_locked(void)
     dispatch_source_t timer = snapshot->timer;
     dispatch_source_cancel(timer);
     dispatch_release(timer);
+    SNAP_DIAG("teardown_end", generation, 0);
 }
 
 // Event loop. Ends the overlay and a capture still waited for; the step that
@@ -149,6 +180,12 @@ static void space_snapshot_tick(struct space_snapshot *snapshot)
             if (SLSSetWindowAlpha(SLSMainConnectionID(), snapshot->window, alpha) != kCGErrorSuccess) {
                 space_snapshot_cancel_locked();
             }
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+            else if (!snapshot->first_alpha_logged) {
+                snapshot->first_alpha_logged = true;
+                SNAP_DIAG("first_alpha", snapshot->generation, 0);
+            }
+#endif
         }
     }
     pthread_mutex_unlock(&space_snapshot_lock);
@@ -162,7 +199,7 @@ static bool space_snapshot_request_start(struct space_snapshot_request *request,
                                          uint64_t target, float interval, int token)
 {
     space_navigation_snapshot_cancel();
-    if (@available(macOS 15.2, *)) { } else return false;
+    if (@available(macOS 26.0, *)) { } else return false;
 
     uint64_t began = read_os_timer();
     if (!CGPreflightScreenCaptureAccess() || !CGDisplayIsActive(display) || !target
@@ -186,7 +223,7 @@ static bool space_snapshot_request_start(struct space_snapshot_request *request,
         return false;
     }
 
-    struct space_snapshot_capture *capture = space_snapshot_capture_start(bounds, token);
+    struct space_snapshot_capture *capture = space_snapshot_capture_start(bounds, width, height, token);
     if (!capture) {
         space_snapshot_trace("no capture", began, read_os_timer());
         return false;
@@ -218,7 +255,12 @@ static bool space_snapshot_request_finish(struct space_snapshot_request *request
     // An asynchronous request reports when the image arrived, not when the
     // event loop came to it.
     struct space_snapshot_capture *capture = request->capture;
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+    uint64_t generation = capture->generation;
+    int token = capture->token;
+#endif
     CGImageRef image = space_snapshot_capture_take(capture, wait);
+    SNAP_DIAG("event_loop_take", generation, token);
     uint64_t captured = image && !wait ? capture->arrived : read_os_timer();
     space_snapshot_capture_release(capture);
     request->capture = NULL;
@@ -249,6 +291,9 @@ static bool space_snapshot_request_finish(struct space_snapshot_request *request
     snapshot->uuid = CFUUIDCreateString(NULL, uuid);
     CFRelease(uuid);
     snapshot->target = target;
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+    snapshot->generation = generation;
+#endif
     snapshot->timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
                                              dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0));
     if (!snapshot->uuid || !snapshot->timer) {
@@ -294,9 +339,19 @@ static bool space_snapshot_request_finish(struct space_snapshot_request *request
             && SLSSetWindowLevel(cid, snapshot->window, 1) == kCGErrorSuccess;
     }
     if (success) {
-        success = space_snapshot_surface_create(snapshot, image, bounds)
-            && space_snapshot_space_create(snapshot)
-            && SLSOrderWindow(cid, snapshot->window, 1, 0) == kCGErrorSuccess;
+        SNAP_DIAG("draw_begin", generation, token);
+        success = space_snapshot_surface_create(snapshot, image, bounds);
+        SNAP_DIAG("draw_end", generation, token);
+        if (success) {
+            SNAP_DIAG("overlay_begin", generation, token);
+            success = space_snapshot_space_create(snapshot);
+            SNAP_DIAG("overlay_end", generation, token);
+        }
+        if (success) {
+            SNAP_DIAG("order_begin", generation, token);
+            success = SLSOrderWindow(cid, snapshot->window, 1, 0) == kCGErrorSuccess;
+            SNAP_DIAG("order_end", generation, token);
+        }
     }
     CGImageRelease(image);
     if (!success) space_snapshot_cancel_locked();
@@ -306,7 +361,11 @@ static bool space_snapshot_request_finish(struct space_snapshot_request *request
 
     // Allow one refresh for the outgoing image before hiding the source.
     // This is a bounded presentation opportunity, not a presentation fence.
-    if (success) usleep((useconds_t) (fminf(interval, 1.0f / 30.0f) * 1e6f));
+    if (success) {
+        SNAP_DIAG("preswitch_wait_begin", generation, token);
+        usleep((useconds_t) (fminf(interval, 1.0f / 30.0f) * 1e6f));
+        SNAP_DIAG("preswitch_wait_end", generation, token);
+    }
     return success;
 }
 
@@ -354,6 +413,7 @@ static bool space_navigation_snapshot_start(float duration, bool switched)
     if (active) {
         snapshot->started = read_os_timer();
         snapshot->deadline = snapshot->started + (uint64_t) (duration * 1e9);
+        SNAP_DIAG("alpha_schedule", snapshot->generation, 0);
     } else {
         space_snapshot_cancel_locked();
     }

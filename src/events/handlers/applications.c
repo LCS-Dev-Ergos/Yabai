@@ -1,9 +1,25 @@
 // Application lifecycle, visibility and frontmost changes.
 // Runs on the event-loop thread.
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+#include <os/signpost.h>
+static void application_launch_diag(const char *phase, pid_t pid, const char *name, int value)
+{
+    static os_log_t log;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ log = os_log_create("com.lcs.yabai", "effects"); });
+    os_signpost_event_emit(log, OS_SIGNPOST_ID_EXCLUSIVE, "launch_diag",
+                           "%{public}s pid %d name %{public}s value %d ns %llu", phase, pid, name, value,
+                           (unsigned long long)clock_gettime_nsec_np(CLOCK_UPTIME_RAW));
+}
+#define APP_LAUNCH_DIAG(phase, value) application_launch_diag(phase, process->pid, process->name, value)
+#else
+#define APP_LAUNCH_DIAG(phase, value) ((void)0)
+#endif
 
 static EVENT_HANDLER(APPLICATION_LAUNCHED)
 {
     struct process *process = context;
+    APP_LAUNCH_DIAG("begin", 0);
 
     if (__atomic_load_n(&process->terminated, __ATOMIC_RELAXED)) {
         debug("%s: %s (%d) terminated during launch\n", __FUNCTION__, process->name, process->pid);
@@ -72,13 +88,17 @@ static EVENT_HANDLER(APPLICATION_LAUNCHED)
     //
 
     struct application *application = window_manager_find_application(&g_window_manager, process->pid);
-    if (application) { return; } else { application = application_create(process); }
+    if (application) { APP_LAUNCH_DIAG("already_present", 0); return; }
+    application = application_create(process);
+    APP_LAUNCH_DIAG("create_end", 0);
 
     if (!application_observe(application)) {
+        APP_LAUNCH_DIAG("observe_failed", application->ax_retry);
         bool ax_retry = application->ax_retry;
 
         application_unobserve(application);
         application_destroy(application);
+        APP_LAUNCH_DIAG("observe_cleanup_end", 0);
         debug("%s: could not observe notifications for %s (%d) (%d)\n", __FUNCTION__, process->name, process->pid, ax_retry);
 
         if (ax_retry) {
@@ -91,6 +111,7 @@ static EVENT_HANDLER(APPLICATION_LAUNCHED)
 
         return;
     }
+    APP_LAUNCH_DIAG("observe_end", 0);
 
     if (window_manager_find_lost_front_switched_event(&g_window_manager, process->pid)) {
         event_loop_post(&g_event_loop, APPLICATION_FRONT_SWITCHED, process, 0);
@@ -103,6 +124,7 @@ static EVENT_HANDLER(APPLICATION_LAUNCHED)
 
     int window_count;
     struct window **window_list = window_manager_add_application_windows(&g_space_manager, &g_window_manager, application, &window_count);
+    APP_LAUNCH_DIAG("windows_end", window_count);
     uint32_t prev_window_id = g_window_manager.focused_window_id;
 
     uint64_t sid;
@@ -170,10 +192,12 @@ static EVENT_HANDLER(APPLICATION_LAUNCHED)
         window_node_flush(view->root);
         view_clear_flag(view, VIEW_IS_DIRTY);
     }
+    APP_LAUNCH_DIAG("layout_end", view_count);
 
     if (workspace_is_macos_sequoia() || workspace_is_macos_tahoe() || workspace_is_macos_goldengate()) {
         update_window_notifications();
     }
+    APP_LAUNCH_DIAG("end", 0);
 }
 
 static EVENT_HANDLER(APPLICATION_TERMINATED)
