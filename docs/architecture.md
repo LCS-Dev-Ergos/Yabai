@@ -1,9 +1,9 @@
 # Architecture
 
 This map describes the daemon, its client and the Dock payload as they stand
-on `dev` after lcs.28: which components exist, which thread runs what, how
-events flow and who owns each piece of state. It is the starting point for the
-refactor at the end, and it lists the risks found while drawing it. Details of
+on `dev` with the local translation-unit refactor: which components exist,
+which thread runs what, how events flow and who owns each piece of state.
+It also lists the risks found while drawing the original map. Details of
 the fork's own features are in [navigation](navigation.md),
 [effects](effects.md) and [scripting addition](osax.md).
 
@@ -11,87 +11,77 @@ the fork's own features are in [navigation](navigation.md),
 
 | Process | Code | Role |
 | --- | --- | --- |
-| `yabai` daemon | `src/manifest.m` (unity build) | Window manager: observes applications, windows, Spaces and displays, tiles, answers commands, runs signals. |
+| `yabai` daemon | `src/yabai_main.m` and the area units below | Window manager: observes applications, windows, Spaces and displays, tiles, answers commands, runs signals. |
 | `yabai -m` client | `src/yabai.c` (`client_send_message`) | Sends one command over the daemon socket and prints the reply. `skhd` and `space.sh` start one per key press. |
 | Dock payload | `src/osax/payload.m` and fork handlers | Injected into Dock by `yabai --load-sa` (root, `src/osax/loader.m`). Runs Dock-private operations: Space focus, create, move; window order, level, opacity and fades. |
-| Signal actions | `src/event_signal*.c` | Shell commands the daemon starts with `posix_spawn` when a subscribed event occurs. |
+| Signal actions | `src/events/event_signal*.c` | Shell commands the daemon starts with `posix_spawn` when a subscribed event occurs. |
 
 The two sockets:
 
-- **Daemon socket** `/tmp/yabai_$USER.socket`, created with `bind` and then
-  `chmod 0600`. A message is a 4-byte length and NUL-separated tokens
-  (`src/ipc/message_loop.c`, parsed by `src/ipc/message.c`). The daemon answers on the same connection. No peer
-  authentication (planned; see the Atrium open threads).
-- **Payload socket** in Dock. Each request opens its own connection
+- **Daemon socket** `~/Library/Caches/yabai/daemon.sock`. The directory must
+  be a real directory owned by the login user with no group or other access;
+  it is created with mode `0700`. The accept thread checks each peer's audit
+  token for the owner's effective UID or root and validates the peer against
+  this daemon's designated code-signing requirement before parsing. A
+  message is a 4-byte length and NUL-separated tokens (`src/ipc/message_loop.c`,
+  parsed by `src/ipc/message.c`). The daemon answers on the same connection.
+- **Payload socket** `~/Library/Caches/yabai/payload.sock` in Dock. The payload
+  applies the same directory and audit-token checks. It validates peers
+  against a requirement saved by the root installer in its bundle. Each request opens its own connection
   (`scripting_addition_send_bytes`), builds its message in a stack buffer of
   `SA_SOCKET_BUFF_LEN` (4 KiB), the payload's message size, refusing one that
   does not fit, and waits up to one second for Dock to close the connection
   or reply. Dock handles connections one at a time on one
-  thread.
+  thread. An explicit local development build may allow unsigned peers;
+  the default requires the signed daemon identity. Live verification is still
+  required before release.
 
 ## Build structure
 
-The daemon is one translation unit. `src/manifest.m` includes every header,
-the core's first and then those of navigation and effects (`effects/*.h`,
-`navigation/*.h` and `hooks.h`), then every source file in a fixed order;
-several sources include further sources:
+The daemon is built from separate Objective-C translation units. Each unit
+includes `core_prelude.h` for platform and area interfaces, then its own
+sources. `core_types.h` supplies platform types to area headers, which also
+compile on their own. The current area boundaries are:
 
 ```
-src/manifest.m
-├── navigation/admission.c, topology.c, activation.c
-├── effects/display.m, window_fade.c, snapshot.m ─ snapshot_capture.m, snapshot_surface.m
-├── navigation/step.c, schedule.c, command.c
-├── sa/sa.m ─ sa_opacity.c
-├── events/mission_control.c
-├── events/event_queue.c, event_loop.c ─ window_focus_events.c, event_loop_trace.c
-├── events/event_signal.c ─ event_signal_process.c
-├── events/workspace.m
-├── windows/rule.c
-├── ipc/message.c
-├── ipc/commands/config.c, display.c, space.c, window.c, query.c, rule.c, signal.c
-├── ipc/message_loop.c
-├── displays/display.c, spaces/space.c, spaces/view.c, windows/window.c
-├── applications/process_manager.c, application.c
-├── displays/display_manager.c, spaces/space_manager.c
-├── windows/window_manager/tables.c, query.c, rules.c, frames.c, animation.c,
-│   appearance.c, lookup.c, focus.c, operations.c, scratchpad.c, spaces.c
-├── events/mouse_handler.c
-└── yabai.c (main)
+src/yabai_main.m                  global definitions, startup and shared helpers
+src/navigation/navigation_effects.m
+                                  navigation and display/window effects
+src/sa/sa_unity.m                 scripting-addition client
+src/displays/displays.m           display facts and manager
+src/applications/applications.m   process table and AX applications
+src/spaces/layout_unity.m         Spaces, BSP views, windows and managers
+src/events/events.m               event loop, handlers, signals and mouse input
+src/ipc/ipc.m                     message parser, seven domains and dispatch
 ```
 
-Each directory holds one concern, with its headers next to its sources:
-`applications/` (processes and their AX observers), `displays/`, `spaces/`
-(Spaces and their views), `windows/` (windows, rules and the window
-manager), `events/` (the event loop and queue, signals, and the sources of
-events: WindowServer notifications, NSWorkspace, the mouse), `ipc/` (the
-daemon socket, the message parser and one file of commands per domain) and
-`sa/` (the daemon's side of the scripting addition, whose payload is in
-`osax/`). `navigation/` and `effects/` hold the fork's modules and `misc/`
-the shared helpers and system declarations; `manifest.m`, `yabai.c` (main)
-and `hooks.h` stay at the top. The `#include` order in `manifest.m`, not
-the directory, decides what each file sees.
+`spaces/` and `windows/` remain one translation unit because their view and
+window-manager functions call each other heavily. This is a deliberate
+intermediate boundary within point 4. `navigation/` and `effects/` also share
+one unit because their callbacks and schedule state interact closely. Every
+other listed area compiles separately, so cross-unit calls use declarations
+in the owning headers and are checked by the compiler.
 
-Consequences:
+`src/manifest.m` still includes all production sources in the original order
+for `yabai_tests` and the daemon-message fuzzer. It is no longer a source of
+the production executable. `yabai_unity_sources()` derives language-server
+compile commands from the production units and the Dock payload. The Makefile
+uses the same daemon units as CMake.
 
-- Every function and global is visible to everything included after it.
-  The core's files call each other's file-static functions by include order.
-- Each global is declared once, in the header of the part that owns it, and
-  defined in `yabai.c` or `event_loop.c`.
-- Each navigation and effects module declares what other files use in its
-  header, which also states its threads, the state it owns, its callers and
-  what it calls. `hooks.h` declares every module function the core calls,
-  grouped by the calling file and handler. What the modules call in the core
-  is declared in the core's headers: the command vocabulary, tokens and
-  selectors in `message.h`, Mission Control's mode in `mission_control.h`,
-  focus in `window_manager.h`. The navigation and effects sources come before
-  every core source, so the compiler holds them to what the headers declare.
-- Tests include a module's header and source directly and replace its
-  dependencies with macros and stubs (`tests/navigation/*.c`).
+The shared helpers with external state or implementation have one definition:
+the hashtable, temporary storage, memory-pool initializer, notification
+delegate and Mach-O symbol lookup are emitted by `yabai_main.m`; their
+headers expose declarations to the other units. The scripting-addition client
+uses the same temporary storage and notification entry point. The process,
+display, Space and window globals remain defined in `yabai.c`, while their
+writing threads and readers are listed below. The definition's file does not
+imply ownership after startup.
 
-The payload is built separately for x86_64 and arm64
+The Dock payload is built separately for x86_64 and arm64
 (`src/osax/{x64,arm64}_payload.m`), then embedded in the daemon as
-`payload_bin.c` and `loader_bin.c`.
-
+`payload_bin.c` and `loader_bin.c`. Focused tests may include a source
+directly with stubs; a successful compile or unit test does not establish
+live Dock behavior.
 ## Threads
 
 ```mermaid
@@ -120,7 +110,7 @@ flowchart LR
 
 | Thread | Started by | Runs | Writes |
 | --- | --- | --- | --- |
-| Main | `main` → `[NSApp run]` | Carbon process events (`process_handler`), NSWorkspace and distributed notifications and KVO (`workspace.m`), AX observers per application and for Dock (`application.c`, `mission_control.c`), the mouse event tap (`mouse_handler.c`), display reconfiguration (`display_manager.c`), SkyLight connection notifications (`mission_control.c` `connection_handler`), and retries dispatched to the main queue. | The process table (`g_process_manager`), `mouse_state` click flags, `__last_cmd_tab_time` (atomic). Everything else it only posts as events. |
+| Main | `main` → `[NSApp run]` | Carbon process events (`process_handler`), NSWorkspace and distributed notifications and KVO (`workspace.m`), AX observers per application and for Dock (`application.c`, `mission_control.c`), the mouse event tap (`mouse_handler.c`), display reconfiguration (`display_manager.c`), SkyLight connection notifications (`mission_control.c` `connection_handler`), and retries dispatched to the main queue. | The process table (`g_process_manager`), `mouse_state` click flags, `__last_cmd_tab_time` (atomic). KVO updates process policy on the main thread; other callbacks only post events. |
 | Event loop | `event_loop_begin` | Every event handler and every daemon command, one at a time (`event_loop_run`). Signals are spawned at the end of each event (`event_signal_flush`). | All window, space, display, view and rule state; all fork navigation state; every SA request of commands and navigation. |
 | Message loop | `message_loop_begin` | `accept` on the daemon socket; the fork's grouping of `space --navigate focus next/prev` requests (`space_navigation_accept`). | `g_space_navigation_queue` (mutex). |
 | Global queues | `dispatch_after`, `dispatch_source` | Navigation wake-ups, deferred focus and capture deadlines (post events), the snapshot overlay's alpha timer and its cancel handler, ScreenCaptureKit completion (posts an event for a queued step). | Snapshot state under `space_snapshot_lock`; capture bookkeeping under its own mutex. |
@@ -177,13 +167,26 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 
 | State | Owner | Other access |
 | --- | --- | --- |
-| `g_window_manager` (windows, applications, focus, opacity, animation settings) | Event loop | Animation threads read their own contexts; `window_animations_table` is locked. |
-| `g_space_manager`, views and their BSP trees | Event loop | — |
-| `g_display_manager` | Event loop | Display reconfiguration callback only posts. |
+| `g_window_manager` (windows, applications, focus, opacity, animation settings) | Startup initializes; event loop writes | Animation threads read their own contexts; `window_animations_table` is locked. |
+| `g_space_manager`, views and their BSP trees | Startup initializes; event loop writes | — |
+| `g_display_manager` | Startup initializes; event loop writes | Display reconfiguration callback only posts. |
 | `g_process_manager.process` (table) | Main thread | Event loop receives `struct process *` through events; main-queue retries look processes up on the main thread. |
-| `g_mouse_state` | Split: settings written by commands on the event loop, click state by the tap on the main thread | The tap reads `modifier` without synchronization (a benign race upstream). |
-| `g_event_loop.queue` | Event loop takes events | Every producer adds them; mutex. |
-| `g_signal_storage` | Event loop | — |
+| `g_process_manager` frontmost-process and switch fields | Event loop | Main-thread process callbacks use the process table, not these fields. |
+| `g_mouse_state` | Settings: event loop; click flags: main-thread tap | The tap reads the configured `modifier` atomically. Drag and focus state belongs to the event loop. |
+| `g_event_loop` and its queue | Startup initializes; event loop consumes | Main, message and global-queue producers add events under the queue mutex. |
+| `g_signal_event` | Event loop | Signal subscriptions and pending actions. |
+| `g_signal_storage` | Event loop | Memory backing signal actions. |
+| `g_workspace_context` | Main-thread startup | Event handlers and process management use it to observe or unobserve applications. |
+| `g_mission_control_mode` | Event loop | Main-thread callbacks only post Mission Control events. |
+| `g_cv_host_clock_frequency` | Startup | Animation threads and event-loop window operations read it. |
+| `g_layer_normal_window_level`, `g_layer_below_window_level`, `g_layer_above_window_level` | Startup | Window and view code read these display levels. |
+| `g_event_bytes` | Startup allocates; event loop writes | Window-focus operations reuse this event buffer. |
+| `g_sa_socket_file` | Startup and scripting-addition load set it | Event-loop commands and animation workers read it for Dock requests. |
+| `g_socket_file`, `g_config_file`, `g_lock_file` | Startup/client option parsing | The daemon uses these paths during initialization and command acceptance. |
+| `g_bs_port` | Startup | Animation notification code reads the bootstrap port. |
+| `g_connection` | Startup | Event loop and main-thread callbacks read the SkyLight connection. |
+| `g_verbose` | Client option parsing and event-loop config command | Logging on other threads uses an atomic relaxed load. |
+| `g_pid` | Startup | Used to acquire the daemon lock. |
 | `g_space_navigation_queue` (fork) | Message loop and event loop | Mutex. |
 | `g_space_navigation_schedule`, `_focus`, `_anchor`, `_spaces` (fork) | Event loop | Timers only post events. |
 | Snapshot (`space_snapshot_active`, recent Spaces) | Event loop creates and cancels | Alpha timer on a global queue, under `space_snapshot_lock`; the timer's cancel handler frees the snapshot without the lock. |
@@ -191,24 +194,55 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 | Capture a step waits for (`space_snapshot_pending`, `space_navigation_flight`) | Event loop | ScreenCaptureKit completion and the deadline timer only post `SPACE_NAVIGATION_CAPTURED`; the capture's image is handed over through its semaphore. |
 | `__pending_window_focus_id` (fork) | Event loop | Atomic. |
 
+### Callback audit and Dock request ordering
+
+The NSWorkspace, AX, display-reconfiguration and SkyLight callbacks inspected
+for point 5 enqueue daemon events. The main-thread process table, KVO policy
+field, mouse-tap click flags and atomic Command-Tab timestamp are the explicit
+exceptions. KVO now reads the cross-thread `terminated` flag atomically; the
+mouse tap reads the event-loop-configured modifier atomically. Logging reads
+`g_verbose` atomically. This is a source audit; a live daemon TSan run has not
+been performed.
+
+The event loop sends Space-focus and other scripting-addition requests while
+animation workers send proxy-swap requests. Separate client connections can
+reach Dock in either order, but the payload's single accept loop handles one
+complete request at a time. A proxy swap names its window and proxy IDs; a
+Space focus names its destination Space. Neither handler uses a partially
+decoded state from another request. No cross-thread ordering is required for
+payload memory safety. The visible result of a swap racing a Space switch
+has not been checked on screen, so visual ordering remains open.
+
+The first-visit performance issue in `window_manager/spaces.c` is still open.
+That path lists Space windows, reconciles the BSP view and flushes visible
+window frames with AX. Deferring or batching those operations can change
+tiling order and focus timing. The requested first-lap `sample` profile has
+not run under the current compile-only verification limit, so no scheduling
+change is included in this candidate.
+
 ## Upstream subsystems
 
 - **Processes and applications** (`applications/process_manager.c`,
   `applications/application.c`, `events/workspace.m`): which applications
   exist, their AX observers and launch state.
-- **Windows** (`windows/window.c`, `windows/rule.c`, and
-  `windows/window_manager/` by concern): the window and application tables,
+- **Windows** (`windows/window/` for observation, Space membership,
+  serialization, attributes, properties, identity and lifecycle;
+  `windows/rule.c`; `windows/window_manager/` by concern): the window and
+  application tables,
   queries, rules, frames, animations with their JankyBorders notifications,
   opacity and layers, lookups, focus, the window commands, the scratchpad, and
   keeping views in step with Space and display changes (`spaces.c`).
-- **Spaces and views** (`spaces/space.c`, `spaces/space_manager.c`,
-  `spaces/view.c`): Desktop queries through SkyLight, one view (layout and BSP
+- **Spaces and views** (`spaces/space.c`, `spaces/space_manager/` for views,
+  labels, layout, selectors, window moves, operations and state;
+  `spaces/view/` for feedback, geometry, nodes, directional lookup, operations
+  and lifecycle): Desktop queries through SkyLight, one view (layout and BSP
   tree) per Space, Space commands through the payload.
 - **Displays** (`displays/display.c`, `displays/display_manager.c`).
 - **Commands** (`ipc/`): the parser (`message.c`), one file per domain in
   `commands/` (`config`, `display`, `space`, `window`, `query`, `rule`,
   `signal`), and the socket's accept thread and dispatch (`message_loop.c`).
-- **Events** (`events/`): the event loop and its queue, signals
+- **Events** (`events/`): the event loop, domain handlers in `handlers/` and
+  its queue, signals
   (`event_signal.c`: subscriptions and spawning), the mouse
   (`mouse_handler.c`: modifier drags, drops and focus follows mouse), Mission
   Control (`mission_control.c`: its modes and the SkyLight notification
@@ -262,10 +296,25 @@ Diagnostics: signposts in subsystem `com.lcs.yabai`, categories
 | 2 | Event queue and signal storage | The events' memory pool wrapped to its start without checking that the consumer was past it: a stall with about 21,000 events posted would have overwritten unread ones. Signals of one event were written without a bound. | Fixed after lcs.28: a ring that grows (`event_queue.c`), consecutive mouse moves merged, a signal that does not fit dropped with a warning |
 | 3 | `sa.m` request builders | `pack` never checked the 4 KiB buffer: requests with one entry per window (`move_window_list_to_space`, proxy swaps, `order_window_in`) overflowed the stack past roughly 500 to 1,000 windows. | Fixed after lcs.28: a request that does not fit is refused |
 | 4 | Event loop | Everything runs on one thread, and some calls wait for others: on a Space change upstream revalidates windows and sets frames over AX (about 1.1 s of busy time in a 45-second sample of bursts), activation waits for WindowServer (about 40 ms on average over 16 activations), Dock up to 1 s. A paced crossfade no longer waits for its capture; drawing the image and one refresh remain, with the switch and the activation, and with pacing off the capture (up to 150 ms) as well. On two 4K displays (20 Mpx each) with lcs.28 that part held the loop a median 132 ms per step (p90 435 ms). | Performance; bounded by timeouts |
-| 5 | Daemon socket | A fixed name in the shared `/tmp`: another local user who creates it first stops the daemon from binding. It is made `0600` only after `bind`, which matters with a permissive umask. No peer authentication. | Security; local |
+| 5 | Daemon and payload sockets | The local candidate moves both sockets to an owner-only directory and checks peer audit-token UIDs and the daemon's designated requirement before parsing. Unsigned peers require an explicit development build. An unsigned local daemon and payload passed a bounded live smoke on 2026-09-29; the signed release path remains untested. | Security; candidate |
 | 6 | TCC | Grants of a bare binary follow its path; every store path asked again and ran without crossfades until restart. | Fixed in Dotfiles `9a8fb78`; the grants survived the update to lcs.28 |
-| 7 | Upstream animations and navigation | The CVDisplayLink thread and the event loop both send Dock requests; Dock serialises them, but nothing orders a proxy swap against a navigation switch. | Unverified; watch |
+| 7 | Upstream animations and navigation | The CVDisplayLink thread and the event loop both send Dock requests. The payload handles each full request serially, and proxy swaps target window IDs while navigation targets a Space ID. Visible ordering during an overlap remains unverified. | Unverified visual result |
 | 8 | Unity build | Hidden coupling through include order and file-static globals, so a module's inputs and threads are not visible where it is used. Navigation and effects now declare their interfaces, threads and state in headers and compile before the core; the core's files still call each other's file-static functions by include order. | Maintainability; reduced |
+
+### First Space visits after restart
+
+On 2026-09-29, a 30-second, 1 ms `sample` of the installed lcs.13 daemon
+covered the first visit to Desktops 2–11 after a service restart. The client
+command for Desktop 2 took 323 ms; the next commands took 15–111 ms, apart
+from Desktop 3 at 72 ms. These are command completion times, not event-handler
+or frame-presentation durations. The sample caught a `SPACE_CHANGED` window
+validation in which the event loop spent 215 samples waiting for animation
+proxy preparation threads. AX frame queries and WindowServer calls also
+appear on that path. Startup configuration separately spent 213 samples in
+window validation and frame setting. The earlier 0.9-second first-visit stall
+did not recur in this lap. Defer batching or moving validation off the event
+loop until signposts isolate each first visit and show which work can safely
+move without changing window ordering or tiling.
 
 ## Upstream integration
 

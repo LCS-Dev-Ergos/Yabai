@@ -159,14 +159,7 @@ static inline uint64_t read_os_freq(void)
     return 1000000000;
 }
 
-struct rgba_color
-{
-    uint32_t p;
-    float r;
-    float g;
-    float b;
-    float a;
-};
+#include "color.h"
 
 static const CFStringRef kAXEnhancedUserInterface = CFSTR("AXEnhancedUserInterface");
 
@@ -343,8 +336,10 @@ static inline void sls_window_disable_shadow(uint32_t id)
     CFRelease(options);
 }
 
-static inline CFArrayRef cfarray_of_cfnumbers(void *values, size_t size, int count, CFNumberType type)
+static inline CFArrayRef cfarray_of_cfnumbers(void *values, size_t size, int count, CFNumberType type) CF_RETURNS_RETAINED
 {
+    if (count < 0 || (count > 0 && !values)) return NULL;
+    if (count == 0) return CFArrayCreate(NULL, NULL, 0, &kCFTypeArrayCallBacks);
     CFNumberRef temp[count];
 
     for (int i = 0; i < count; ++i) {

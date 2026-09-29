@@ -1,6 +1,19 @@
 #ifndef PROCESS_MANAGER_H
 #define PROCESS_MANAGER_H
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <sys/types.h>
+#include <Carbon/Carbon.h>
+#include "../misc/hashtable.h"
+
+// Area: process_manager.c tracks Carbon processes and frontmost application.
+// Threads: the main thread owns the process table and Carbon callback; the
+// event loop updates frontmost-process fields after receiving an event.
+// State: g_process_manager, including process objects passed through events.
+// Callers: startup, application observation and event handlers.
+// Calls: Carbon, workspace helpers and event_loop_post.
+
 #define PROCESS_EVENT_HANDLER(name) OSStatus name(EventHandlerCallRef ref, EventRef event, void *context)
 typedef PROCESS_EVENT_HANDLER(process_event_handler);
 

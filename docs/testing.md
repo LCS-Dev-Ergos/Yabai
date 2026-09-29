@@ -15,10 +15,17 @@ editor's root `compile_commands.json` symlink.
 
 ## CTest and sanitizers
 
-- `yabai_tests` runs the core's unit tests against the unity build, plus
-  navigation argument, opacity-policy protocol, signal dispatch and storage
-  bound, scripting-addition request size and query string escaping
-  regressions. The signal tests launch
+- `yabai_tests` runs the core's unit tests against the unity build. Synthetic
+  views cover BSP insertion and removal, geometry, rotation, mirroring,
+  balancing, equalizing, traversal and directional lookup. Layout tests run
+  the actual Space commands with fixed display geometry and visibility;
+  window tests cover rule matching and effects and managed-window relations.
+  NUL-separated requests check dispatch and replies in all seven command
+  domains, plus state changes in the mutating domains. A single case runs with
+  `build/debug/tests/yabai_tests <test-name>`; the regular CTest run selects
+  every case. These tests also cover navigation arguments, opacity-policy
+  protocol, signal dispatch and storage bounds, scripting-addition request
+  size and query string escaping. The signal tests launch
   harmless local shell actions and check socket lifetime, isolated event
   variables and retained standard output/error. They do not run the daemon.
 - `navigation_tests` checks the fork's [space navigation](navigation.md)
@@ -117,6 +124,20 @@ waits for five seconds without keys or clicks, stops at the next one, and
 restores the Desktop and window it started from. Its helpers `space_poll` and
 `ax_focused` are built with the other tools into `build/<preset>/tools`
 (`YABAI_TOOLS` overrides the directory).
+The helper selects the candidate's private socket when it exists and the
+installed daemon's legacy `/tmp` socket during the transition.
+For a signed daemon that enforces its designated requirement, set
+`YABAI_LIVE_CLIENT=binary` so the harness sends requests through the signed
+`/opt/yabai/bin/yabai -m` client. `YABAI_LIVE_BINARY` overrides that path.
+Launching a process per request adds client overhead to timing measurements.
+
+An unsigned local daemon/payload pair can be compiled explicitly with
+`cmake --preset debug -DYABAI_ALLOW_UNSIGNED_LOCAL=ON` or
+`make UNSIGNED_LOCAL=1`. The default build rejects unsigned socket peers.
+Never use the local option for a release; it applies to both socket servers.
+When `--load-sa` installs a different payload version, it restarts Dock.
+Run `--load-sa` again after Dock returns to inject and validate that payload.
+Restore the installed signed payload and daemon after a local smoke.
 
 ```sh
 python3 tools/live/burst.py 2 0.25 taps 5 100 -- held 1500 -- reverse 3 100 -- back 4 2 100
@@ -235,14 +256,17 @@ frames still require the live probe and installed-release check.
 
 ```sh
 tools/analyze.sh
+python3 tools/check-area-headers.py
 ```
 
 The script uses Apple clang by default (`CLANG` overrides it). Payload and
-loader warnings fail the check on both arm64 and x86_64. The daemon's arm64
-unity build is compared with `tools/analyzer-baseline.txt`, keyed by source,
-diagnostic and checker, including the count of each finding. New findings or
-increased counts fail. Existing entries include upstream ownership warnings;
-the baseline is an allowance, not proof that a finding is harmless.
+loader warnings fail the check on both arm64 and x86_64. The test manifest's
+arm64 findings keep their historical `tools/analyzer-baseline.txt` allowance;
+the production translation units use `tools/analyzer-units-baseline.txt`.
+Paths are normalized before comparison, and a new finding or increased count
+fails either check. The separate units can expose additional paths through
+header-only helpers and narrower analyzer context. Both baselines are
+allowances for known diagnostics, not proof that they are harmless.
 
 Only run `tools/analyze.sh --update-baseline` after reviewing the diagnostics
 and the resulting diff. Do not refresh the baseline just to pass CI.
@@ -302,4 +326,6 @@ the user's approval before changing the active installation or loading the
 payload. After the user switches to the signed release, check space creation,
 destruction, focus and moves (`space --move`, `--swap` and `--display`), plus
 window opacity, layer, shadow and sticky state. Verify the load result and
-`build/debug/tools/sa_client handshake`: macOS 27 expects attribute bits `0x5D`.
+query spaces through the signed `yabai` binary. The unsigned `sa_client`
+works directly against the payload only in an explicit unsigned local build.
+On macOS 27 the payload handshake expects attribute bits `0x5D`.

@@ -17,7 +17,7 @@ static const int token_char_int_table[] =
     ['f'] = 0xF, ['F'] = 0xF,
 };
 
-static struct token get_token(char **message)
+struct token get_token(char **message)
 {
     struct token token;
 
@@ -46,7 +46,7 @@ static bool token_prefix(struct token token, char *match)
     return *at == 0;
 }
 
-static bool token_equals(struct token token, char *match)
+bool token_equals(struct token token, char *match)
 {
     char *at = match;
     for (int i = 0; i < token.length; ++i, ++at) {
@@ -119,7 +119,7 @@ static bool token_is_float(struct token token, float *value)
     }
 }
 
-static struct token_value token_to_value(struct token token)
+struct token_value token_to_value(struct token token)
 {
     struct token_value value = { .token = token, .type = TOKEN_TYPE_INVALID };
 
@@ -140,7 +140,7 @@ static struct token_value token_to_value(struct token token)
     return value;
 }
 
-static inline void daemon_fail(FILE *rsp, char *fmt, ...)
+void daemon_fail(FILE *rsp, char *fmt, ...)
 {
     if (!rsp) return;
 
@@ -229,13 +229,6 @@ static uint8_t parse_resize_handle(char *handle)
         return 0;
     }
 }
-
-enum label_type
-{
-    LABEL_DISPLAY,
-    LABEL_SPACE,
-    LABEL_WINDOW
-};
 
 static char *reserved_display_identifiers[] =
 {
@@ -326,14 +319,6 @@ static bool parse_label(FILE *rsp, struct token token, enum label_type type, cha
 
     return true;
 }
-
-struct properties
-{
-    struct token token;
-    bool did_parse;
-    bool did_error;
-    uint64_t flags;
-};
 
 static inline bool parse_property(struct properties *properties, char *property, uint64_t *property_val, char **property_str, int property_count)
 {
@@ -499,7 +484,7 @@ static struct selector parse_display_selector(FILE *rsp, char **message, uint32_
     return result;
 }
 
-static struct selector parse_space_selector(FILE *rsp, char **message, uint64_t acting_sid, bool optional)
+struct selector parse_space_selector(FILE *rsp, char **message, uint64_t acting_sid, bool optional)
 {
     TIME_FUNCTION;
 

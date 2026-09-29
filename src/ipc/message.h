@@ -1,10 +1,19 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 
+#include "../core_types.h"
+
+// Area: message.c parses tokens and selectors; commands/*.c handles domains;
+// message_loop.c accepts socket clients and dispatches their messages.
+// Threads: the accept thread owns the socket; the event loop runs commands.
+// State: the accept thread's g_message_loop; command state lives in managers.
+// Callers: clients through the socket, startup and DAEMON_MESSAGE events.
+// Calls: event_loop_post, navigation admission and domain managers.
+
 // The command language of `yabai -m`: its vocabulary, the tokens and
 // selectors message.c parses, and the parser functions other files use.
-// message.c defines them, handles every domain and runs the accept thread of
-// the message loop.
+// message.c defines the parsers; commands/*.c handles domains and
+// message_loop.c runs the daemon socket's accept thread.
 
 #define DOMAIN_CONFIG  "config"
 #define DOMAIN_DISPLAY "display"
@@ -292,11 +301,43 @@ struct selector
     };
 };
 
-static struct token get_token(char **message);
-static bool token_equals(struct token token, char *match);
-static struct token_value token_to_value(struct token token);
-static inline void daemon_fail(FILE *rsp, char *fmt, ...);
-static struct selector parse_space_selector(FILE *rsp, char **message, uint64_t acting_sid, bool optional);
+enum label_type
+{
+    LABEL_DISPLAY,
+    LABEL_SPACE,
+    LABEL_WINDOW
+};
+
+struct properties
+{
+    struct token token;
+    bool did_parse;
+    bool did_error;
+    uint64_t flags;
+};
+
+struct token get_token(char **message);
+bool token_equals(struct token token, char *match);
+static inline bool token_is_valid(struct token token);
+struct token_value token_to_value(struct token token);
+void daemon_fail(FILE *rsp, char *fmt, ...);
+static void parse_key_value_pair(char *token, char **key, char **value, bool *exclusion);
+static uint8_t parse_value_type(char *type);
+static uint8_t parse_resize_handle(char *handle);
+static bool parse_label(FILE *rsp, struct token token, enum label_type type, char **label);
+static struct properties parse_properties(FILE *rsp, struct token token, uint64_t *property_val, char **property_str, int property_count);
+static struct selector parse_display_selector(FILE *rsp, char **message, uint32_t acting_did, bool optional);
+struct selector parse_space_selector(FILE *rsp, char **message, uint64_t acting_sid, bool optional);
+static struct selector parse_window_selector(FILE *rsp, char **message, struct window *acting_window, bool optional);
+static struct selector parse_insert_selector(FILE *rsp, char **message);
+
+static void handle_domain_config(FILE *rsp, struct token domain, char *message);
+static void handle_domain_display(FILE *rsp, struct token domain, char *message);
+static void handle_domain_query(FILE *rsp, struct token domain, char *message);
+static void handle_domain_rule(FILE *rsp, struct token domain, char *message);
+static void handle_domain_signal(FILE *rsp, struct token domain, char *message);
+static void handle_domain_space(FILE *rsp, struct token domain, char *message);
+static void handle_domain_window(FILE *rsp, struct token domain, char *message);
 
 void handle_message(FILE *rsp, char *message);
 bool message_loop_begin(char *socket_path);

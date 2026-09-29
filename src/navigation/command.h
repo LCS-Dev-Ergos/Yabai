@@ -1,6 +1,8 @@
 #ifndef NAVIGATION_COMMAND_H
 #define NAVIGATION_COMMAND_H
 
+#include "../core_types.h"
+
 // Navigation command (command.c): `space --navigate` from the request to the
 // steps it queues or runs, and the host services the other navigation modules
 // call.

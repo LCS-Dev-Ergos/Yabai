@@ -8,6 +8,9 @@ struct memory_pool
     volatile uint64_t used;
 };
 
+bool memory_pool_init(struct memory_pool *pool, uint64_t size);
+
+#ifdef YABAI_DEFINE_CORE
 bool memory_pool_init(struct memory_pool *pool, uint64_t size)
 {
     int page_size = getpagesize();
@@ -25,5 +28,6 @@ bool memory_pool_init(struct memory_pool *pool, uint64_t size)
 
     return result;
 }
+#endif
 
 #endif

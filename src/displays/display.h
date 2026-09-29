@@ -1,6 +1,19 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <CoreFoundation/CoreFoundation.h>
+#include <CoreGraphics/CoreGraphics.h>
+
+// Area: display.c supplies display and Space facts and the display callback.
+// Threads: the main thread receives reconfiguration callbacks; the event loop
+// uses display queries while handling commands and events.
+// State: no mutable display state; the callback posts changes to the loop.
+// Callers: display management, space management and event handlers.
+// Calls: CoreGraphics, SkyLight and event_loop_post.
+
 #define DISPLAY_EVENT_HANDLER(name) void name(uint32_t did, CGDisplayChangeSummaryFlags flags, void *context)
 typedef DISPLAY_EVENT_HANDLER(display_callback);
 
@@ -35,7 +48,7 @@ static char *display_property_str[] =
 };
 
 void display_serialize(FILE *rsp, uint32_t did, uint64_t flags);
-CFStringRef display_uuid(uint32_t did);
+CFStringRef display_uuid(uint32_t did) CF_RETURNS_RETAINED;
 uint32_t display_id(CFStringRef uuid);
 CGRect display_bounds_constrained(uint32_t did, bool ignore_external_bar);
 CGPoint display_center(uint32_t did);

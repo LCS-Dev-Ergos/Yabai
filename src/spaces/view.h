@@ -1,6 +1,14 @@
 #ifndef VIEW_H
 #define VIEW_H
 
+#include "../core_types.h"
+
+// Area: view/*.c owns area geometry, BSP nodes and each Space's view lifecycle.
+// Thread: the event loop mutates views and their BSP trees.
+// State: view and window_node objects; g_space_manager holds their table.
+// Callers: space and window managers, display geometry and event handlers.
+// Calls: window helpers, SkyLight and update_window_notifications.
+
 #define AX_ABS(a, b) (((a) - (b) < 0) ? (((a) - (b)) * -1) : ((a) - (b)))
 #define AX_DIFF(a, b) (AX_ABS(a, b) >= 1.5f)
 
@@ -218,6 +226,23 @@ struct view
 #define view_check_flag(v, x) ((v)->flags  &  (x))
 #define view_clear_flag(v, x) ((v)->flags &= ~(x))
 #define view_set_flag(v, x)   ((v)->flags |=  (x))
+
+struct area area_from_cgrect(CGRect rect);
+CGPoint area_max_point(struct area area);
+static inline enum window_node_split window_node_get_split(struct view *view, struct window_node *node);
+static inline float window_node_get_ratio(struct window_node *node);
+static inline int window_node_get_gap(struct view *view);
+static void area_make_pair(enum window_node_split split, int gap, float ratio, struct area *parent_area, struct area *left_area, struct area *right_area);
+static inline bool window_node_is_intermediate(struct window_node *node);
+static inline bool window_node_is_leaf(struct window_node *node);
+static inline bool window_node_is_left_child(struct window_node *node);
+static void window_node_equalize(struct window_node *node, uint32_t axis_flag);
+static struct balance_node window_node_balance(struct window_node *node, uint32_t axis_flag);
+void window_node_rotate(struct window_node *node, int degrees);
+struct window_node *window_node_mirror(struct window_node *node, enum window_node_split axis);
+struct window_node *window_node_fence(struct window_node *node, int dir);
+bool area_is_in_direction(struct area *r1, CGPoint r1_max, struct area *r2, CGPoint r2_max, int direction);
+int area_distance_in_direction(struct area *r1, CGPoint r1_max, struct area *r2, CGPoint r2_max, int direction);
 
 void insert_feedback_show(struct window_node *node);
 void insert_feedback_destroy(struct window_node *node);

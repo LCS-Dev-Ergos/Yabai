@@ -6,7 +6,7 @@ extern bool g_verbose;
 static inline void
 debug(const char *format, ...)
 {
-    if (!g_verbose) return;
+    if (!__atomic_load_n(&g_verbose, __ATOMIC_RELAXED)) return;
 
     va_list args;
     va_start(args, format);
@@ -48,7 +48,7 @@ require(const char *format, ...)
 static inline void
 debug_message(const char *prefix, char *message)
 {
-    if (!g_verbose) return;
+    if (!__atomic_load_n(&g_verbose, __ATOMIC_RELAXED)) return;
 
     fprintf(stdout, "%s:", prefix);
 

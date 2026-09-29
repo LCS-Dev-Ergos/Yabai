@@ -1,6 +1,8 @@
 #ifndef EFFECTS_DISPLAY_H
 #define EFFECTS_DISPLAY_H
 
+#include "../core_types.h"
+
 // Display facts the effects depend on (display.m): the refresh interval they
 // are timed with, and Reduce Motion. Each call asks the system.
 //

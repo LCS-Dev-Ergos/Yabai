@@ -1,6 +1,8 @@
 FRAMEWORK_PATH = -F/System/Library/PrivateFrameworks
-FRAMEWORK      = -framework Carbon -framework Cocoa -framework CoreServices -framework CoreVideo -framework SkyLight -framework QuartzCore -weak_framework ScreenCaptureKit
+FRAMEWORK      = -framework Carbon -framework Cocoa -framework CoreServices -framework CoreVideo -framework SkyLight -framework QuartzCore -framework Security -weak_framework ScreenCaptureKit -lbsm.0
 CLI_FLAGS      =
+UNSIGNED_LOCAL ?= 0
+SOCKET_FLAGS   = -DYABAI_ALLOW_UNSIGNED_LOCAL=$(UNSIGNED_LOCAL)
 BUILD_FLAGS    = -std=c11 -Wall -Wextra -g -O0 -fvisibility=hidden -mmacosx-version-min=11.0 -fno-objc-arc -arch x86_64 -arch arm64 -sectcreate __TEXT __info_plist $(INFO_PLIST)
 BUILD_PATH     = ./bin
 DOC_PATH       = ./doc
@@ -9,7 +11,7 @@ ASSET_PATH     = ./assets
 SMP_PATH       = ./examples
 ARCH_PATH      = ./archive
 OSAX_SRC       = ./src/osax/payload_bin.c ./src/osax/loader_bin.c
-YABAI_SRC      = ./src/manifest.m $(OSAX_SRC)
+YABAI_SRC      = ./src/yabai_main.m ./src/navigation/navigation_effects.m ./src/sa/sa_unity.m ./src/displays/displays.m ./src/applications/applications.m ./src/spaces/layout_unity.m ./src/events/events.m ./src/ipc/ipc.m $(OSAX_SRC)
 OSAX_PATH      = ./src/osax
 INFO_PLIST     = $(ASSET_PATH)/Info.plist
 BINS           = $(BUILD_PATH)/yabai
@@ -28,7 +30,7 @@ install: BUILD_FLAGS=-std=c11 -Wall -Wextra -DNDEBUG -O3 -fvisibility=hidden -mm
 install: clean-build $(BINS)
 
 $(OSAX_SRC): $(filter-out $(OSAX_SRC),$(wildcard $(OSAX_PATH)/*.m $(OSAX_PATH)/*.h $(OSAX_PATH)/*.c))
-	xcrun clang $(OSAX_PATH)/payload.m -shared -fPIC -O3 -mmacosx-version-min=11.0 -arch x86_64 -arch arm64e -o $(OSAX_PATH)/payload $(FRAMEWORK_PATH) -framework SkyLight -framework AppKit -framework QuartzCore -framework Carbon
+	xcrun clang $(OSAX_PATH)/payload.m -shared -fPIC -O3 -mmacosx-version-min=11.0 -arch x86_64 -arch arm64e $(SOCKET_FLAGS) -o $(OSAX_PATH)/payload $(FRAMEWORK_PATH) -framework SkyLight -framework AppKit -framework QuartzCore -framework Carbon -framework Security -lbsm.0
 	xcrun clang $(OSAX_PATH)/loader.m -O3 -mmacosx-version-min=11.0 -arch x86_64 -arch arm64e -o $(OSAX_PATH)/loader -framework Cocoa
 	xxd -i -a $(OSAX_PATH)/payload $(OSAX_PATH)/payload_bin.c
 	xxd -i -a $(OSAX_PATH)/loader $(OSAX_PATH)/loader_bin.c
@@ -65,4 +67,4 @@ clean: clean-build
 
 $(BUILD_PATH)/yabai: $(YABAI_SRC)
 	mkdir -p $(BUILD_PATH)
-	xcrun clang $^ $(BUILD_FLAGS) $(CLI_FLAGS) $(FRAMEWORK_PATH) $(FRAMEWORK) -o $@
+	xcrun clang $^ $(BUILD_FLAGS) $(CLI_FLAGS) $(SOCKET_FLAGS) $(FRAMEWORK_PATH) $(FRAMEWORK) -o $@

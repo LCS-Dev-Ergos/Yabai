@@ -13,6 +13,7 @@ overrides the directory.
 import ctypes
 import json
 import os
+import pwd
 import socket
 import struct
 import subprocess
@@ -21,7 +22,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = Path(os.environ.get("YABAI_TOOLS", ROOT / "build" / "debug" / "tools"))
-SOCKET = f"/tmp/yabai_{os.environ['USER']}.socket"
+_private_socket = Path.home() / "Library" / "Caches" / "yabai" / "daemon.sock"
+_legacy_socket = Path("/tmp") / f"yabai_{pwd.getpwuid(os.getuid()).pw_name}.socket"
+SOCKET = str(_private_socket if _private_socket.exists() else _legacy_socket)
+CLIENT_MODE = os.environ.get("YABAI_LIVE_CLIENT", "socket")
+CLIENT_BINARY = os.environ.get("YABAI_LIVE_BINARY", "/opt/yabai/bin/yabai")
 
 _cg = ctypes.cdll.LoadLibrary(
     "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
@@ -66,6 +71,11 @@ def now_ms():
 
 
 def request(*tokens):
+    if CLIENT_MODE == "binary":
+        return subprocess.Popen(
+            [CLIENT_BINARY, "-m", *tokens], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+
     body = b"\0".join(t.encode() for t in tokens) + b"\0\0"
     connection = socket.socket(socket.AF_UNIX)
     connection.connect(SOCKET)
@@ -80,6 +90,15 @@ def request(*tokens):
 
 
 def reply(connection):
+    if isinstance(connection, subprocess.Popen):
+        try:
+            output, errors = connection.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            connection.kill()
+            connection.communicate()
+            return "<timeout>"
+        return (errors if connection.returncode else output).decode(errors="replace").strip()
+
     connection.settimeout(5)
     chunks = []
     try:

@@ -1,6 +1,22 @@
 #ifndef APPLICATION_H
 #define APPLICATION_H
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <sys/types.h>
+#include <Carbon/Carbon.h>
+#include <ApplicationServices/ApplicationServices.h>
+
+struct process;
+
+// Area: application.c manages AX application objects and observers.
+// Threads: the main thread receives AX callbacks; the event loop creates,
+// observes and destroys application objects.
+// State: each application owns its AX element and observer; the window manager
+// keeps the application table.
+// Callers: process and event handlers, window management and startup.
+// Calls: AX, process and window helpers, and event_loop_post from callbacks.
+
 #define OBSERVER_CALLBACK(name) void name(AXObserverRef observer, AXUIElementRef element, CFStringRef notification, void *context)
 typedef OBSERVER_CALLBACK(observer_callback);
 

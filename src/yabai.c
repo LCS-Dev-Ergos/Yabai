@@ -1,6 +1,4 @@
-#define SA_SOCKET_PATH_FMT      "/tmp/yabai-sa_%s.socket"
-#define SOCKET_PATH_FMT         "/tmp/yabai_%s.socket"
-#define LCFILE_PATH_FMT         "/tmp/yabai_%s.lock"
+#include "osax/socket_path.h"
 
 #define SCRPT_ADD_LOAD_OPT      "--load-sa"
 #define SCRPT_ADD_UNINSTALL_OPT "--uninstall-sa"
@@ -19,6 +17,10 @@
 #define VERSION_OPT_SHRT        "-v"
 #define HELP_OPT_LONG           "--help"
 #define HELP_OPT_SHRT           "-h"
+
+const CFStringRef kAXFullscreenAttribute = CFSTR("AXFullScreen");
+mach_port_t (* CGSGetConnectionPortById)(int);
+int64_t (* SLSPerformAsynchronousBridgedWindowManagementOperation)(void *);
 
 #define MAJOR  7
 #define MINOR  1
@@ -57,11 +59,6 @@ static int client_send_message(int argc, char **argv)
         error("yabai-msg: no arguments given! abort..\n");
     }
 
-    char *user = getenv("USER");
-    if (!user) {
-        error("yabai-msg: 'env USER' not set! abort..\n");
-    }
-
     int message_length = argc;
     int argl[argc];
 
@@ -83,7 +80,9 @@ static int client_send_message(int argc, char **argv)
 
     int sockfd;
     char socket_file[MAXLEN];
-    snprintf(socket_file, sizeof(socket_file), SOCKET_PATH_FMT, user);
+    if (!yabai_socket_path(getuid(), YABAI_SOCKET_DAEMON, socket_file, sizeof(socket_file), false)) {
+        error("yabai-msg: private socket directory is unavailable..\n");
+    }
 
     if (!socket_open(&sockfd)) {
         error("yabai-msg: failed to open socket..\n");
@@ -127,14 +126,12 @@ static int client_send_message(int argc, char **argv)
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 static inline bool configure_settings_and_acquire_lock(void)
 {
-    char *user = getenv("USER");
-    if (!user) {
-        error("yabai: 'env USER' not set! abort..\n");
+    uid_t owner = getuid();
+    if (!yabai_socket_path(owner, YABAI_SOCKET_DAEMON, g_socket_file, sizeof(g_socket_file), true) ||
+        !yabai_socket_path(owner, YABAI_SOCKET_PAYLOAD, g_sa_socket_file, sizeof(g_sa_socket_file), false) ||
+        !yabai_socket_path(owner, YABAI_SOCKET_LOCK, g_lock_file, sizeof(g_lock_file), false)) {
+        error("yabai: private socket directory is unavailable..\n");
     }
-
-    snprintf(g_sa_socket_file, sizeof(g_sa_socket_file), SA_SOCKET_PATH_FMT, user);
-    snprintf(g_socket_file, sizeof(g_socket_file), SOCKET_PATH_FMT, user);
-    snprintf(g_lock_file, sizeof(g_lock_file), LCFILE_PATH_FMT, user);
 
     NSApplicationLoad();
     g_pid = getpid();
@@ -245,7 +242,7 @@ static void parse_arguments(int argc, char **argv)
 
         if ((string_equals(opt, DEBUG_VERBOSE_OPT_LONG)) ||
             (string_equals(opt, DEBUG_VERBOSE_OPT_SHRT))) {
-            g_verbose = true;
+            __atomic_store_n(&g_verbose, true, __ATOMIC_RELAXED);
         } else if ((string_equals(opt, CONFIG_OPT_LONG)) ||
                    (string_equals(opt, CONFIG_OPT_SHRT))) {
             char *val = i < argc - 1 ? argv[++i] : NULL;

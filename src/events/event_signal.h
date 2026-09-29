@@ -1,6 +1,14 @@
 #ifndef EVENT_SIGNAL_H
 #define EVENT_SIGNAL_H
 
+#include "../core_types.h"
+
+// Area: event_signal.c and event_signal_process.c store and spawn signals.
+// Thread: the event loop mutates subscriptions and flushes pending signals.
+// State: g_signal_event and g_signal_storage.
+// Callers: event handlers and signal commands.
+// Calls: process spawning and memory-pool helpers.
+
 enum signal_type
 {
     SIGNAL_TYPE_UNKNOWN,
@@ -125,6 +133,7 @@ bool event_signal_remove_by_index(int index);
 bool event_signal_remove(char *label);
 void event_signal_list(FILE *rsp);
 enum signal_type signal_type_from_string(const char *str);
+static int event_signal_spawn(struct event_signal *es, char *command);
 
 extern struct signal *g_signal_event[SIGNAL_TYPE_COUNT];
 extern struct memory_pool g_signal_storage;

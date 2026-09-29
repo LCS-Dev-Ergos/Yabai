@@ -1,6 +1,14 @@
 #ifndef SPACE_H
 #define SPACE_H
 
+#include "../core_types.h"
+
+// Area: space.c supplies SkyLight Space queries and window lists.
+// Thread: the event loop uses these helpers; startup also reads Space facts.
+// State: no owned mutable state; returned lists belong to their callers.
+// Callers: space and display managers, views, windows and navigation.
+// Calls: SkyLight and display queries.
+
 uint32_t space_display_id(uint64_t sid);
 uint32_t *space_window_list_for_connection(uint64_t *space_list, int space_count, int cid, int *count, bool include_minimized);
 uint32_t *space_window_list(uint64_t sid, int *count, bool include_minimized);

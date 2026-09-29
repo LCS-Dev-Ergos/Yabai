@@ -290,6 +290,10 @@ static void handle_domain_window(FILE *rsp, struct token domain, char *message)
                 daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
             }
         } else if (token_equals(command, COMMAND_WINDOW_SUB_LAYER)) {
+            if (!acting_window) {
+                daemon_fail(rsp, "could not locate the window to act on!\n");
+                return;
+            }
             struct token value = get_token(&message);
             if (token_equals(value, ARGUMENT_WINDOW_LAYER_BELOW)) {
                 if (!window_manager_set_window_layer(acting_window, LAYER_BELOW)) {
@@ -311,6 +315,10 @@ static void handle_domain_window(FILE *rsp, struct token domain, char *message)
                 daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
             }
         } else if (token_equals(command, COMMAND_WINDOW_OPACITY)) {
+            if (!acting_window) {
+                daemon_fail(rsp, "could not locate the window to act on!\n");
+                return;
+            }
             struct token_value value = token_to_value(get_token(&message));
             if (value.type == TOKEN_TYPE_FLOAT && in_range_ii(value.float_value, 0.0f, 1.0f)) {
                 if (window_manager_set_opacity(&g_window_manager, acting_window, value.float_value)) {

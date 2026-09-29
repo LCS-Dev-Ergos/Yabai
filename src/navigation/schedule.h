@@ -1,6 +1,8 @@
 #ifndef NAVIGATION_SCHEDULE_H
 #define NAVIGATION_SCHEDULE_H
 
+#include "../core_types.h"
+
 // Navigation schedule (schedule.c): queued navigation runs one Desktop at a
 // time, paced by a rhythm, the effect's duration and the last activation. A
 // Desktop reached without activation, with nothing queued after it, takes

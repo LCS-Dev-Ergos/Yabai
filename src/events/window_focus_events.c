@@ -1,4 +1,4 @@
-static void window_focus_note(uint32_t window_id)
+void window_focus_note(uint32_t window_id)
 {
     __atomic_store_n(&__pending_window_focus_id, window_id, __ATOMIC_RELEASE);
 }

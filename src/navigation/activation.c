@@ -82,7 +82,7 @@ static void space_navigation_raise_window(ProcessSerialNumber *psn, uint32_t win
 // becoming focused does not: it is usually an earlier navigation's activation
 // that the busy application handled late, and without this activation that
 // window pulls its Desktop back into view.
-static void space_navigation_focus_resume(int generation)
+void space_navigation_focus_resume(int generation)
 {
     if (generation != g_space_navigation_focus.generation) return;
     if (!psn_equals(&g_window_manager.focused_window_psn, &g_space_navigation_focus.psn)) return;

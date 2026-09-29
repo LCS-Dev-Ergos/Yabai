@@ -26,6 +26,8 @@
 #include <stdio.h>
 
 #include "common.h"
+#include "socket_path.h"
+#include "socket_identity.h"
 #include "pattern.h"
 
 #ifdef __x86_64__
@@ -103,6 +105,7 @@ static swift_bridge_object_release_call swift_bridge_object_release;
 
 static pthread_t daemon_thread;
 static int daemon_sockfd;
+static SecRequirementRef daemon_requirement;
 
 static void dump_class_info(Class c)
 {
@@ -1109,6 +1112,10 @@ static void *handle_connection(void *unused)
     for (;;) {
         int sockfd = accept(daemon_sockfd, NULL, 0);
         if (sockfd == -1) continue;
+        if (!yabai_socket_peer_is_trusted(sockfd, getuid(), daemon_requirement)) {
+            close(sockfd);
+            continue;
+        }
 
         // A reply to a daemon that stopped waiting must not raise SIGPIPE in Dock.
         int on = 1;
@@ -1138,7 +1145,7 @@ static bool start_daemon(char *socket_path)
     struct sockaddr_un socket_address;
     socket_address.sun_family = AF_UNIX;
     snprintf(socket_address.sun_path, sizeof(socket_address.sun_path), "%s", socket_path);
-    unlink(socket_path);
+    if (!yabai_socket_remove_stale(socket_path, getuid())) return false;
 
     if ((daemon_sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
         return false;
@@ -1167,14 +1174,22 @@ void load_payload(void)
 {
     NSLog(@"[yabai-sa] loaded payload..");
 
-    const char *user = getenv("USER");
-    if (!user) {
-        NSLog(@"[yabai-sa] could not get 'env USER'! abort..");
-        return;
+    if (!YABAI_ALLOW_UNSIGNED_LOCAL) {
+        CFDataRef data = yabai_socket_copy_installed_requirement_data();
+        daemon_requirement = yabai_socket_requirement_from_data(data);
+        if (data) CFRelease(data);
+        if (!daemon_requirement) {
+            NSLog(@"[yabai-sa] daemon signature requirement is unavailable..");
+            return;
+        }
     }
 
     char socket_file[255];
-    snprintf(socket_file, sizeof(socket_file), SA_SOCKET_PATH_FMT, user);
+    if (!yabai_socket_path(getuid(), YABAI_SOCKET_PAYLOAD,
+                           socket_file, sizeof(socket_file), true)) {
+        NSLog(@"[yabai-sa] private socket directory is unavailable..");
+        return;
+    }
 
     if (start_daemon(socket_file)) {
         NSLog(@"[yabai-sa] now listening..");

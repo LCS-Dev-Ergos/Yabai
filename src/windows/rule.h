@@ -1,6 +1,14 @@
 #ifndef RULE_H
 #define RULE_H
 
+#include "../core_types.h"
+
+// Area: rule.c builds, matches and destroys window rules.
+// Thread: the event loop owns rule evaluation and mutation.
+// State: rule objects, stored in g_window_manager.rules.
+// Callers: rule commands, window management and event handlers.
+// Calls: regex matching and window helpers.
+
 #define RULE_PROP_UD  0
 #define RULE_PROP_ON  1
 #define RULE_PROP_OFF 2

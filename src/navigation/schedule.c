@@ -77,7 +77,7 @@ static os_log_t space_navigation_log(void)
     return log;
 }
 
-static bool space_navigation_schedule_pacing(void)
+bool space_navigation_schedule_pacing(void)
 {
     return g_space_navigation_schedule.pacing;
 }
@@ -88,7 +88,7 @@ static void space_navigation_schedule_clear(void)
     g_space_navigation_schedule.unsettled = false;
 }
 
-static void space_navigation_schedule_set_pacing(bool pacing)
+void space_navigation_schedule_set_pacing(bool pacing)
 {
     g_space_navigation_schedule.pacing = pacing;
     space_navigation_schedule_clear();
@@ -382,7 +382,7 @@ static void space_navigation_schedule_completed(bool success)
 
 // Event loop, when a requested delay has passed. The pump asks again for
 // whatever is still waiting.
-static void space_navigation_schedule_timer(void)
+void space_navigation_schedule_timer(void)
 {
     g_space_navigation_schedule.timer = 0;
     space_navigation_schedule_pump();
@@ -404,7 +404,7 @@ static void space_navigation_schedule_switched(float duration)
 }
 
 // The application took focus on the window the last step activated.
-static void space_navigation_schedule_focused(uint32_t window_id)
+void space_navigation_schedule_focused(uint32_t window_id)
 {
     if (!window_id || window_id != g_space_navigation_schedule.activated) return;
 

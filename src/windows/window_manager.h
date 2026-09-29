@@ -1,6 +1,17 @@
 #ifndef WINDOW_MANAGER_H
 #define WINDOW_MANAGER_H
 
+#include "../core_types.h"
+
+// Area: window_manager/*.c owns tables, rules, layout operations, focus,
+// appearance, animation, scratchpads and Space reconciliation.
+// Threads: startup initializes it; the event loop owns ordinary mutations;
+// animation workers and CVDisplayLink use locked animation state.
+// State: g_window_manager, g_cv_host_clock_frequency, g_event_bytes and
+// g_bs_port; animation contexts and the animation table have their own lock.
+// Callers: commands, navigation, event handlers and window observation.
+// Calls: window, view, Space and display helpers, AX and scripting addition.
+
 enum window_op_error
 {
     WINDOW_OP_ERROR_SUCCESS,
@@ -142,7 +153,7 @@ struct window *window_manager_find_second_nephew_for_managed_window(struct windo
 struct window *window_manager_find_uncle_for_managed_window(struct window_manager *wm, struct window *window);
 struct window *window_manager_find_first_cousin_for_managed_window(struct window_manager *wm, struct window *window);
 struct window *window_manager_find_second_cousin_for_managed_window(struct window_manager *wm, struct window *window);
-static void window_manager_make_key_window(ProcessSerialNumber *window_psn, uint32_t window_id);
+void window_manager_make_key_window(ProcessSerialNumber *window_psn, uint32_t window_id);
 void window_manager_focus_window_without_raise(ProcessSerialNumber *window_psn, uint32_t window_id);
 void window_manager_focus_window_with_raise(ProcessSerialNumber *window_psn, uint32_t window_id, AXUIElementRef window_ref);
 struct window *window_manager_focused_window(struct window_manager *wm);
@@ -185,6 +196,7 @@ void window_manager_send_window_to_space(struct space_manager *sm, struct window
 struct window *window_manager_create_and_add_window(struct space_manager *sm, struct window_manager *wm, struct application *application, AXUIElementRef window_ref, uint32_t window_id, bool one_shot_rules);
 struct window **window_manager_add_application_windows(struct space_manager *sm, struct window_manager *wm, struct application *application, int *count);
 bool window_manager_add_existing_application_windows(struct space_manager *sm, struct window_manager *wm, struct application *application, int refresh_index);
+static uint32_t *window_manager_existing_application_window_list(struct application *application, int *window_count);
 enum window_op_error window_manager_apply_grid(struct space_manager *sm, struct window_manager *wm, struct window *window, unsigned r, unsigned c, unsigned x, unsigned y, unsigned w, unsigned h);
 void window_manager_purify_window(struct window_manager *wm, struct window *window);
 void window_manager_make_window_floating(struct space_manager *sm, struct window_manager *wm, struct window *window, bool should_float, bool force);

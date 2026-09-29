@@ -1,12 +1,17 @@
 #ifndef TS_H
 #define TS_H
 
-static struct {
+struct temporary_storage {
     void *memory;
     uint64_t size;
     volatile uint64_t used;
-} g_temp_storage;
+};
 
+extern struct temporary_storage g_temp_storage;
+bool ts_init(uint64_t size);
+
+#ifdef YABAI_DEFINE_CORE
+struct temporary_storage g_temp_storage;
 bool ts_init(uint64_t size)
 {
     int page_size = getpagesize();
@@ -24,6 +29,7 @@ bool ts_init(uint64_t size)
 
     return result;
 }
+#endif
 
 static inline void ts_assert_within_bounds(uint64_t size)
 {

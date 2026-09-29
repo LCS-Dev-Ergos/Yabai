@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include "common.h"
+#include "socket_path.h"
 
 extern int SLSMainConnectionID(void);
 extern CFArrayRef SLSCopyManagedDisplaySpaces(int cid);
@@ -36,9 +37,12 @@ static const char *attrib_names[] =
 
 static int sa_connect(void)
 {
-    struct passwd *pw = getpwuid(getuid());
     struct sockaddr_un addr = { .sun_family = AF_UNIX };
-    snprintf(addr.sun_path, sizeof(addr.sun_path), SA_SOCKET_PATH_FMT, pw ? pw->pw_name : "");
+    if (!yabai_socket_path(getuid(), YABAI_SOCKET_PAYLOAD,
+                           addr.sun_path, sizeof(addr.sun_path), false)) {
+        fprintf(stderr, "private payload socket directory is unavailable\n");
+        exit(1);
+    }
 
     int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sockfd == -1 || connect(sockfd, (struct sockaddr *) &addr, sizeof(addr)) == -1) {

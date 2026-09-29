@@ -1,6 +1,6 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
-static CONNECTION_CALLBACK(connection_handler)
+CONNECTION_CALLBACK(connection_handler)
 {
     if (type == 1204) {
         event_loop_post(&g_event_loop, MISSION_CONTROL_ENTER, NULL, 0);
@@ -92,7 +92,7 @@ void mission_control_unobserve(void)
     }
 }
 
-static inline bool mission_control_is_active(void)
+bool mission_control_is_active(void)
 {
     return g_mission_control_mode != MISSION_CONTROL_MODE_INACTIVE;
 }

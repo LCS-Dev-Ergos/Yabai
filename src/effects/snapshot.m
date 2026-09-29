@@ -76,7 +76,7 @@ static void space_snapshot_space_created(uint64_t sid)
     space_snapshot_recent_next = (space_snapshot_recent_next + 1) % SPACE_SNAPSHOT_RECENT_SPACES;
 }
 
-static bool space_navigation_snapshot_owns_space(uint64_t sid)
+bool space_navigation_snapshot_owns_space(uint64_t sid)
 {
     bool owned = false;
 
@@ -115,7 +115,7 @@ static void space_snapshot_cancel_locked(void)
 
 // Event loop. Ends the overlay and a capture still waited for; the step that
 // waits for that capture learns so when it asks to present it.
-static void space_navigation_snapshot_cancel(void)
+void space_navigation_snapshot_cancel(void)
 {
     pthread_mutex_lock(&space_snapshot_lock);
     space_snapshot_cancel_locked();
@@ -125,7 +125,7 @@ static void space_navigation_snapshot_cancel(void)
     space_snapshot_pending = (struct space_snapshot_request) { 0 };
 }
 
-static void space_navigation_snapshot_space_changed(void)
+void space_navigation_snapshot_space_changed(void)
 {
     pthread_mutex_lock(&space_snapshot_lock);
     struct space_snapshot *snapshot = space_snapshot_active;

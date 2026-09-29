@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 # Builds the same artifacts as the makefile: the scripting-addition payload and
 # loader, embedded into the yabai binary. The makefile remains the original
 # build; this file adds out-of-tree builds and a compile_commands.json that
-# language servers can use despite the unity build in src/manifest.m.
+# language servers can use for the daemon's area translation units.
 
 # Must precede project() so the compiler checks already use it.
 set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum macOS version")
@@ -20,6 +20,7 @@ set(YABAI_ARCHITECTURES "x86_64;arm64" CACHE STRING "Architectures of the yabai 
 set(YABAI_OSAX_ARCHITECTURES "x86_64;arm64e" CACHE STRING "Architectures of the scripting-addition payload and loader")
 set(YABAI_SANITIZE "" CACHE STRING "Sanitizers for the yabai binary: empty, address or thread")
 set(YABAI_CODESIGN_IDENTITY "" CACHE STRING "Code signing identity applied to the yabai binary after linking")
+option(YABAI_ALLOW_UNSIGNED_LOCAL "Allow same-UID unsigned socket clients in an explicit local development build" OFF)
 option(YABAI_LINK_COMPILE_COMMANDS "Point compile_commands.json in the source tree at this build directory" ON)
 
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -34,7 +35,8 @@ set_target_properties(payload PROPERTIES
     OSX_ARCHITECTURES "${YABAI_OSAX_ARCHITECTURES}")
 target_compile_options(payload PRIVATE -O3)
 target_link_options(payload PRIVATE -F${PRIVATE_FRAMEWORKS})
-target_link_libraries(payload PRIVATE "-framework SkyLight" "-framework AppKit" "-framework QuartzCore" "-framework Carbon")
+target_compile_definitions(payload PRIVATE YABAI_ALLOW_UNSIGNED_LOCAL=$<BOOL:${YABAI_ALLOW_UNSIGNED_LOCAL}>)
+target_link_libraries(payload PRIVATE "-framework SkyLight" "-framework AppKit" "-framework QuartzCore" "-framework Carbon" "-framework Security" "-lbsm.0")
 
 add_executable(loader ${SRC}/osax/loader.m)
 set_target_properties(loader PROPERTIES
@@ -54,7 +56,17 @@ foreach(name payload loader)
         VERBATIM)
 endforeach()
 
-add_executable(yabai ${SRC}/manifest.m ${OSAX_OUT}/payload_bin.c ${OSAX_OUT}/loader_bin.c)
+add_executable(yabai
+    ${SRC}/yabai_main.m
+    ${SRC}/navigation/navigation_effects.m
+    ${SRC}/sa/sa_unity.m
+    ${SRC}/displays/displays.m
+    ${SRC}/applications/applications.m
+    ${SRC}/spaces/layout_unity.m
+    ${SRC}/events/events.m
+    ${SRC}/ipc/ipc.m
+    ${OSAX_OUT}/payload_bin.c
+    ${OSAX_OUT}/loader_bin.c)
 set_target_properties(yabai PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     OSX_ARCHITECTURES "${YABAI_ARCHITECTURES}"
@@ -63,12 +75,13 @@ set_target_properties(yabai PROPERTIES
 target_compile_options(yabai PRIVATE
     -std=c11 -Wall -Wextra -fvisibility=hidden -fno-objc-arc
     $<$<CONFIG:Debug>:-O0>)
+target_compile_definitions(yabai PRIVATE YABAI_ALLOW_UNSIGNED_LOCAL=$<BOOL:${YABAI_ALLOW_UNSIGNED_LOCAL}>)
 target_link_options(yabai PRIVATE
     -F${PRIVATE_FRAMEWORKS}
     LINKER:-sectcreate,__TEXT,__info_plist,${CMAKE_CURRENT_SOURCE_DIR}/assets/Info.plist)
 target_link_libraries(yabai PRIVATE
     "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight"
-    "-weak_framework ScreenCaptureKit" "-framework QuartzCore")
+    "-weak_framework ScreenCaptureKit" "-framework QuartzCore" "-framework Security" "-lbsm.0")
 
 if(YABAI_SANITIZE STREQUAL "address")
     set(YABAI_SANITIZE_FLAGS -fsanitize=address,undefined)
@@ -86,7 +99,7 @@ if(YABAI_CODESIGN_IDENTITY)
         VERBATIM)
 endif()
 
-# Unit tests of the core. tests.m includes the whole unity build with -DTESTS
+# Unit tests of the core. tests.m includes the full manifest with -DTESTS
 # and stubs the embedded payload and loader.
 enable_testing()
 add_executable(yabai_tests tests/src/tests.m)
@@ -95,10 +108,11 @@ set_target_properties(yabai_tests PROPERTIES
     C_STANDARD 11 C_EXTENSIONS OFF)
 target_compile_definitions(yabai_tests PRIVATE TESTS PROFILE=1)
 target_compile_options(yabai_tests PRIVATE -std=c11 -fno-objc-arc ${YABAI_SANITIZE_FLAGS})
+target_compile_definitions(yabai_tests PRIVATE YABAI_ALLOW_UNSIGNED_LOCAL=1)
 target_link_options(yabai_tests PRIVATE -F${PRIVATE_FRAMEWORKS} ${YABAI_SANITIZE_FLAGS})
 target_link_libraries(yabai_tests PRIVATE
     "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight"
-    "-weak_framework ScreenCaptureKit" "-framework QuartzCore")
+    "-weak_framework ScreenCaptureKit" "-framework QuartzCore" "-framework Security" "-lbsm.0")
 add_test(NAME yabai_tests COMMAND yabai_tests)
 
 # Exercise the actual navigation implementation with isolated OS dependencies.
@@ -162,14 +176,16 @@ if(YABAI_FUZZ)
 
     add_executable(fuzz_daemon_message tests/fuzz/daemon_message.m)
     target_compile_definitions(fuzz_daemon_message PRIVATE TESTS)
+    target_compile_definitions(fuzz_daemon_message PRIVATE YABAI_ALLOW_UNSIGNED_LOCAL=1)
     target_link_libraries(fuzz_daemon_message PRIVATE
         "-framework Carbon" "-framework Cocoa" "-framework CoreServices" "-framework CoreVideo" "-framework SkyLight"
-        "-weak_framework ScreenCaptureKit" "-framework QuartzCore")
+        "-weak_framework ScreenCaptureKit" "-framework QuartzCore" "-framework Security" "-lbsm.0")
 
     add_executable(fuzz_payload_message tests/fuzz/payload_message.m)
     target_include_directories(fuzz_payload_message PRIVATE ${SRC}/osax)
+    target_compile_definitions(fuzz_payload_message PRIVATE YABAI_ALLOW_UNSIGNED_LOCAL=1)
     target_link_libraries(fuzz_payload_message PRIVATE
-        "-framework AppKit" "-framework QuartzCore" "-framework Carbon" "-framework CoreGraphics")
+        "-framework AppKit" "-framework QuartzCore" "-framework Carbon" "-framework CoreGraphics" "-framework Security" "-lbsm.0")
 
     foreach(target daemon_message payload_message)
         set_target_properties(fuzz_${target} PROPERTIES
@@ -198,7 +214,7 @@ if(YABAI_BUILD_TOOLS AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
 
     add_executable(sa_client tools/osax/sa_client.c)
     target_include_directories(sa_client PRIVATE ${SRC}/osax)
-    target_link_libraries(sa_client PRIVATE "-framework CoreFoundation" "-framework SkyLight")
+    target_link_libraries(sa_client PRIVATE "-framework CoreFoundation" "-framework SkyLight" "-lbsm.0")
 
     add_executable(window_sub_level tools/skylight/window_sub_level.c)
     target_link_libraries(window_sub_level PRIVATE "-framework CoreFoundation" "-framework CoreGraphics" "-framework SkyLight")
@@ -299,6 +315,13 @@ add_library(yabai_unity OBJECT EXCLUDE_FROM_ALL)
 target_include_directories(yabai_unity PRIVATE ${SRC} ${OSAX_OUT})
 target_compile_options(yabai_unity PRIVATE -std=c11 -fno-objc-arc -Wno-undefined-internal)
 set(yabai_unity_prelude "")
-yabai_unity_sources(${SRC}/manifest.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/yabai_main.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/navigation/navigation_effects.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/sa/sa_unity.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/displays/displays.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/applications/applications.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/spaces/layout_unity.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/events/events.m yabai_unity yabai_unity_prelude 0)
+yabai_unity_sources(${SRC}/ipc/ipc.m yabai_unity yabai_unity_prelude 0)
 yabai_unity_sources(${SRC}/osax/payload.m yabai_unity yabai_unity_prelude 0)
 set_property(SOURCE ${SRC}/osax/x64_payload.m APPEND PROPERTY COMPILE_OPTIONS -arch x86_64)

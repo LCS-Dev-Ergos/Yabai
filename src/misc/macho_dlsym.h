@@ -1,3 +1,9 @@
+#ifndef MACHO_DLSYM_H
+#define MACHO_DLSYM_H
+
+void *macho_find_symbol(char *target_image, char *target_symbol);
+
+#ifdef MACHO_DLSYM_IMPLEMENTATION
 static struct mach_header_64 *macho_find_image_header(char *target_name, uint64_t *slide)
 {
     int image_count = _dyld_image_count();
@@ -78,3 +84,5 @@ void *macho_find_symbol(char *target_image, char *target_symbol)
 
     return NULL;
 }
+#endif
+#endif

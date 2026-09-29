@@ -171,7 +171,7 @@ out:
 }
 #pragma clang diagnostic pop
 
-void window_manager_animate_window_list_async(struct window_capture *window_list, int window_count)
+static void window_manager_animate_window_list_async(struct window_capture *window_list, int window_count)
 {
     struct window_animation_context *context = malloc(sizeof(struct window_animation_context));
 

@@ -1,6 +1,14 @@
 #ifndef WORKSPACE_H
 #define WORKSPACE_H
 
+#include "../core_types.h"
+
+// Area: workspace.m observes NSWorkspace, Dock and display notifications.
+// Thread: the main run loop receives callbacks and posts daemon events.
+// State: g_workspace_context and macOS-version flags, set at startup.
+// Callers: startup, process management and application observation.
+// Calls: NSWorkspace, process helpers and event_loop_post.
+
 #define SUPPORTED_MACOS_VERSION_LIST    \
     SUPPORT_MACOS_VERSION(goldengate, 27) \
     SUPPORT_MACOS_VERSION(tahoe,      26) \
