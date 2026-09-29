@@ -119,6 +119,14 @@ requirements.
 
 ## Acceptance before release
 
+User update, 2026-09-29: complete the main implementation/release work now;
+run new live measurements only after the user reboots with few active
+processes. Preserve the completed bounded live evidence. Defer the new
+WindowServer rights-type comparison and further visual/performance campaigns
+to that fresh-system session. Offline regression checks, CI, signing, package
+preparation and minimal installed-identity verification may proceed; pending
+live coverage must remain explicit in the release handoff.
+
 - Focused tests for AX success, failures, partial cleanup, retries and process
   destruction; callback loss, lateness, cancellation and recovery. Relevant
   sanitizers and combined CI must pass on the final candidate.
