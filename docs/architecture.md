@@ -18,16 +18,23 @@ the fork's own features are in [navigation](navigation.md),
 
 The two sockets:
 
-- **Daemon socket** `/tmp/yabai_$USER.socket`, created with `bind` and then
-  `chmod 0600`. A message is a 4-byte length and NUL-separated tokens
-  (`src/ipc/message_loop.c`, parsed by `src/ipc/message.c`). The daemon answers on the same connection. No peer
-  authentication (planned; see the Atrium open threads).
-- **Payload socket** in Dock. Each request opens its own connection
+- **Daemon socket** `~/Library/Caches/yabai/daemon.sock`. The directory must
+  be a real directory owned by the login user with no group or other access;
+  it is created with mode `0700`. The accept thread checks each peer's audit
+  token for the owner's effective UID or root and validates the peer against
+  this daemon's designated code-signing requirement before parsing. A
+  message is a 4-byte length and NUL-separated tokens (`src/ipc/message_loop.c`,
+  parsed by `src/ipc/message.c`). The daemon answers on the same connection.
+- **Payload socket** `~/Library/Caches/yabai/payload.sock` in Dock. The payload
+  applies the same directory and audit-token checks. It validates peers
+  against a requirement saved by the root installer in its bundle. Each request opens its own connection
   (`scripting_addition_send_bytes`), builds its message in a stack buffer of
   `SA_SOCKET_BUFF_LEN` (4 KiB), the payload's message size, refusing one that
   does not fit, and waits up to one second for Dock to close the connection
   or reply. Dock handles connections one at a time on one
-  thread.
+  thread. An explicit local development build may allow unsigned peers;
+  the default requires the signed daemon identity. Live verification is still
+  required before release.
 
 ## Build structure
 
@@ -103,7 +110,7 @@ flowchart LR
 
 | Thread | Started by | Runs | Writes |
 | --- | --- | --- | --- |
-| Main | `main` → `[NSApp run]` | Carbon process events (`process_handler`), NSWorkspace and distributed notifications and KVO (`workspace.m`), AX observers per application and for Dock (`application.c`, `mission_control.c`), the mouse event tap (`mouse_handler.c`), display reconfiguration (`display_manager.c`), SkyLight connection notifications (`mission_control.c` `connection_handler`), and retries dispatched to the main queue. | The process table (`g_process_manager`), `mouse_state` click flags, `__last_cmd_tab_time` (atomic). Everything else it only posts as events. |
+| Main | `main` → `[NSApp run]` | Carbon process events (`process_handler`), NSWorkspace and distributed notifications and KVO (`workspace.m`), AX observers per application and for Dock (`application.c`, `mission_control.c`), the mouse event tap (`mouse_handler.c`), display reconfiguration (`display_manager.c`), SkyLight connection notifications (`mission_control.c` `connection_handler`), and retries dispatched to the main queue. | The process table (`g_process_manager`), `mouse_state` click flags, `__last_cmd_tab_time` (atomic). KVO updates process policy on the main thread; other callbacks only post events. |
 | Event loop | `event_loop_begin` | Every event handler and every daemon command, one at a time (`event_loop_run`). Signals are spawned at the end of each event (`event_signal_flush`). | All window, space, display, view and rule state; all fork navigation state; every SA request of commands and navigation. |
 | Message loop | `message_loop_begin` | `accept` on the daemon socket; the fork's grouping of `space --navigate focus next/prev` requests (`space_navigation_accept`). | `g_space_navigation_queue` (mutex). |
 | Global queues | `dispatch_after`, `dispatch_source` | Navigation wake-ups, deferred focus and capture deadlines (post events), the snapshot overlay's alpha timer and its cancel handler, ScreenCaptureKit completion (posts an event for a queued step). | Snapshot state under `space_snapshot_lock`; capture bookkeeping under its own mutex. |
@@ -165,7 +172,7 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 | `g_display_manager` | Startup initializes; event loop writes | Display reconfiguration callback only posts. |
 | `g_process_manager.process` (table) | Main thread | Event loop receives `struct process *` through events; main-queue retries look processes up on the main thread. |
 | `g_process_manager` frontmost-process and switch fields | Event loop | Main-thread process callbacks use the process table, not these fields. |
-| `g_mouse_state` | Settings: event loop; click flags: main-thread tap | The tap reads `modifier` without synchronization; this race remains open for step 5. |
+| `g_mouse_state` | Settings: event loop; click flags: main-thread tap | The tap reads the configured `modifier` atomically. Drag and focus state belongs to the event loop. |
 | `g_event_loop` and its queue | Startup initializes; event loop consumes | Main, message and global-queue producers add events under the queue mutex. |
 | `g_signal_event` | Event loop | Signal subscriptions and pending actions. |
 | `g_signal_storage` | Event loop | Memory backing signal actions. |
@@ -178,7 +185,7 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 | `g_socket_file`, `g_config_file`, `g_lock_file` | Startup/client option parsing | The daemon uses these paths during initialization and command acceptance. |
 | `g_bs_port` | Startup | Animation notification code reads the bootstrap port. |
 | `g_connection` | Startup | Event loop and main-thread callbacks read the SkyLight connection. |
-| `g_verbose` | Client option parsing and event-loop config command | Logging on other threads reads it without synchronization. |
+| `g_verbose` | Client option parsing and event-loop config command | Logging on other threads uses an atomic relaxed load. |
 | `g_pid` | Startup | Used to acquire the daemon lock. |
 | `g_space_navigation_queue` (fork) | Message loop and event loop | Mutex. |
 | `g_space_navigation_schedule`, `_focus`, `_anchor`, `_spaces` (fork) | Event loop | Timers only post events. |
@@ -186,6 +193,32 @@ only that handler frees it. Handlers taking more than 10 ms emit a signpost
 | Capture bookkeeping (`space_snapshot_captures`) | Event loop begins | ScreenCaptureKit completion ends it; own mutex, reference-counted capture. |
 | Capture a step waits for (`space_snapshot_pending`, `space_navigation_flight`) | Event loop | ScreenCaptureKit completion and the deadline timer only post `SPACE_NAVIGATION_CAPTURED`; the capture's image is handed over through its semaphore. |
 | `__pending_window_focus_id` (fork) | Event loop | Atomic. |
+
+### Callback audit and Dock request ordering
+
+The NSWorkspace, AX, display-reconfiguration and SkyLight callbacks inspected
+for point 5 enqueue daemon events. The main-thread process table, KVO policy
+field, mouse-tap click flags and atomic Command-Tab timestamp are the explicit
+exceptions. KVO now reads the cross-thread `terminated` flag atomically; the
+mouse tap reads the event-loop-configured modifier atomically. Logging reads
+`g_verbose` atomically. This is a source audit; a live daemon TSan run has not
+been performed.
+
+The event loop sends Space-focus and other scripting-addition requests while
+animation workers send proxy-swap requests. Separate client connections can
+reach Dock in either order, but the payload's single accept loop handles one
+complete request at a time. A proxy swap names its window and proxy IDs; a
+Space focus names its destination Space. Neither handler uses a partially
+decoded state from another request. No cross-thread ordering is required for
+payload memory safety. The visible result of a swap racing a Space switch
+has not been checked on screen, so visual ordering remains open.
+
+The first-visit performance issue in `window_manager/spaces.c` is still open.
+That path lists Space windows, reconciles the BSP view and flushes visible
+window frames with AX. Deferring or batching those operations can change
+tiling order and focus timing. The requested first-lap `sample` profile has
+not run under the current compile-only verification limit, so no scheduling
+change is included in this candidate.
 
 ## Upstream subsystems
 
@@ -263,10 +296,25 @@ Diagnostics: signposts in subsystem `com.lcs.yabai`, categories
 | 2 | Event queue and signal storage | The events' memory pool wrapped to its start without checking that the consumer was past it: a stall with about 21,000 events posted would have overwritten unread ones. Signals of one event were written without a bound. | Fixed after lcs.28: a ring that grows (`event_queue.c`), consecutive mouse moves merged, a signal that does not fit dropped with a warning |
 | 3 | `sa.m` request builders | `pack` never checked the 4 KiB buffer: requests with one entry per window (`move_window_list_to_space`, proxy swaps, `order_window_in`) overflowed the stack past roughly 500 to 1,000 windows. | Fixed after lcs.28: a request that does not fit is refused |
 | 4 | Event loop | Everything runs on one thread, and some calls wait for others: on a Space change upstream revalidates windows and sets frames over AX (about 1.1 s of busy time in a 45-second sample of bursts), activation waits for WindowServer (about 40 ms on average over 16 activations), Dock up to 1 s. A paced crossfade no longer waits for its capture; drawing the image and one refresh remain, with the switch and the activation, and with pacing off the capture (up to 150 ms) as well. On two 4K displays (20 Mpx each) with lcs.28 that part held the loop a median 132 ms per step (p90 435 ms). | Performance; bounded by timeouts |
-| 5 | Daemon socket | A fixed name in the shared `/tmp`: another local user who creates it first stops the daemon from binding. It is made `0600` only after `bind`, which matters with a permissive umask. No peer authentication. | Security; local |
+| 5 | Daemon and payload sockets | The local candidate moves both sockets to an owner-only directory and checks peer audit-token UIDs and the daemon's designated requirement before parsing. Unsigned peers require an explicit development build. An unsigned local daemon and payload passed a bounded live smoke on 2026-09-29; the signed release path remains untested. | Security; candidate |
 | 6 | TCC | Grants of a bare binary follow its path; every store path asked again and ran without crossfades until restart. | Fixed in Dotfiles `9a8fb78`; the grants survived the update to lcs.28 |
-| 7 | Upstream animations and navigation | The CVDisplayLink thread and the event loop both send Dock requests; Dock serialises them, but nothing orders a proxy swap against a navigation switch. | Unverified; watch |
+| 7 | Upstream animations and navigation | The CVDisplayLink thread and the event loop both send Dock requests. The payload handles each full request serially, and proxy swaps target window IDs while navigation targets a Space ID. Visible ordering during an overlap remains unverified. | Unverified visual result |
 | 8 | Unity build | Hidden coupling through include order and file-static globals, so a module's inputs and threads are not visible where it is used. Navigation and effects now declare their interfaces, threads and state in headers and compile before the core; the core's files still call each other's file-static functions by include order. | Maintainability; reduced |
+
+### First Space visits after restart
+
+On 2026-09-29, a 30-second, 1 ms `sample` of the installed lcs.13 daemon
+covered the first visit to Desktops 2–11 after a service restart. The client
+command for Desktop 2 took 323 ms; the next commands took 15–111 ms, apart
+from Desktop 3 at 72 ms. These are command completion times, not event-handler
+or frame-presentation durations. The sample caught a `SPACE_CHANGED` window
+validation in which the event loop spent 215 samples waiting for animation
+proxy preparation threads. AX frame queries and WindowServer calls also
+appear on that path. Startup configuration separately spent 213 samples in
+window validation and frame setting. The earlier 0.9-second first-visit stall
+did not recur in this lap. Defer batching or moving validation off the event
+loop until signposts isolate each first visit and show which work can safely
+move without changing window ordering or tiling.
 
 ## Upstream integration
 

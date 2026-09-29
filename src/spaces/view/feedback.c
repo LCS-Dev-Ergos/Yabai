@@ -44,7 +44,7 @@ void insert_feedback_show(struct window_node *node)
         }
     }
 
-    CGFloat clip_x, clip_y, clip_w, clip_h;
+    CGFloat clip_x = 0, clip_y = 0, clip_w = 0, clip_h = 0;
     CGFloat midx = CGRectGetMidX(frame);
     CGFloat midy = CGRectGetMidY(frame);
 

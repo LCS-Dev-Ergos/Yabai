@@ -29,7 +29,7 @@ static MOUSE_HANDLER(mouse_handler)
         uint8_t mod = mouse_mod_from_cgflags(CGEventGetFlags(event));
         event_loop_post(&g_event_loop, MOUSE_DOWN, (void *) CFRetain(event), mod);
 
-        if (mod == mouse_state->modifier) {
+        if (mod == mouse_modifier_load(mouse_state)) {
             mouse_state->consume_mouse_click = true;
             mouse_state->consumed_event = (CGEventRef) CFRetain(event);
             return NULL;
@@ -58,7 +58,7 @@ static MOUSE_HANDLER(mouse_handler)
     } break;
     case kCGEventMouseMoved: {
         uint8_t mod = mouse_mod_from_cgflags(CGEventGetFlags(event));
-        if (mod == mouse_state->modifier) return event;
+        if (mod == mouse_modifier_load(mouse_state)) return event;
 
         event_loop_post(&g_event_loop, MOUSE_MOVED, (void *) CFRetain(event), mod);
     } break;
@@ -261,7 +261,7 @@ end:
 
 void mouse_state_init(struct mouse_state *state)
 {
-    state->modifier    = MOUSE_MOD_FN;
+    mouse_modifier_store(state, MOUSE_MOD_FN);
     state->action1     = MOUSE_MODE_MOVE;
     state->action2     = MOUSE_MODE_RESIZE;
     state->drop_action = MOUSE_MODE_SWAP;

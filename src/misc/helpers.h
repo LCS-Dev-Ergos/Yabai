@@ -338,6 +338,8 @@ static inline void sls_window_disable_shadow(uint32_t id)
 
 static inline CFArrayRef cfarray_of_cfnumbers(void *values, size_t size, int count, CFNumberType type)
 {
+    if (count < 0 || (count > 0 && !values)) return NULL;
+    if (count == 0) return CFArrayCreate(NULL, NULL, 0, &kCFTypeArrayCallBacks);
     CFNumberRef temp[count];
 
     for (int i = 0; i < count; ++i) {

@@ -3,6 +3,10 @@
 
 // Shared system types, helpers and area interfaces for the daemon's units.
 // Only the owning unit defines YABAI_DEFINE_CORE before inclusion.
+// Private declarations and header-only helpers are intentionally unused by
+// some area units; keep that warning scoped to this shared include surface.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
 #include <objc/objc-runtime.h>
 #include <Carbon/Carbon.h>
 #include <Cocoa/Cocoa.h>
@@ -104,4 +108,5 @@
 #include "navigation/command.h"
 #include "hooks.h"
 
+#pragma clang diagnostic pop
 #endif

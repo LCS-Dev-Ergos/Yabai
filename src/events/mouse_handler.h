@@ -77,7 +77,7 @@ struct mouse_state
     CGEventRef consumed_event;
     enum mouse_mode action1;
     enum mouse_mode action2;
-    volatile uint8_t modifier;
+    uint8_t modifier; // Atomic access: the tap reads; the event loop configures.
     enum mouse_mode drop_action;
     enum mouse_mode current_action;
     CGPoint down_location;
@@ -121,5 +121,15 @@ bool mouse_handler_begin(struct mouse_state *mouse_state, uint32_t mask);
 void mouse_handler_end(struct mouse_state *mouse_state);
 
 extern struct mouse_state g_mouse_state;
+
+static inline uint8_t mouse_modifier_load(const struct mouse_state *state)
+{
+    return __atomic_load_n(&state->modifier, __ATOMIC_RELAXED);
+}
+
+static inline void mouse_modifier_store(struct mouse_state *state, uint8_t modifier)
+{
+    __atomic_store_n(&state->modifier, modifier, __ATOMIC_RELAXED);
+}
 
 #endif

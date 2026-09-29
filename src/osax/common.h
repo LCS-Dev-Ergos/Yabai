@@ -1,10 +1,9 @@
 #ifndef SA_COMMON_H
 #define SA_COMMON_H
 
-#define SA_SOCKET_PATH_FMT "/tmp/yabai-sa_%s.socket"
 #define SA_SOCKET_BUFF_LEN 0x1000
 
-#define OSAX_VERSION                "2.1.31-lcs.13"
+#define OSAX_VERSION                "2.1.31-lcs.14"
 
 #define SA_OPACITY_BATCH_MAX 400
 

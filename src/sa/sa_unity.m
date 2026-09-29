@@ -31,6 +31,9 @@
 #include "../misc/ts.h"
 #include "../misc/notify.h"
 #include "../misc/log.h"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
 #include "../misc/helpers.h"
 #include "../spaces/view.h"
+#pragma clang diagnostic pop
 #include "sa.m"

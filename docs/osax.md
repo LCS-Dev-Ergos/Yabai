@@ -26,7 +26,12 @@ signal.
 
 ## Protocol
 
-The socket is `/tmp/yabai-sa_$USER.socket`, mode 0600. Each connection carries
+The socket is `~/Library/Caches/yabai/payload.sock` in an owner-only directory.
+The payload checks each peer's audit-token UID and Yabai's designated
+code-signing requirement before reading a request. The requirement is saved
+by the root installer in `Contents/Resources/daemon.requirement`; a changed
+requirement causes a reinstall. Unsigned development builds require the
+explicit `YABAI_ALLOW_UNSIGNED_LOCAL` build option. Each connection carries
 one request: an `int16_t` length, then an opcode byte and its arguments packed
 without padding. The length covers the opcode and arguments and must be below
 `SA_SOCKET_BUFF_LEN`. Handlers stop at the received length and reject counts
@@ -121,9 +126,9 @@ debug`). The tools land in `build/debug/tools/`.
 5. **Version.** Bump `OSAX_VERSION` (see below), or `--load-sa` keeps the old
    payload.
 6. **Test live.** Install the new build, run `sudo yabai --load-sa`, then
-   `build/debug/tools/sa_client handshake` for the attribute bits. `sa_client
-   spaces` lists space ids; `sa_client focus|create|destroy <sid>` and `sa_client
-   move <sid> <dst>` exercise the space handlers without yabai.
+   inspect the load result and query spaces with the signed `yabai` binary.
+   The unsigned `sa_client` can exercise the payload handlers directly only
+   in an explicit unsigned local development build; a signed payload rejects it.
 7. **SkyLight.** `window.c` queries window sub-levels with a raw MIG message
    whose id changes between releases. `window_sub_level` finds the reply id
    `SLSGetWindowSubLevel` checks for and verifies the request id (reply id

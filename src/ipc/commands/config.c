@@ -22,11 +22,11 @@ static void handle_domain_config(FILE *rsp, struct token domain, char *message)
         if (token_equals(command, COMMAND_CONFIG_DEBUG_OUTPUT)) {
             struct token value = get_token(&message);
             if (!token_is_valid(value)) {
-                fprintf(rsp, "%s\n", bool_str[g_verbose]);
+                fprintf(rsp, "%s\n", bool_str[__atomic_load_n(&g_verbose, __ATOMIC_RELAXED)]);
             } else if (token_equals(value, ARGUMENT_COMMON_VAL_OFF)) {
-                g_verbose = false;
+                __atomic_store_n(&g_verbose, false, __ATOMIC_RELAXED);
             } else if (token_equals(value, ARGUMENT_COMMON_VAL_ON)) {
-                g_verbose = true;
+                __atomic_store_n(&g_verbose, true, __ATOMIC_RELAXED);
             } else {
                 daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
             }
@@ -481,17 +481,17 @@ static void handle_domain_config(FILE *rsp, struct token domain, char *message)
         } else if (token_equals(command, COMMAND_CONFIG_MOUSE_MOD)) {
             struct token value = get_token(&message);
             if (!token_is_valid(value)) {
-                fprintf(rsp, "%s\n", mouse_mod_str[g_mouse_state.modifier]);
+                fprintf(rsp, "%s\n", mouse_mod_str[mouse_modifier_load(&g_mouse_state)]);
             } else if (token_equals(value, ARGUMENT_CONFIG_MOUSE_MOD_ALT)) {
-                g_mouse_state.modifier = MOUSE_MOD_ALT;
+                mouse_modifier_store(&g_mouse_state, MOUSE_MOD_ALT);
             } else if (token_equals(value, ARGUMENT_CONFIG_MOUSE_MOD_SHIFT)) {
-                g_mouse_state.modifier = MOUSE_MOD_SHIFT;
+                mouse_modifier_store(&g_mouse_state, MOUSE_MOD_SHIFT);
             } else if (token_equals(value, ARGUMENT_CONFIG_MOUSE_MOD_CMD)) {
-                g_mouse_state.modifier = MOUSE_MOD_CMD;
+                mouse_modifier_store(&g_mouse_state, MOUSE_MOD_CMD);
             } else if (token_equals(value, ARGUMENT_CONFIG_MOUSE_MOD_CTRL)) {
-                g_mouse_state.modifier = MOUSE_MOD_CTRL;
+                mouse_modifier_store(&g_mouse_state, MOUSE_MOD_CTRL);
             } else if (token_equals(value, ARGUMENT_CONFIG_MOUSE_MOD_FN)) {
-                g_mouse_state.modifier = MOUSE_MOD_FN;
+                mouse_modifier_store(&g_mouse_state, MOUSE_MOD_FN);
             } else {
                 daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
             }

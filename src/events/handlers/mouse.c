@@ -21,9 +21,9 @@ static EVENT_HANDLER(MOUSE_DOWN)
     int64_t button = CGEventGetIntegerValueField(context, kCGMouseEventButtonNumber);
     uint8_t mod = (uint8_t) param1;
 
-    if (button == kCGMouseButtonLeft && g_mouse_state.modifier == mod) {
+    if (button == kCGMouseButtonLeft && mouse_modifier_load(&g_mouse_state) == mod) {
         g_mouse_state.current_action = g_mouse_state.action1;
-    } else if (button == kCGMouseButtonRight && g_mouse_state.modifier == mod) {
+    } else if (button == kCGMouseButtonRight && mouse_modifier_load(&g_mouse_state) == mod) {
         g_mouse_state.current_action = g_mouse_state.action2;
     }
 

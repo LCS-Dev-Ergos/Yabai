@@ -1,4 +1,6 @@
 #include "sa.h"
+#include "../osax/socket_path.h"
+#include "../osax/socket_identity.h"
 
 
 static char osax_base_dir[MAXLEN];
@@ -147,11 +149,8 @@ static bool scripting_addition_set_socket_path(void)
     if (sudo_uid == NULL)                  return false;
     if (sscanf(sudo_uid, "%u", &uid) != 1) return false;
 
-    struct passwd *pw = getpwuid(uid);
-    if (!pw) return false;
-
-    snprintf(g_sa_socket_file, sizeof(g_sa_socket_file), SA_SOCKET_PATH_FMT, pw->pw_name);
-    return true;
+    return yabai_socket_path(uid, YABAI_SOCKET_PAYLOAD,
+                             g_sa_socket_file, sizeof(g_sa_socket_file), false);
 }
 
 static bool scripting_addition_is_installed(void)
@@ -176,7 +175,7 @@ static int scripting_addition_check(void)
         NSString *ns_version = [payload_bundle objectForInfoDictionaryKey:@"CFBundleVersion"];
 
         bool status = string_equals([ns_version UTF8String], OSAX_VERSION);
-        result = status ? 0 : 1;
+        result = status && yabai_socket_installed_requirement_matches_self() ? 0 : 1;
     } else {
         result = 1;
     }
@@ -219,6 +218,10 @@ static int scripting_addition_install(void)
     }
 
     if (!scripting_addition_write_file((char *) __src_osax_payload, __src_osax_payload_len, osax_bin_payload, "wb")) {
+        goto cleanup;
+    }
+
+    if (!yabai_socket_install_self_requirement()) {
         goto cleanup;
     }
 

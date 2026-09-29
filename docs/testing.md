@@ -124,6 +124,20 @@ waits for five seconds without keys or clicks, stops at the next one, and
 restores the Desktop and window it started from. Its helpers `space_poll` and
 `ax_focused` are built with the other tools into `build/<preset>/tools`
 (`YABAI_TOOLS` overrides the directory).
+The helper selects the candidate's private socket when it exists and the
+installed daemon's legacy `/tmp` socket during the transition.
+For a signed daemon that enforces its designated requirement, set
+`YABAI_LIVE_CLIENT=binary` so the harness sends requests through the signed
+`/opt/yabai/bin/yabai -m` client. `YABAI_LIVE_BINARY` overrides that path.
+Launching a process per request adds client overhead to timing measurements.
+
+An unsigned local daemon/payload pair can be compiled explicitly with
+`cmake --preset debug -DYABAI_ALLOW_UNSIGNED_LOCAL=ON` or
+`make UNSIGNED_LOCAL=1`. The default build rejects unsigned socket peers.
+Never use the local option for a release; it applies to both socket servers.
+When `--load-sa` installs a different payload version, it restarts Dock.
+Run `--load-sa` again after Dock returns to inject and validate that payload.
+Restore the installed signed payload and daemon after a local smoke.
 
 ```sh
 python3 tools/live/burst.py 2 0.25 taps 5 100 -- held 1500 -- reverse 3 100 -- back 4 2 100
@@ -312,4 +326,6 @@ the user's approval before changing the active installation or loading the
 payload. After the user switches to the signed release, check space creation,
 destruction, focus and moves (`space --move`, `--swap` and `--display`), plus
 window opacity, layer, shadow and sticky state. Verify the load result and
-`build/debug/tools/sa_client handshake`: macOS 27 expects attribute bits `0x5D`.
+query spaces through the signed `yabai` binary. The unsigned `sa_client`
+works directly against the payload only in an explicit unsigned local build.
+On macOS 27 the payload handshake expects attribute bits `0x5D`.
