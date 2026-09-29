@@ -16,6 +16,45 @@ static void application_launch_diag(const char *phase, pid_t pid, const char *na
 #define APP_LAUNCH_DIAG(phase, value) ((void)0)
 #endif
 
+#ifdef YABAI_TEST_AX_OBSERVATION
+#define AX_RETRY_DISPATCH(delay, block) test_ax_retry_dispatch(delay, block)
+#define AX_RETRY_FIND(psn) test_ax_retry_find(psn)
+#define AX_RETRY_POST(process) test_ax_retry_post(process)
+#else
+#define AX_RETRY_DISPATCH(delay, block) dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay), dispatch_get_main_queue(), block)
+#define AX_RETRY_FIND(psn) process_manager_find_process(&g_process_manager, psn)
+#define AX_RETRY_POST(process) event_loop_post(&g_event_loop, APPLICATION_LAUNCHED, process, 0)
+#endif
+
+static uint64_t application_ax_retry_delay_ns(uint8_t failures)
+{
+    // 100 ms on the first failure, then exponential backoff to 6.4 s.
+    unsigned shift = failures > 7 ? 6 : failures ? failures - 1 : 0;
+    return (100000000ULL << shift);
+}
+
+static void application_ax_schedule_retry(struct process *process)
+{
+    if (__atomic_load_n(&process->ax_retry_pending, __ATOMIC_ACQUIRE)) return;
+    if (process->ax_retry_count < 7) ++process->ax_retry_count;
+    __atomic_store_n(&process->ax_retry_pending, true, __ATOMIC_RELEASE);
+    uint64_t delay = application_ax_retry_delay_ns(process->ax_retry_count);
+    __block ProcessSerialNumber psn = process->psn;
+    pid_t pid = process->pid;
+    AX_RETRY_DISPATCH(delay, ^{
+        struct process *_process = AX_RETRY_FIND(&psn);
+        if (_process && _process->pid == pid && !__atomic_load_n(&_process->terminated, __ATOMIC_RELAXED)) {
+            __atomic_store_n(&_process->ax_retry_pending, false, __ATOMIC_RELEASE);
+            AX_RETRY_POST(_process);
+        }
+    });
+}
+
+static void application_ax_retry_succeeded(struct process *process)
+{
+    process->ax_retry_count = 0;
+}
+
 static EVENT_HANDLER(APPLICATION_LAUNCHED)
 {
     struct process *process = context;
@@ -26,6 +65,8 @@ static EVENT_HANDLER(APPLICATION_LAUNCHED)
         window_manager_remove_lost_front_switched_event(&g_window_manager, process->pid);
         return;
     }
+
+    if (__atomic_load_n(&process->ax_retry_pending, __ATOMIC_ACQUIRE)) return;
 
     if (!__atomic_load_n(&process->ns_application, __ATOMIC_RELAXED)) {
         debug("%s: %s (%d) missing ns_application. fetching..\n", __FUNCTION__, process->name, process->pid);
@@ -101,16 +142,11 @@ static EVENT_HANDLER(APPLICATION_LAUNCHED)
         APP_LAUNCH_DIAG("observe_cleanup_end", 0);
         debug("%s: could not observe notifications for %s (%d) (%d)\n", __FUNCTION__, process->name, process->pid, ax_retry);
 
-        if (ax_retry) {
-            __block ProcessSerialNumber psn = process->psn;
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.1f * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                struct process *_process = process_manager_find_process(&g_process_manager, &psn);
-                if (_process) event_loop_post(&g_event_loop, APPLICATION_LAUNCHED, _process, 0);
-            });
-        }
+        if (ax_retry) application_ax_schedule_retry(process);
 
         return;
     }
+    application_ax_retry_succeeded(process);
     APP_LAUNCH_DIAG("observe_end", 0);
 
     if (window_manager_find_lost_front_switched_event(&g_window_manager, process->pid)) {
@@ -199,6 +235,10 @@ static EVENT_HANDLER(APPLICATION_LAUNCHED)
     }
     APP_LAUNCH_DIAG("end", 0);
 }
+
+#undef AX_RETRY_DISPATCH
+#undef AX_RETRY_FIND
+#undef AX_RETRY_POST
 
 static EVENT_HANDLER(APPLICATION_TERMINATED)
 {

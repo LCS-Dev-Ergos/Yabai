@@ -1,5 +1,12 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
+#ifdef YABAI_TEST_AX_OBSERVATION
+#define AXUIElementSetMessagingTimeout test_ax_set_messaging_timeout
+#define AXObserverCreate test_ax_observer_create
+#define AXObserverAddNotification test_ax_observer_add_notification
+#define AXObserverRemoveNotification test_ax_observer_remove_notification
+#define AXObserverGetRunLoopSource test_ax_observer_get_run_loop_source
+#endif
 #ifdef YABAI_CAPTURE_DIAGNOSTICS
 #include <os/signpost.h>
 static void application_ax_diag(const char *phase, pid_t pid, int notification,
@@ -55,6 +62,14 @@ static OBSERVER_CALLBACK(application_notification_handler)
 
 bool application_observe(struct application *application)
 {
+    // AX calls to an unresponsive helper must not hold the event loop for
+    // the system default timeout on every notification.
+    AXError timeout_result = AXUIElementSetMessagingTimeout(application->ref, 0.25f);
+    if (timeout_result != kAXErrorSuccess) {
+        application->ax_retry = timeout_result == kAXErrorCannotComplete;
+        debug("%s: could not set AX timeout for application '%s': %d\n", __FUNCTION__, application->name, timeout_result);
+        return false;
+    }
 #ifdef YABAI_CAPTURE_DIAGNOSTICS
     uint64_t create_begin = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
 #endif
@@ -64,6 +79,7 @@ bool application_observe(struct application *application)
                         clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - create_begin);
 #endif
     if (create_result == kAXErrorSuccess) {
+        application->is_observing = true;
         for (int i = 0; i < array_count(ax_application_notification); ++i) {
 #ifdef YABAI_CAPTURE_DIAGNOSTICS
             uint64_t add_begin = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
@@ -78,19 +94,39 @@ bool application_observe(struct application *application)
             } else {
                 if (result == kAXErrorCannotComplete) application->ax_retry = true;
                 debug("%s: error '%s' for application '%s' and notification '%s'\n", __FUNCTION__, ax_error_str[-result], application->name, ax_application_notification_str[i]);
+                if (result == kAXErrorCannotComplete) break;
             }
         }
 
-        application->is_observing = true;
+    } else if (create_result == kAXErrorCannotComplete) {
+        application->ax_retry = true;
+    }
+
+    bool complete = (application->notification & AX_APPLICATION_ALL) == AX_APPLICATION_ALL;
+    if (!application->is_observing || complete) {
+        // On partial failure, leave the short timeout in place until the
+        // caller removes registrations. Those removals may also contact AX.
+        AXError reset_result = AXUIElementSetMessagingTimeout(application->ref, 0);
+        if (reset_result != kAXErrorSuccess) {
+            application->ax_retry |= reset_result == kAXErrorCannotComplete;
+            debug("%s: could not restore AX timeout for application '%s': %d\n", __FUNCTION__, application->name, reset_result);
+            return false;
+        }
+    }
+    if (complete) {
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(application->observer_ref), kCFRunLoopDefaultMode);
     }
 
-    return (application->notification & AX_APPLICATION_ALL) == AX_APPLICATION_ALL;
+    return complete;
 }
 
 void application_unobserve(struct application *application)
 {
     if (application->is_observing) {
+        AXError timeout_result = AXUIElementSetMessagingTimeout(application->ref, 0.25f);
+        if (timeout_result != kAXErrorSuccess) {
+            debug("%s: could not set AX cleanup timeout for application '%s': %d\n", __FUNCTION__, application->name, timeout_result);
+        }
         for (int i = 0; i < array_count(ax_application_notification); ++i) {
             if (!(application->notification & (1 << i))) continue;
 
@@ -98,6 +134,10 @@ void application_unobserve(struct application *application)
             application->notification &= ~(1 << i);
         }
 
+        AXError reset_result = AXUIElementSetMessagingTimeout(application->ref, 0);
+        if (reset_result != kAXErrorSuccess) {
+            debug("%s: could not restore AX timeout for application '%s' during cleanup: %d\n", __FUNCTION__, application->name, reset_result);
+        }
         application->is_observing = false;
         CFRunLoopSourceInvalidate(AXObserverGetRunLoopSource(application->observer_ref));
         CFRelease(application->observer_ref);
@@ -170,3 +210,10 @@ void application_destroy(struct application *application)
     CFRelease(application->ref);
     free(application);
 }
+#ifdef YABAI_TEST_AX_OBSERVATION
+#undef AXUIElementSetMessagingTimeout
+#undef AXObserverCreate
+#undef AXObserverAddNotification
+#undef AXObserverRemoveNotification
+#undef AXObserverGetRunLoopSource
+#endif
