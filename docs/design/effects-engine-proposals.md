@@ -18,8 +18,11 @@ Replacing or containing this capture path is a prerequisite for the two
 workstreams below; a GPU renderer alone would not address the measured trigger.
 The focused replacement and bounded live measurements are recorded in the
 [decision-data report](../reports/capture-decision-data-2026-09-29.md); its
-long memory gate remains open, and GPU crossfade and first-Space visuals were
-not completed.
+subsequent [extended campaign](../reports/capture-extended-results-2026-09-29.md)
+completed 108 ready effects in one daemon lifetime with a 120-second live-client
+hold, matched system-wide GPU samples, and first-Space/portrait visuals. The
+focused fix remains a candidate for the next isolated optimization/prototype;
+HDR, moving-pointer and display-reconfiguration compatibility remain untested.
 
 ## Problem and boundaries
 

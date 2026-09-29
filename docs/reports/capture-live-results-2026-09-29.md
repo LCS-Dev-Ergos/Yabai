@@ -1,5 +1,7 @@
 # Capture replacement: live results and next decision
 
+**Latest evidence:** The [extended campaign](capture-extended-results-2026-09-29.md) completed the longer memory, GPU, first-Space and portrait measurements. The follow-up status below is historical and superseded.
+
 **Follow-up on the same date:**
 [capture-decision-data-2026-09-29.md](capture-decision-data-2026-09-29.md)
 supersedes the next-experiment plan below. The longer 50-effect client-alive

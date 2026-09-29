@@ -1,5 +1,7 @@
 # Capture replacement: decision data after the focused fix
 
+**Later evidence on the same date:** The [extended campaign](capture-extended-results-2026-09-29.md) completed the long same-daemon memory hold, matched GPU blocks, first-Space visuals and portrait routing. Its findings supersede the open-gate status and next-experiment recommendations below; this report preserves the earlier measurements and their original limits.
+
 Date: 2026-09-29. Worktree `lcs-code/crossfade-capture-retention` at
 `ad3826e` before these diagnostics; capture fix `2131b94` on `9a56727`.
 The user authorized one measurement campaign with a temporary unsigned
