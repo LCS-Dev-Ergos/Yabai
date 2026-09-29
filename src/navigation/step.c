@@ -1,5 +1,8 @@
 // Navigation runs within one event-loop request, without shell queries or
 // global configuration edits.
+#ifndef SNAP_DIAG
+#define SNAP_DIAG(phase, generation, token) ((void)0)
+#endif
 static uint64_t space_navigation_last_time;
 
 // The space the last navigation switched to. For a moment after a switch,
@@ -266,7 +269,12 @@ static void space_navigation_finish(struct space_navigation_plan *plan, bool suc
 // is shared between them.
 static bool space_navigation_switch_crossfade(struct space_navigation_plan *plan, bool prepared)
 {
+#ifdef YABAI_CAPTURE_DIAGNOSTICS
+    uint64_t generation = space_snapshot_diag_active_generation();
+#endif
+    SNAP_DIAG("dock_request", generation, 0);
     bool success = scripting_addition_focus_space(plan->sid);
+    SNAP_DIAG("dock_reply", generation, 0);
     bool started = prepared && space_navigation_snapshot_start(plan->duration, success);
 
     space_navigation_finish(plan, success, started ? plan->duration : 0.0f);
@@ -382,6 +390,7 @@ static enum space_navigation_result space_navigation_begin_step(uint64_t current
 // without the crossfade if the image is missing or came too late.
 void space_navigation_step_captured(int token)
 {
+    SNAP_DIAG("capture_event_loop", 0, token);
     if (!space_navigation_flight.active || token != space_navigation_flight.token) return;
     space_navigation_flight.active = false;
 

@@ -118,6 +118,7 @@ static struct space_snapshot_capture *space_snapshot_capture_start(CGRect bounds
         }
 
         capture->began = read_os_timer();
+        SNAP_DIAG("capture_request", generation, token);
         capture->deadline = dispatch_time(DISPATCH_TIME_NOW, SPACE_SNAPSHOT_CAPTURE_NS);
         [SCScreenshotManager captureScreenshotWithRect:bounds configuration:config
             completionHandler:^(SCScreenshotOutput *output, NSError *error) {
@@ -126,12 +127,14 @@ static struct space_snapshot_capture *space_snapshot_capture_start(CGRect bounds
                 capture->image = image && CGImageGetWidth(image) == width && CGImageGetHeight(image) == height
                     ? CGImageRetain(image) : NULL;
                 capture->arrived = read_os_timer();
+                SNAP_DIAG("capture_callback", capture->generation, capture->token);
                 space_snapshot_capture_end(capture->generation);
                 dispatch_semaphore_signal(capture->ready);
                 if (capture->token) space_navigation_snapshot_captured(capture->token);
                 space_snapshot_capture_release(capture);
             }];
         capture->returned = read_os_timer();
+        SNAP_DIAG("capture_request_return", generation, token);
 
         return capture;
     }
