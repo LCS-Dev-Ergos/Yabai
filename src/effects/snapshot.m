@@ -162,7 +162,7 @@ static bool space_snapshot_request_start(struct space_snapshot_request *request,
                                          uint64_t target, float interval, int token)
 {
     space_navigation_snapshot_cancel();
-    if (@available(macOS 15.2, *)) { } else return false;
+    if (@available(macOS 26.0, *)) { } else return false;
 
     uint64_t began = read_os_timer();
     if (!CGPreflightScreenCaptureAccess() || !CGDisplayIsActive(display) || !target
@@ -186,7 +186,7 @@ static bool space_snapshot_request_start(struct space_snapshot_request *request,
         return false;
     }
 
-    struct space_snapshot_capture *capture = space_snapshot_capture_start(bounds, token);
+    struct space_snapshot_capture *capture = space_snapshot_capture_start(bounds, width, height, token);
     if (!capture) {
         space_snapshot_trace("no capture", began, read_os_timer());
         return false;

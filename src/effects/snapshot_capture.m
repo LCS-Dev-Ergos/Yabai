@@ -21,6 +21,7 @@ struct space_snapshot_capture
     uint64_t began;             // Before the capture was requested.
     uint64_t returned;          // When the request call returned.
     uint64_t arrived;           // When the callback stored the image.
+    id configuration;           // Kept alive until the asynchronous request ends.
     CGImageRef image;
 };
 
@@ -70,51 +71,71 @@ static void space_snapshot_capture_release(struct space_snapshot_capture *captur
 {
     if (__sync_sub_and_fetch(&capture->references, 1)) return;
     if (capture->image) CGImageRelease(capture->image);
+    [capture->configuration release];
     dispatch_release(capture->ready);
     free(capture);
 }
 
 // Requests a capture of `bounds`. NULL when the system cannot capture or a
 // capture is still in flight. The caller owns one reference.
-static struct space_snapshot_capture *space_snapshot_capture_start(CGRect bounds, int token)
+static struct space_snapshot_capture *space_snapshot_capture_start(CGRect bounds, size_t width, size_t height, int token)
 {
-    if (@available(macOS 15.2, *)) { } else return NULL;
+    // The older captureImageInRect path retained approximately one full frame
+    // in WindowServer per request on the tested OS. Older systems omit the
+    // optional effect until a bounded alternative is verified there.
+    if (@available(macOS 26.0, *)) {
+        uint64_t generation = space_snapshot_capture_begin();
+        if (!generation) return NULL;
 
-    uint64_t generation = space_snapshot_capture_begin();
-    if (!generation) return NULL;
+        SCScreenshotConfiguration *config = [SCScreenshotConfiguration new];
+        if (!config) {
+            space_snapshot_capture_end(generation);
+            return NULL;
+        }
+        config.width = (NSInteger)width;
+        config.height = (NSInteger)height;
+        config.showsCursor = YES;
+        config.dynamicRange = SCScreenshotDynamicRangeSDR;
+        config.displayIntent = SCScreenshotDisplayIntentLocal;
 
-    struct space_snapshot_capture *capture = calloc(1, sizeof(*capture));
-    if (!capture) {
-        space_snapshot_capture_end(generation);
-        return NULL;
+        struct space_snapshot_capture *capture = calloc(1, sizeof(*capture));
+        if (!capture) {
+            [config release];
+            space_snapshot_capture_end(generation);
+            return NULL;
+        }
+
+        capture->references = 2; // Caller and asynchronous completion.
+        capture->generation = generation;
+        capture->token = token;
+        capture->configuration = config;
+        capture->ready = dispatch_semaphore_create(0);
+        if (!capture->ready) {
+            [config release];
+            free(capture);
+            space_snapshot_capture_end(generation);
+            return NULL;
+        }
+
+        capture->began = read_os_timer();
+        capture->deadline = dispatch_time(DISPATCH_TIME_NOW, SPACE_SNAPSHOT_CAPTURE_NS);
+        [SCScreenshotManager captureScreenshotWithRect:bounds configuration:config
+            completionHandler:^(SCScreenshotOutput *output, NSError *error) {
+                (void) error;
+                CGImageRef image = output.sdrImage;
+                capture->image = image && CGImageGetWidth(image) == width && CGImageGetHeight(image) == height
+                    ? CGImageRetain(image) : NULL;
+                capture->arrived = read_os_timer();
+                space_snapshot_capture_end(capture->generation);
+                dispatch_semaphore_signal(capture->ready);
+                if (capture->token) space_navigation_snapshot_captured(capture->token);
+                space_snapshot_capture_release(capture);
+            }];
+        capture->returned = read_os_timer();
+
+        return capture;
     }
-
-    capture->references = 2; // Caller and asynchronous completion.
-    capture->generation = generation;
-    capture->token = token;
-    capture->ready = dispatch_semaphore_create(0);
-    if (!capture->ready) {
-        free(capture);
-        space_snapshot_capture_end(generation);
-        return NULL;
-    }
-
-    capture->began = read_os_timer();
-    capture->deadline = dispatch_time(DISPATCH_TIME_NOW, SPACE_SNAPSHOT_CAPTURE_NS);
-    if (@available(macOS 15.2, *)) {
-        [SCScreenshotManager captureImageInRect:bounds completionHandler:^(CGImageRef image, NSError *error) {
-            (void) error;
-            capture->image = image ? CGImageRetain(image) : NULL;
-            capture->arrived = read_os_timer();
-            space_snapshot_capture_end(capture->generation);
-            dispatch_semaphore_signal(capture->ready);
-            if (capture->token) space_navigation_snapshot_captured(capture->token);
-            space_snapshot_capture_release(capture);
-        }];
-    }
-    capture->returned = read_os_timer();
-
-    return capture;
+    return NULL;
 }
 
 // The captured image, retained, or NULL when it is missing or came too late.
