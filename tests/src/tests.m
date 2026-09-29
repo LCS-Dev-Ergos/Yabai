@@ -7,6 +7,7 @@ unsigned int __src_osax_loader_len;
 #define YABAI_TEST_DIRECTION_WINDOWS
 #define YABAI_TEST_RULE_EFFECTS
 #define YABAI_TEST_COMMAND_STATE
+#define YABAI_TEST_RESOURCE_LIFETIME
 #define YABAI_TEST_AX_OBSERVATION
 #import <ApplicationServices/ApplicationServices.h>
 static AXError test_ax_set_messaging_timeout(AXUIElementRef element, float timeout);
@@ -111,6 +112,7 @@ typedef TEST_SIG(function);
 #include "opacity_policy.c"
 #include "string_escape.c"
 #include "sa_request.c"
+#include "resource_lifetime.c"
 #include "application_observation.c"
 
 #define TEST_ENTRY(name) { #name, test_##name },
@@ -137,7 +139,9 @@ typedef TEST_SIG(function);
     TEST_ENTRY(window_rule_matching_and_effects)               \
     TEST_ENTRY(window_tree_lookup_and_direction)              \
     TEST_ENTRY(command_domain_errors)                          \
-    TEST_ENTRY(command_domain_state_changes)
+    TEST_ENTRY(command_domain_state_changes)                  \
+    TEST_ENTRY(jankyborders_resource_lifetime)                \
+    TEST_ENTRY(mouse_tap_resource_lifetime)
 
 static struct {
     char *name;

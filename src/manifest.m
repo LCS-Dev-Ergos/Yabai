@@ -134,12 +134,64 @@ static void test_rule_make_window_sticky(struct space_manager *sm, struct window
 #endif
 
 #include "windows/window_manager/frames.c"
+
+#ifdef YABAI_TEST_RESOURCE_LIFETIME
+static kern_return_t test_ipc_lookup(mach_port_t *port);
+static void test_ipc_send(mach_port_t port, void *data, uint32_t size);
+static kern_return_t test_ipc_deallocate(mach_port_t port);
+static void test_ipc_wait(void);
+#define bootstrap_look_up(bootstrap, service, port) test_ipc_lookup(port)
+#define mach_send(port, data, size) test_ipc_send(port, data, size)
+#define mach_port_deallocate(task, port) test_ipc_deallocate(port)
+#define usleep(usec) test_ipc_wait()
+#endif
+
 #include "windows/window_manager/animation.c"
+
+#ifdef YABAI_TEST_RESOURCE_LIFETIME
+#undef bootstrap_look_up
+#undef mach_send
+#undef mach_port_deallocate
+#undef usleep
+#endif
+
 #include "windows/window_manager/appearance.c"
 #include "windows/window_manager/lookup.c"
 #include "windows/window_manager/focus.c"
 #include "windows/window_manager/operations.c"
 #include "windows/window_manager/scratchpad.c"
 #include "windows/window_manager/spaces.c"
+
+#ifdef YABAI_TEST_RESOURCE_LIFETIME
+static CFMachPortRef test_mouse_create(void);
+static bool test_mouse_enabled(void);
+static CFRunLoopSourceRef test_mouse_create_source(void);
+static void test_mouse_invalidate(const void *value);
+static void test_mouse_release(const void *value);
+static void test_mouse_add_source(void);
+static void test_mouse_remove_source(void);
+static void test_mouse_enable(bool enabled);
+#define CGEventTapCreate(...) test_mouse_create()
+#define CGEventTapIsEnabled(...) test_mouse_enabled()
+#define CFMachPortCreateRunLoopSource(...) test_mouse_create_source()
+#define CFMachPortInvalidate(value) test_mouse_invalidate(value)
+#define CFRelease(value) test_mouse_release(value)
+#define CFRunLoopAddSource(...) test_mouse_add_source()
+#define CFRunLoopRemoveSource(...) test_mouse_remove_source()
+#define CGEventTapEnable(handle, enabled) test_mouse_enable(enabled)
+#endif
+
 #include "events/mouse_handler.c"
+
+#ifdef YABAI_TEST_RESOURCE_LIFETIME
+#undef CGEventTapCreate
+#undef CGEventTapIsEnabled
+#undef CFMachPortCreateRunLoopSource
+#undef CFMachPortInvalidate
+#undef CFRelease
+#undef CFRunLoopAddSource
+#undef CFRunLoopRemoveSource
+#undef CGEventTapEnable
+#endif
+
 #include "yabai.c"

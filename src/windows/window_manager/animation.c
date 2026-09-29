@@ -19,6 +19,11 @@ static inline void window_manager_notify_jankyborders(struct window_animation *a
         for (int i = 0; i < animation_count; ++i) {
             if (skip && __atomic_load_n(&animation_list[i].skip, __ATOMIC_RELAXED)) continue;
 
+            if (data.count == 512) {
+                mach_send(port, &data, sizeof(data));
+                data.count = 0;
+            }
+
             data.proxy_wid[data.count] = animation_list[i].proxy.id;
             data.real_wid[data.count]  = animation_list[i].wid;
 
@@ -26,6 +31,7 @@ static inline void window_manager_notify_jankyborders(struct window_animation *a
         }
 
         mach_send(port, &data, sizeof(data));
+        mach_port_deallocate(mach_task_self(), port);
         if (wait) usleep(20000);
     }
 }

@@ -275,12 +275,21 @@ bool mouse_handler_begin(struct mouse_state *mouse_state, uint32_t mask)
     if (!mouse_state->handle) return false;
 
     if (!CGEventTapIsEnabled(mouse_state->handle)) {
-        CFMachPortInvalidate(mouse_state->handle);
-        CFRelease(mouse_state->handle);
+        CFMachPortRef handle = mouse_state->handle;
+        __atomic_store_n(&mouse_state->handle, NULL, __ATOMIC_RELEASE);
+        CFMachPortInvalidate(handle);
+        CFRelease(handle);
         return false;
     }
 
     mouse_state->runloop_source = CFMachPortCreateRunLoopSource(NULL, mouse_state->handle, 0);
+    if (!mouse_state->runloop_source) {
+        CFMachPortRef handle = mouse_state->handle;
+        __atomic_store_n(&mouse_state->handle, NULL, __ATOMIC_RELEASE);
+        CFMachPortInvalidate(handle);
+        CFRelease(handle);
+        return false;
+    }
     CFRunLoopAddSource(CFRunLoopGetMain(), mouse_state->runloop_source, kCFRunLoopCommonModes);
 
     return true;
@@ -294,6 +303,7 @@ void mouse_handler_end(struct mouse_state *mouse_state)
     CFMachPortInvalidate(mouse_state->handle);
     CFRunLoopRemoveSource(CFRunLoopGetMain(), mouse_state->runloop_source, kCFRunLoopCommonModes);
     CFRelease(mouse_state->runloop_source);
+    mouse_state->runloop_source = NULL;
     CFRelease(mouse_state->handle);
     __atomic_store_n(&mouse_state->handle, NULL, __ATOMIC_RELEASE);
 }
