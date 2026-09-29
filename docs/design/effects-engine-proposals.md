@@ -3,8 +3,10 @@
 Status: proposals, not an implementation specification. Recorded 2026-09-29.
 
 The user requested a design discussion and subsequently asked to preserve its
-results here. Implementation is intended for two agents on separate worktrees;
-that work has not been dispatched. The reported WindowServer memory growth
+results here. The two broader engine workstreams remain undispatched. The user
+has now authorized a focused memory correction in a new GPT-6 Sol / High chat,
+on isolated worktree `4953/Yabai`, branch `lcs-code/crossfade-capture-retention`.
+The reported WindowServer memory growth
 takes priority over selecting or implementing a replacement renderer.
 
 Update after the same day's investigation: the installed lcs.32 crossfade
@@ -145,3 +147,72 @@ Integration, visual acceptance and release are later, explicit steps.
 
 Blur is a later aesthetic option. It does not correct stale frames, resource
 retention or unsynchronised presentation and adds processing cost.
+
+## Resource priorities after the privileged inspection
+
+The report now includes a privileged before/held/exit comparison: three legacy
+rectangle captures add 233 MB and three regions in WindowServer's `Owned
+physical footprint (unmapped)` category; the new rectangle API adds neither
+in the same bounded test. The precise private object remains unknown. The
+installed lcs.32 daemon used 0.0–0.1% CPU and approximately 21 MiB at idle in a
+six-second sample. These observations prioritize the following work:
+
+1. **Close the capture lifetime defect first.** Validate the delegated backend
+   with the daemon alive, then visual continuity and longer bounded workloads.
+   Stable post-exit memory alone is insufficient. Do not require a renderer
+   rewrite to deliver this fix or assume the new API is faster.
+2. **Avoid work that will never be presented.** Revalidate effect admission
+   before capture and before full-frame preparation. When a pending effect is
+   superseded by a quick burst, continue logical navigation safely and discard
+   late visual output. Preserve generation ownership and correct final focus.
+   Measure how many captures/draws this actually avoids. Logical cancellation
+   does not cancel an outstanding ScreenCaptureKit operation.
+3. **Bound missing callbacks.** The current two-second stale-request escape
+   permits another request even when the previous callback never returned.
+   Generation safety prevents stale adoption but does not bound all retained
+   callback contexts. Consider suspending effects after a bounded number of
+   unresolved requests, with an explicit recovery policy. This is a separate
+   failure-path concern, not the demonstrated source of the capture growth.
+4. **Reduce full-frame preparation only with a visual gate.** A 6016x3384
+   four-byte image is 77.7 MiB. The current path draws it into a WindowServer
+   window context before ordering the overlay. Direct image/layer handoff
+   previously exposed uninitialized white backing; removing the copy without
+   a reliable readiness mechanism is not an accepted optimization. An
+   on-demand buffer/GPU experiment remains useful, but include all server
+   work, color conversion and presentation in its comparison.
+5. **Optionally cap effect resolution.** Scaling both dimensions by 0.75
+   would reduce the image pixel payload to 56.25% (43.7 MiB for this frame),
+   if the capture backend honors those output dimensions. This arithmetic is
+   not a measured CPU or latency saving: capture may still composite at native
+   size, and upscaling may blur text/icons. Make it a separate opt-in quality
+   experiment, never an implicit fix for the memory bug.
+6. **Profile cold reconciliation before caching it.** Source at `9a56727`
+   refreshes only `applications_to_refresh`, not all applications unconditionally
+   on every Space change. Tree changes already use dirty flags and batching.
+   Identify repeated AX/SkyLight queries and cache only within a clearly
+   invalidated reconciliation pass. Measure cold first visits separately.
+7. **Measure redundant event wakeups.** Producers currently `sem_post` for
+   every event, including merged mouse moves, while the consumer drains the
+   entire queue before waiting. Remaining semaphore tokens can cause empty
+   iterations and autorelease-pool churn. This follows from the source, but
+   its material cost has not been measured. A wake-coalescing protocol would
+   need queue/consumer synchronization and a lost-wakeup regression test.
+   Do not prioritize it over the measured capture and preparation costs.
+
+Avoid continuous capture solely to hide on-demand latency: a persistent stream
+may trade a faster click for greater idle server/GPU work. Likewise, retaining
+one overlay per Space trades allocation time for resident resources. Prefer
+on-demand work, bounded resources, and prompt release until measurements show
+a worthwhile alternative. A smaller pacing interval alone is not evidence of
+less work and may increase contention; assess input-to-presentation and final
+focus rather than command return time.
+
+## Candidate checkpoint
+
+Candidate `2131b94` now has bounded live acceptance for the capture-memory
+regression, primary-display icons/bar and the tested focus/burst cases.
+The [live report](../reports/capture-live-results-2026-09-29.md) records the
+remaining limits and orders the next experiments. No-effect presentation was
+33–43 ms; 250 ms crossfades reached 5% change in 248–292 ms. Keep the focused
+capture fix and measure the remaining phase delays before choosing a GPU
+renderer or continuous stream.

@@ -1,7 +1,9 @@
 # Crossfade capture backend: local candidate and live gate
 
-Date: 2026-09-29. Status: local source correction; no daemon installation,
-restart, release or real Desktop capture from this worktree.
+Date: 2026-09-29. Status: candidate committed as `2131b94`; subsequently
+validated in bounded temporary live sessions. See [live results and remaining
+gates](capture-live-results-2026-09-29.md). The signed service was restored;
+no release or daily-use installation was performed.
 
 ## Why this backend
 
