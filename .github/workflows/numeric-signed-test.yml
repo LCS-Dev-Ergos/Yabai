@@ -48,7 +48,7 @@ jobs:
           security list-keychains -d user -s "$keychain" "${existing[@]}"
           rm "$RUNNER_TEMP/numeric-signing.p12"
 
-      - name: Build matched signed Release binaries
+      - name: Build the pinned signed Release binary
         run: |
           set -euo pipefail
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
@@ -85,8 +85,8 @@ jobs:
         with:
           name: numeric-signed-${{ matrix.variant }}
           path: |
-            effects-${{ matrix.variant }}.tar.gz
-            effects-${{ matrix.variant }}.tar.gz.sha256
+            numeric-${{ matrix.variant }}.tar.gz
+            numeric-${{ matrix.variant }}.tar.gz.sha256
           if-no-files-found: error
           retention-days: 3
 
