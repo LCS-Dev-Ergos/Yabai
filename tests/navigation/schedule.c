@@ -33,6 +33,7 @@ static void space_navigation_schedule_after(uint64_t delay_ns);
 
 // Schedule policy tests leave pending step behavior to captured_schedule.c.
 static void space_navigation_step_skip_effect(void) { }
+static bool space_navigation_step_replace_after_click(uint64_t input_time) { return false; }
 
 #include "../../src/navigation/schedule.c"
 

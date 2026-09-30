@@ -9,7 +9,8 @@
 //
 // Thread: event loop. The timers below post their events from a global
 // queue, and the capture report from the capture's queue as well.
-// State: none of its own. It has topology read its snapshot for each request
+// State: the last accepted focus ingress time, only on the event loop. It
+// has topology read its snapshot for each request
 // and each queued step, and asks admission for the claimed steps.
 // Callers: the schedule starts steps and requests wakes; activation requests
 // its delay; the snapshot reports its capture. The command handler calls its entry points, see hooks.h.

@@ -1,3 +1,7 @@
+// Only validated, accepted focus navigation contributes to the burst clock.
+// Times come from admission, so event-loop or capture delays do not hide a burst.
+static uint64_t space_navigation_last_ingress;
+
 static void space_navigation_focus_schedule(int generation, uint64_t delay_ns)
 {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay_ns), dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
@@ -35,6 +39,7 @@ void space_navigation_note_message(char *message)
     if (token_equals(domain, DOMAIN_QUERY)) return;
     if (token_equals(domain, DOMAIN_SPACE) && token_equals(get_token(&message), COMMAND_SPACE_NAVIGATE)) return;
 
+    space_navigation_last_ingress = 0;
     space_navigation_step_cancel();
     space_navigation_snapshot_cancel();
     space_navigation_forget();
@@ -174,6 +179,7 @@ static void space_navigation_run_request(FILE *rsp, char **message)
     }
 
     if (!space_navigation_schedule_pacing()) {
+        space_navigation_last_ingress = 0;
         struct space_navigation_step step = {
             .sid = selector.sid,
             .move = move,
@@ -191,18 +197,27 @@ static void space_navigation_run_request(FILE *rsp, char **message)
     }
 
     // Joined requests whose steps cancelled out leave nothing to do.
-    if (joined && !steps) return;
+    struct space_navigation_claim claim = space_navigation_queue_claimed();
+    if (joined && !steps) {
+        space_navigation_last_ingress = claim.time;
+        return;
+    }
 
     // A window move keeps its effect however quickly it was pressed.
-    struct space_navigation_claim claim = space_navigation_queue_claimed();
+    uint64_t gap = claim.gap;
+    if (claim.first_time && space_navigation_last_ingress && claim.first_time >= space_navigation_last_ingress) {
+        uint64_t since = claim.first_time - space_navigation_last_ingress;
+        if (since < gap) gap = since;
+    }
     struct space_navigation_request request = {
         .move = move,
         .steps = steps,
         .sid = steps ? 0 : selector.sid,
-        .fast = !move && claim.active && claim.gap < SPACE_NAVIGATION_FAST_NS,
+        .fast = !move && claim.time && gap < SPACE_NAVIGATION_FAST_NS,
         .crossfade = crossfade,
         .alpha = alpha,
-        .duration = duration
+        .duration = duration,
+        .time = claim.first_time
     };
 
     if (!space_navigation_schedule_add(&request, repeat)) {
@@ -210,6 +225,7 @@ static void space_navigation_run_request(FILE *rsp, char **message)
         return;
     }
 
+    space_navigation_last_ingress = move ? 0 : claim.time;
     space_navigation_schedule_pump();
 }
 

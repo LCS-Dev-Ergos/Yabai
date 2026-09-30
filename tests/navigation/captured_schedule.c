@@ -63,6 +63,7 @@ static void test_fast_pending(void)
 static void tick(uint64_t delay)
 {
     timestamp += delay;
+    seconds_since_click += (double)delay / 1e9;
     space_navigation_schedule_timer();
 }
 
@@ -198,7 +199,8 @@ static void test_new_flight_and_cancellation(void)
         if (kind == 0) seconds_since_click = .001;
         if (kind == 1) mission_control = true;
         if (kind == 2) animating = true;
-        press(1, true);
+        if (kind == 0) space_navigation_step_captured(capture_token);
+        else press(1, true);
         assert(active_space == 1 && focus_calls == 0 && window_focus_calls == 0);
         assert(present_calls == 0 && discard_calls == 1 && g_space_navigation_schedule.count == 0);
         space_navigation_step_captured(capture_token);
@@ -245,8 +247,73 @@ static void test_move_and_rejected_input(void)
     assert(discard_calls == 0 && focus_calls == 0 && g_space_navigation_schedule.count == 4);
 }
 
+static void test_numeric_after_click(void)
+{
+    // The new command comes after the click. Neither old destination nor
+    // stale capture callback may take focus, before or after the new switch.
+    for (int callback_first = 0; callback_first < 2; ++callback_first) {
+        reset();
+        number(2, false, false);
+        int old_token = capture_token;
+        timestamp += 30000000ULL;
+        seconds_since_click = .001;
+        if (callback_first) space_navigation_step_captured(old_token);
+        number(4, true, false);
+        space_navigation_step_captured(old_token);
+        drain_fast();
+        space_navigation_step_captured(old_token);
+        assert(active_space == 4 && focus_calls == 1 && window_focus_calls == 1);
+        assert(focused_id == 1 && present_calls == 0 && !pending_token);
+    }
+
+    // Naming the current Desktop abandons the old capture without a switch
+    // or an application activation, just like an ordinary absolute no-op.
+    reset();
+    number(2, false, false);
+    int old_token = capture_token;
+    timestamp += 30000000ULL;
+    seconds_since_click = .001;
+    number(1, true, false);
+    drain_fast();
+    space_navigation_step_captured(old_token);
+    assert(active_space == 1 && focus_calls == 0 && window_focus_calls == 0 && !pending_token);
+
+    // A relative group that started before the click cannot resurrect its
+    // old steps simply because its last joining press arrived afterwards.
+    reset();
+    number(2, false, false);
+    uint64_t before_click = timestamp;
+    timestamp += 30000000ULL;
+    seconds_since_click = .001;
+    struct space_navigation_request old_group = {
+        .steps = 2, .fast = true, .time = before_click,
+        .crossfade = true, .alpha = 1.0f, .duration = .25f
+    };
+    assert(space_navigation_schedule_add(&old_group, false));
+    assert(active_space == 1 && !g_space_navigation_schedule.count && !pending_token);
+
+    // Rejection is checked before retiring the old capture. Its slot and
+    // queue keep their state until the ordinary callback handles the click.
+    reset();
+    number(2, false, false);
+    for (uint64_t sid = 3; sid <= 6; ++sid) number(sid, false, true);
+    uint64_t last_request = g_space_navigation_schedule.last_request;
+    timestamp += 30000000ULL;
+    seconds_since_click = .001;
+    struct space_navigation_request rejected = {
+        .steps = 1, .fast = true, .crossfade = true, .alpha = .5f, .duration = .25f
+    };
+    assert(!space_navigation_schedule_add(&rejected, false));
+    assert(space_navigation_flight.active && pending_token && g_space_navigation_schedule.count == 4);
+    assert(g_space_navigation_schedule.last_request == last_request);
+    for (int i = 0; i < 4; ++i) assert(!g_space_navigation_schedule.queue[i].fast);
+    space_navigation_step_captured(capture_token);
+    assert(active_space == 1 && !g_space_navigation_schedule.count && !pending_token);
+}
+
 int main(void)
 {
+    test_numeric_after_click();
     test_fast_pending();
     test_order_selectors_and_bound();
     test_new_flight_and_cancellation();

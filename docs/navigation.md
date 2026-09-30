@@ -86,14 +86,20 @@ Desktop from a bounded queue, in the order requested:
   ms apart on lcs.29: capturing and preparing the 20-million-pixel image took
   about 110 ms of each, Dock's switch and the activation about 100 ms, and the
   blend of the step before the rest; see [performance](performance.md).
-- A `next` or `prev` pressed within 400 ms of the one before starts a quick
+- A valid, accepted `focus next`, `focus prev` or numeric `focus` request
+  arriving within 400 ms of the previous accepted focus request starts a quick
   burst: every switch queued from then on, the last included, shows no effect
   and waits only for the 100 ms rhythm, and the next switch ends the blend of
   the step before. On two 4K displays a crossfade step takes 300–460 ms, more
   than such presses leave between them. The bound comes from the user's own
   presses: 150 recorded ones came 450–600 ms apart when meant to look at each
   Desktop, and 150–350 ms apart in quick runs. A held key's repeats are quick
-  presses; a window `move` keeps its effect.
+  presses. Numeric requests keep their absolute destinations and do not join
+  relative ingress groups; numeric and relative requests share the burst clock.
+  The clock uses ingress times, including the shortest gap inside a relative
+  group, so event-loop delays do not hide a burst. Invalid selectors/effects and
+  refused requests do not change it. A window `move` keeps its effect and breaks
+  the focus burst clock.
 - At most four switches wait, which keeps navigation within about 1.5 s of
   the last press on two 4K displays. No press is dropped for that: `next` or
   `prev` steps beyond the four join a jump at the end of the queue, one
@@ -102,7 +108,13 @@ Desktop from a bounded queue, in the order requested:
   Desktop. Only a `move`, or a request with another effect, can still be
   refused when the queue is full.
 - A click after a request, or any other command except queries, empties the
-  queue. A failed step drops the rest.
+  queue. If a validated focus request arrives after a click while the old
+  capture is pending, acceptance is checked first; the old capture and queued
+  work are then retired and only the new request survives. It does not switch
+  to or focus the abandoned destination. A refused request cannot retire the
+  capture, and late callbacks cannot revive it. Mission Control, display
+  animation and window moves retain their cancellation policy. A failed step
+  drops the rest.
 
 The client gets its answer when its request is queued; failures of later steps
 go to the debug log. `yabai -m config space_navigation_pacing off` runs each
@@ -211,7 +223,12 @@ Desktop of relative navigation and the raise decision.
 `navigation_spaces_tests` reads a constructed `SLSCopyManagedDisplaySpaces`
 reply and checks its lookups and fallbacks. `navigation_queue_tests` covers request recognition and merging, and the
 daemon fuzz target runs the request check. The upstream unity-test executable
-also checks numeric argument validation. None of these tests establishes
+also checks numeric argument validation. `navigation_ingress_tests` uses actual
+socket admission, the token/selector parser, command and schedule with simulated
+host services; it covers numeric and mixed bursts, wrapping, duplicate targets,
+invalid input, rejected queues and cancellation. `navigation_captured_schedule_tests`
+connects the real asynchronous step and schedule to check clicks, superseded
+captures, late callbacks, destination and focus decisions. None establishes
 visual quality, application focus behavior or live Dock behavior.
 
 On 2026-09-26, a local 16-switch comparison at 150 ms intervals measured the

@@ -27,6 +27,8 @@
 // SPACE_NAVIGATION_RELEASE_NS. Requests sent without a key, as by a script,
 // only have the timing.
 
+#define SPACE_NAVIGATION_ABSOLUTE 2
+
 #define SPACE_NAVIGATION_REPEAT_NS  75000000ULL
 #define SPACE_NAVIGATION_RELEASE_NS 150000000ULL
 
@@ -36,9 +38,10 @@ struct space_navigation_group
     int owner;
     int steps;
     int direction;
+    uint64_t first_time;
     uint64_t time;
     bool repeat;
-    uint64_t gap;       // The shortest time between its requests, or since the one before.
+    uint64_t gap;       // The shortest gap inside this relative group.
 };
 
 static struct
@@ -78,9 +81,25 @@ static bool space_navigation_request_number(const char *token, bool allow_zero)
     return value <= 1.0f && (allow_zero ? value >= 0.0f : value > 0.0f);
 }
 
+// Mission Control indices use the same decimal digits and INT_MAX bound as
+// token_to_value. Resolution against the topology stays on the event loop.
+static bool space_navigation_request_index(const char *token)
+{
+    if (!*token) return false;
+    int index = 0;
+    for (const char *cursor = token; *cursor; ++cursor) {
+        if (*cursor < '0' || *cursor > '9') return false;
+        int digit = *cursor - '0';
+        if (index > (INT_MAX - digit) / 10) return false;
+        index = index * 10 + digit;
+    }
+    return true;
+}
+
 // Returns 1 for `space --navigate focus next <effect> <duration>`, where the
 // effect is crossfade or a starting opacity, -1 for prev, and 0 for anything
-// else, including an incomplete message.
+// else, including an incomplete message. A decimal index returns
+// SPACE_NAVIGATION_ABSOLUTE: it carries timing but is never coalesced.
 static int space_navigation_request_direction(const char *bytes, int length)
 {
     int size;
@@ -104,6 +123,7 @@ static int space_navigation_request_direction(const char *bytes, int length)
 
     if (strcmp(token[3], "next") == 0) return 1;
     if (strcmp(token[3], "prev") == 0) return -1;
+    if (space_navigation_request_index(token[3])) return SPACE_NAVIGATION_ABSOLUTE;
 
     return 0;
 }
@@ -119,6 +139,8 @@ static double space_navigation_seconds_since_key_up(void)
 // requests still run in the order they arrived.
 static bool space_navigation_queue_join(int sockfd, int direction, uint64_t now)
 {
+    bool absolute = direction == SPACE_NAVIGATION_ABSOLUTE;
+    if (absolute) direction = 0;
     bool joined = false;
     double key_up = direction ? space_navigation_seconds_since_key_up() : 0.0;
 
@@ -135,9 +157,15 @@ static bool space_navigation_queue_join(int sockfd, int direction, uint64_t now)
         g_space_navigation_queue.time = now;
     }
 
-    if (!direction) {
+    if (absolute) {
+        g_space_navigation_queue.direction = 0;
+        g_space_navigation_queue.time = now;
         g_space_navigation_queue.open = false;
-    } else if (last && g_space_navigation_queue.open) {
+    }
+
+    if (!direction && !absolute) {
+        g_space_navigation_queue.open = false;
+    } else if (direction && last && g_space_navigation_queue.open) {
         if (!repeat) last->steps += direction;
         if (since < last->gap) last->gap = since;
 
@@ -146,16 +174,17 @@ static bool space_navigation_queue_join(int sockfd, int direction, uint64_t now)
         joined = true;
     } else {
         struct space_navigation_group *group = malloc(sizeof(*group));
-        g_space_navigation_queue.open = group != NULL;
+        g_space_navigation_queue.open = direction && group != NULL;
 
         if (group) {
             *group = (struct space_navigation_group) {
                 .owner = sockfd,
                 .steps = direction,
                 .direction = direction,
+                .first_time = now,
                 .time = now,
                 .repeat = repeat,
-                .gap = since
+                .gap = UINT64_MAX
             };
 
             if (last) last->next = group;
@@ -178,12 +207,17 @@ void space_navigation_queue_claim(int sockfd)
     pthread_mutex_lock(&g_space_navigation_queue.lock);
 
     struct space_navigation_group *first = g_space_navigation_queue.first;
-    g_space_navigation_claim.active = first && first->owner == sockfd;
-    g_space_navigation_claim.steps  = g_space_navigation_claim.active ? first->steps : 0;
-    g_space_navigation_claim.repeat = g_space_navigation_claim.active && first->repeat;
-    g_space_navigation_claim.gap    = g_space_navigation_claim.active ? first->gap : UINT64_MAX;
+    bool matched = first && first->owner == sockfd;
+    g_space_navigation_claim = (struct space_navigation_claim) {
+        .active = matched && first->direction != 0,
+        .steps = matched ? first->steps : 0,
+        .repeat = matched && first->repeat,
+        .gap = matched ? first->gap : UINT64_MAX,
+        .first_time = matched ? first->first_time : 0,
+        .time = matched ? first->time : 0
+    };
 
-    if (g_space_navigation_claim.active) {
+    if (matched) {
         g_space_navigation_queue.first = first->next;
 
         if (g_space_navigation_queue.last == first) {

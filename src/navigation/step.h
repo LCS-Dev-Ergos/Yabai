@@ -80,5 +80,7 @@ static enum space_navigation_result space_navigation_begin_step(uint64_t current
 // Moves keep their effect. This does not cancel logical navigation.
 static void space_navigation_step_skip_effect(void);
 static void space_navigation_step_cancel(void);
+// An accepted focus request after a click retires a capture from before it.
+static bool space_navigation_step_replace_after_click(uint64_t input_time);
 
 #endif

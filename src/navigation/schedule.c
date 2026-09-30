@@ -158,17 +158,11 @@ static bool space_navigation_schedule_enqueue(struct space_navigation_request *r
     struct space_navigation_request entry = *request;
     entry.jump = false;
     entry.repeat = repeat;
-    entry.time = read_os_timer();
-    g_space_navigation_schedule.last_request = entry.time;
+    entry.time = request->time ? request->time : read_os_timer();
 
     int count = g_space_navigation_schedule.count;
     struct space_navigation_request *tail = count ? &g_space_navigation_schedule.queue[count - 1] : NULL;
     bool same = tail && space_navigation_schedule_same_effect(tail, &entry);
-
-    // A quick press makes the whole burst queued so far quick too.
-    if (entry.fast) {
-        for (int i = 0; i < count; ++i) g_space_navigation_schedule.queue[i].fast = true;
-    }
 
     // Relative steps add up with those of the last request, which is taken
     // out and queued again with their sum.
@@ -233,8 +227,27 @@ static bool space_navigation_schedule_enqueue(struct space_navigation_request *r
 static bool space_navigation_schedule_add(struct space_navigation_request *request, bool repeat)
 {
     bool accepted = space_navigation_schedule_enqueue(request, repeat);
-    if (accepted && request->fast) space_navigation_step_skip_effect();
-    return accepted;
+    if (!accepted) return false;
+
+    uint64_t input_time = request->time ? request->time : read_os_timer();
+    if (!request->move && space_navigation_step_replace_after_click(input_time)) {
+        // Acceptance was checked against the original queue. A click wins over
+        // its old work; only the newer explicit request survives. Enqueue into
+        // the empty bounded queue cannot reject this already accepted request.
+        space_navigation_schedule_cancel();
+        space_navigation_schedule_enqueue(request, repeat);
+    }
+
+    g_space_navigation_schedule.last_request = read_os_timer();
+    // Only accepted focus input makes the queued burst quick. A move keeps
+    // its own effect, and a rejected request changes neither timing nor effects.
+    if (request->fast && !request->move) {
+        for (int i = 0; i < g_space_navigation_schedule.count; ++i) {
+            if (!g_space_navigation_schedule.queue[i].move) g_space_navigation_schedule.queue[i].fast = true;
+        }
+        space_navigation_step_skip_effect();
+    }
+    return true;
 }
 
 // A confirmed activation can make the next step due before the wake already
