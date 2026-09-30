@@ -34,6 +34,9 @@ enum space_snapshot_result
 static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t target, float interval);
 static bool space_navigation_snapshot_capture(uint32_t display, uint64_t target, float interval, int token);
 static enum space_snapshot_result space_navigation_snapshot_present(int token);
+// Drop only this token's pending presentation; its framework callback retains
+// ownership and its unresolved slot until it really returns. Active overlays stay.
+static enum space_snapshot_result space_navigation_snapshot_discard(int token);
 static bool space_navigation_snapshot_start(float duration, bool switched);
 
 #endif

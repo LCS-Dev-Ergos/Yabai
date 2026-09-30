@@ -76,6 +76,9 @@ static bool space_navigation_window(struct window *window);
 static float space_navigation_opacity(struct window *window, uint32_t focused_id);
 static bool space_navigation_run_step(uint64_t current, struct space_navigation_step *step);
 static enum space_navigation_result space_navigation_begin_step(uint64_t current, struct space_navigation_step *step);
+// A quick accepted request finishes a pending focus step without its snapshot.
+// Moves keep their effect. This does not cancel logical navigation.
+static void space_navigation_step_skip_effect(void);
 static void space_navigation_step_cancel(void);
 
 #endif

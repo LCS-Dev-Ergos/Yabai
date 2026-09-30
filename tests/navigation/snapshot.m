@@ -538,6 +538,49 @@ int main(void)
         space_navigation_snapshot_cancel();
         expect_released();
 
+        // Dropping a pending presentation does not cancel the framework
+        // request or return its unresolved slot. Wrong/old tokens cannot
+        // discard a newer request. No overlay is constructed by this path.
+        capture_lost = true;
+        int discard_lost = lost_count;
+        assert(capture(70));
+        struct space_snapshot_capture *discarded = space_snapshot_pending.capture;
+        assert(discarded->references == 2 && space_snapshot_capture_unresolved() == 1);
+        assert(space_navigation_snapshot_discard(69) == SPACE_SNAPSHOT_CANCELLED);
+        assert(space_snapshot_pending.capture == discarded);
+        assert(space_navigation_snapshot_discard(70) == SPACE_SNAPSHOT_MISSING);
+        assert(!space_snapshot_pending.capture && discarded->references == 1);
+        assert(space_snapshot_capture_unresolved() == 1 && space_snapshot_capture_pending());
+        assert(space_navigation_snapshot_discard(70) == SPACE_SNAPSHOT_CANCELLED);
+        assert(!capture(71)); // Discard is not admission-slot cancellation.
+        usleep((useconds_t)(SPACE_SNAPSHOT_STALE_NS / 1000));
+        assert(capture(71));
+        assert(space_snapshot_capture_unresolved() == 2);
+        struct space_snapshot_capture *newer = space_snapshot_pending.capture;
+        assert(space_navigation_snapshot_discard(70) == SPACE_SNAPSHOT_CANCELLED);
+        assert(space_snapshot_pending.capture == newer);
+        assert(space_navigation_snapshot_discard(71) == SPACE_SNAPSHOT_MISSING);
+        usleep((useconds_t)(SPACE_SNAPSHOT_STALE_NS / 1000));
+        int discard_bound_calls = modern_capture_calls;
+        assert(!capture(72));
+        assert(modern_capture_calls == discard_bound_calls && space_snapshot_capture_unresolved() == 2);
+        deliver_lost(discard_lost + 1); // Reverse callback order, after discard.
+        assert(space_snapshot_capture_unresolved() == 1);
+        deliver_lost(discard_lost);
+        assert(space_snapshot_capture_unresolved() == 0 && !space_snapshot_capture_pending());
+        assert(space_navigation_snapshot_present(70) == SPACE_SNAPSHOT_CANCELLED);
+        assert(space_navigation_snapshot_present(71) == SPACE_SNAPSHOT_CANCELLED);
+        assert(!live_windows && !live_spaces);
+        capture_lost = false;
+        usleep((useconds_t)(SPACE_SNAPSHOT_CAPTURE_NS / 1000)); // Drain old deadline reports.
+
+        // Discard never tears down an already visible overlay.
+        assert(prepare());
+        assert(space_navigation_snapshot_discard(70) == SPACE_SNAPSHOT_CANCELLED);
+        assert(live_windows == 1 && live_spaces == 1);
+        space_navigation_snapshot_cancel();
+        expect_released();
+
         // An asynchronous capture reports its callback, and presents its
         // image; the deadline reports too and finds nothing left.
         assert(capture(5));

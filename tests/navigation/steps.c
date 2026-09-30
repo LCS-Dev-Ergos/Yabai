@@ -78,12 +78,23 @@ static void test_captured_steps(void)
     mission_control = true;
     space_navigation_step_captured(capture_token);
     assert(focus_calls == 0 && completed_calls == 1 && !completed_success);
+    assert(present_calls == 0 && discard_calls == 1);
 
     reset();
     assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
     animating = true;
     space_navigation_step_captured(capture_token);
     assert(focus_calls == 0 && completed_calls == 1 && !completed_success);
+    assert(present_calls == 0 && discard_calls == 1);
+
+    // Pointer input already known before presentation must avoid all drawing.
+    reset();
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
+    timestamp += 30000000;
+    seconds_since_click = .001;
+    space_navigation_step_captured(capture_token);
+    assert(present_calls == 0 && discard_calls == 1 && focus_calls == 0);
+    assert(completed_calls == 1 && !completed_success);
 
     // Another command abandons the step: its event switches nothing and
     // reports nothing, since the schedule has been emptied already.

@@ -384,23 +384,29 @@ static enum space_navigation_result space_navigation_begin_step(uint64_t current
     return space_navigation_switch_crossfade(&plan, false) ? SPACE_NAVIGATION_SWITCHED : SPACE_NAVIGATION_FAILED;
 }
 
-// Event loop, when the capture of the step in flight came back or reached its
-// deadline. The step stops if the capture was cancelled meanwhile, or if a
-// click, Mission Control or a display animation came first; it switches
-// without the crossfade if the image is missing or came too late.
-void space_navigation_step_captured(int token)
+// Check before expensive presentation, and again afterwards: pointer input
+// can arrive while the renderer draws or waits for a refresh.
+static bool space_navigation_flight_stopped(struct space_navigation_plan *plan)
 {
-    SNAP_DIAG("capture_event_loop", 0, token);
+    return space_navigation_clicked_since(space_navigation_flight.capture_started)
+        || mission_control_is_active() || display_manager_display_is_animating(plan->display);
+}
+
+// Completes exactly once, either for a callback/deadline or an accepted quick
+// request. Giving up an optional image is MISSING, not a failed logical step.
+static void space_navigation_complete_capture(int token, bool skip)
+{
     if (!space_navigation_flight.active || token != space_navigation_flight.token) return;
     space_navigation_flight.active = false;
 
     struct space_navigation_plan plan = space_navigation_flight.plan;
-    enum space_snapshot_result result = space_navigation_snapshot_present(token);
-
-    bool stopped = result == SPACE_SNAPSHOT_CANCELLED
-        || space_navigation_clicked_since(space_navigation_flight.capture_started)
-        || mission_control_is_active() || display_manager_display_is_animating(plan.display);
-
+    bool stopped = space_navigation_flight_stopped(&plan);
+    enum space_snapshot_result result = skip || stopped ? space_navigation_snapshot_discard(token)
+                                                        : space_navigation_snapshot_present(token);
+    // Discard neither draws nor waits. Recheck only after presentation, which
+    // can be slow even when surface preparation eventually fails.
+    stopped = stopped || result == SPACE_SNAPSHOT_CANCELLED
+        || (!skip && space_navigation_flight_stopped(&plan));
     bool success = false;
 
     if (!stopped) {
@@ -410,6 +416,25 @@ void space_navigation_step_captured(int token)
     }
 
     space_navigation_schedule_completed(success);
+}
+
+// Event loop, when capture returned or reached its deadline. Cancelled or
+// superseded tokens cannot present, switch or report a second completion.
+void space_navigation_step_captured(int token)
+{
+    SNAP_DIAG("capture_event_loop", 0, token);
+    space_navigation_complete_capture(token, false);
+}
+
+// Queue insertion has already preserved the new request. Retire the pending
+// presentation and perform the existing planned switch/focus/completion now.
+// Moving a window retains its effect and activation policy.
+static void space_navigation_step_skip_effect(void)
+{
+    if (!space_navigation_flight.active || space_navigation_flight.plan.move) return;
+    int token = space_navigation_flight.token;
+    SNAP_DIAG("capture_skip", 0, token);
+    space_navigation_complete_capture(token, true);
 }
 
 // The step in flight is abandoned: its capture, when it comes back, finds

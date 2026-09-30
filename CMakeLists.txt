@@ -132,6 +132,11 @@ target_compile_options(navigation_schedule_tests PRIVATE -UNDEBUG ${YABAI_SANITI
 target_link_options(navigation_schedule_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
 add_test(NAME navigation_schedule_tests COMMAND navigation_schedule_tests)
 
+add_executable(navigation_captured_schedule_tests tests/navigation/captured_schedule.c)
+target_compile_options(navigation_captured_schedule_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
+target_link_options(navigation_captured_schedule_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
+add_test(NAME navigation_captured_schedule_tests COMMAND navigation_captured_schedule_tests)
+
 add_executable(navigation_queue_tests tests/navigation/queue.c)
 target_compile_options(navigation_queue_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
 target_link_options(navigation_queue_tests PRIVATE ${YABAI_SANITIZE_FLAGS})

@@ -59,6 +59,8 @@ static int snapshot_prepares, snapshot_starts, snapshot_cancels;
 static bool click_during_snapshot;
 static bool capture_starts;
 static int capture_calls, present_calls, completed_calls, capture_token;
+static int discard_calls, pending_token;
+static uint64_t move_sid;
 static enum space_snapshot_result present_result;
 static bool completed_success;
 static uint32_t destroyed_id;
@@ -84,10 +86,19 @@ static struct
 
 #include "../../src/navigation/topology.h"
 #include "../../src/navigation/step.h"
+#ifdef NAVIGATION_REAL_SCHEDULE
+#include "../../src/navigation/schedule.h"
+static enum space_navigation_result space_navigation_execute(struct space_navigation_request *request, int steps,
+                                                             bool activate, bool settle, float duration);
+static void space_navigation_schedule_after(uint64_t delay_ns);
+#endif
 #include "../../src/effects/window_fade.h"
 #include "stubs.h"
 #include "../../src/effects/window_fade.c"
 #include "../../src/navigation/step.c"
+#ifdef NAVIGATION_REAL_SCHEDULE
+#include "../../src/navigation/schedule.c"
+#endif
 
 // A single activating step with the window fade, as before the schedule.
 static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, float alpha, float duration)
@@ -105,6 +116,10 @@ static bool space_navigation_run(uint64_t current, uint64_t sid, bool move, floa
 
 static void reset(void)
 {
+#ifdef NAVIGATION_REAL_SCHEDULE
+    memset(&g_space_navigation_schedule, 0, sizeof(g_space_navigation_schedule));
+    g_space_navigation_schedule.pacing = true;
+#endif
     memset(&app, 0, sizeof(app));
     app.connection = 7;
 
@@ -135,6 +150,8 @@ static void reset(void)
     click_during_snapshot = false;
     capture_starts = true;
     capture_calls = present_calls = completed_calls = capture_token = 0;
+    discard_calls = pending_token = 0;
+    move_sid = 0;
     present_result = SPACE_SNAPSHOT_READY;
     completed_success = false;
     destroyed_id = 0;

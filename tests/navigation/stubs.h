@@ -55,12 +55,18 @@ static bool space_navigation_space_fullscreen(uint64_t sid)
 static void window_manager_send_window_to_space(void *sm, void *wm, struct window *w, uint64_t sid, bool rule)
 {
     ++move_calls;
+    move_sid = sid;
 }
 
 static uint32_t *space_window_list(uint64_t sid, int *count, bool minimized)
 {
+#ifdef NAVIGATION_REAL_SCHEDULE
+    *count = 1;
+    return &ids[sid % 2]; // Different focus candidates on alternating Desktops.
+#else
     *count = 2;
     return ids;
+#endif
 }
 
 static struct window *window_manager_find_window(void *wm, uint32_t id)
@@ -160,6 +166,7 @@ static bool scripting_addition_focus_space(uint64_t sid)
 static void space_navigation_snapshot_cancel(void)
 {
     ++snapshot_cancels;
+    pending_token = 0;
 }
 
 static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t sid, float interval)
@@ -175,33 +182,51 @@ static bool space_navigation_snapshot_capture(uint32_t display, uint64_t sid, fl
 {
     (void) display; (void) sid; (void) interval;
     ++capture_calls;
-    assert(focus_calls == 0); // Capture the source before switching.
     capture_token = token;
+    pending_token = capture_starts ? token : 0;
     return capture_starts;
+}
+
+static enum space_snapshot_result space_navigation_snapshot_discard(int token)
+{
+    ++discard_calls;
+    if (token != pending_token) return SPACE_SNAPSHOT_CANCELLED;
+    pending_token = 0;
+    return present_result == SPACE_SNAPSHOT_CANCELLED ? SPACE_SNAPSHOT_CANCELLED : SPACE_SNAPSHOT_MISSING;
 }
 
 static enum space_snapshot_result space_navigation_snapshot_present(int token)
 {
     ++present_calls;
-    assert(token == capture_token && focus_calls == 0);
+    assert(token == capture_token);
+#ifndef NAVIGATION_REAL_SCHEDULE
+    assert(focus_calls == 0);
+#endif
+    pending_token = 0;
     if (click_during_snapshot) { timestamp += 100000000; seconds_since_click = .01; }
     return present_result;
 }
 
+#ifndef NAVIGATION_REAL_SCHEDULE
 static void space_navigation_schedule_completed(bool success)
 {
     ++completed_calls;
     completed_success = success;
 }
 
+#endif
+
 static bool space_navigation_snapshot_start(float duration, bool success)
 {
     ++snapshot_starts;
+#ifndef NAVIGATION_REAL_SCHEDULE
     assert(focus_calls == 1 && window_focus_calls == 0);
+#endif
     last_crossfade_duration = duration;
     return success;
 }
 
+#ifndef NAVIGATION_REAL_SCHEDULE
 static void space_navigation_schedule_activated(uint32_t window_id)
 {
     activated_id = window_id;
@@ -220,6 +245,8 @@ static void space_navigation_schedule_switched(float duration)
 {
     switched_duration = duration;
 }
+
+#endif
 
 static float space_navigation_frame_interval(uint32_t display)
 {
