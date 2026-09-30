@@ -443,3 +443,19 @@ static void space_navigation_step_cancel(void)
 {
     space_navigation_flight.active = false;
 }
+
+// A newer explicit focus request wins after a click, without finishing the
+// destination the click abandoned. The caller has already accepted the new
+// input. Mission Control, display animation and window moves keep their policy.
+static bool space_navigation_step_replace_after_click(uint64_t input_time)
+{
+    if (!space_navigation_flight.active || space_navigation_flight.plan.move
+        || !space_navigation_clicked_since(space_navigation_flight.capture_started)
+        || space_navigation_clicked_since(input_time)
+        || mission_control_is_active()
+        || display_manager_display_is_animating(space_navigation_flight.plan.display)) return false;
+
+    space_navigation_step_cancel();
+    space_navigation_snapshot_cancel();
+    return true;
+}

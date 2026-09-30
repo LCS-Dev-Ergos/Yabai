@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <math.h>
+#include <limits.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -119,7 +120,7 @@ static void test_repeat_groups(void)
 }
 
 // A claim tells how quickly its presses came: the shortest time between two
-// of its requests, or since the relative request before them.
+// of its requests; first and last timestamps preserve its ingress interval.
 static void test_gaps(void)
 {
     uint64_t now = 300000000000ULL;
@@ -130,7 +131,7 @@ static void test_gaps(void)
 
     assert(!space_navigation_queue_join(61, 1, now + 400000000));
     space_navigation_queue_claim(61);
-    assert(g_space_navigation_claim.gap == 400000000);
+    assert(g_space_navigation_claim.gap == UINT64_MAX);
 
     assert(!space_navigation_queue_join(62, -1, now + 900000000));
     assert(space_navigation_queue_join(63, -1, now + 1200000000));
@@ -138,13 +139,14 @@ static void test_gaps(void)
     space_navigation_queue_claim(62);
     assert(g_space_navigation_claim.steps == -3 && g_space_navigation_claim.gap == 120000000);
 
-    // A request that is not relative is no press to measure from.
+    // A non-navigation request carries no ingress metadata.
     assert(!space_navigation_queue_join(65, 0, now + 1400000000));
     space_navigation_queue_claim(65);
     assert(!g_space_navigation_claim.active && g_space_navigation_claim.gap == UINT64_MAX);
+    assert(!g_space_navigation_claim.time && !g_space_navigation_claim.first_time);
     assert(!space_navigation_queue_join(66, 1, now + 1500000000));
     space_navigation_queue_claim(66);
-    assert(g_space_navigation_claim.gap == 180000000);
+    assert(g_space_navigation_claim.gap == UINT64_MAX);
 }
 
 // Frames a request as the yabai client sends it.
@@ -229,6 +231,28 @@ static void test_accept(void)
     }
 }
 
+static void test_numeric_groups(void)
+{
+    uint64_t at = 1000000000000ULL;
+    assert(!space_navigation_queue_join(80, 1, at));
+    assert(space_navigation_queue_join(81, 1, at + 200000000));
+    assert(!space_navigation_queue_join(82, SPACE_NAVIGATION_ABSOLUTE, at + 210000000));
+    assert(!space_navigation_queue_join(83, SPACE_NAVIGATION_ABSOLUTE, at + 220000000));
+    assert(!space_navigation_queue_join(84, -1, at + 230000000));
+    space_navigation_queue_claim(80);
+    assert(g_space_navigation_claim.active && g_space_navigation_claim.steps == 2);
+    assert(g_space_navigation_claim.first_time == at && g_space_navigation_claim.time == at + 200000000);
+    assert(g_space_navigation_claim.gap == 200000000);
+    space_navigation_queue_claim(82);
+    assert(!g_space_navigation_claim.active && !g_space_navigation_claim.steps);
+    assert(g_space_navigation_claim.time == at + 210000000 && g_space_navigation_claim.gap == UINT64_MAX);
+    space_navigation_queue_claim(83);
+    assert(!g_space_navigation_claim.active && g_space_navigation_claim.time == at + 220000000);
+    space_navigation_queue_claim(84);
+    assert(g_space_navigation_claim.active && g_space_navigation_claim.steps == -1 && !g_space_navigation_claim.repeat);
+    assert(!g_space_navigation_queue.first);
+}
+
 int main(void)
 {
     assert(DIRECTION("space", "--navigate", "focus", "next", "0.95", "0.1") == 1);
@@ -237,7 +261,7 @@ int main(void)
     assert(DIRECTION("space", "--navigate", "focus", "next", "crossfades", "0.2") == 0);
 
     assert(DIRECTION("space", "--navigate", "move", "next", "0.95", "0.1") == 0);
-    assert(DIRECTION("space", "--navigate", "focus", "3", "0.95", "0.1") == 0);
+    assert(DIRECTION("space", "--navigate", "focus", "3", "0.95", "0.1") == SPACE_NAVIGATION_ABSOLUTE);
     assert(DIRECTION("space", "--navigate", "focus", "next", "0", "0.1") == 0);
     assert(DIRECTION("space", "--navigate", "focus", "next", "0.95", "1.5") == 0);
     assert(DIRECTION("space", "--navigate", "focus", "next", "0.95x", "0.1") == 0);
@@ -304,6 +328,7 @@ int main(void)
     test_repeat_groups();
     test_gaps();
     test_accept();
+    test_numeric_groups();
 
     puts("navigation queue: parsing, repeats, presses, gaps, ordering and accept checks passed");
 

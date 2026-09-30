@@ -39,7 +39,7 @@ struct space_navigation_request
     bool crossfade;
     float alpha;
     float duration;
-    uint64_t time;      // When it was queued.
+    uint64_t time;      // First ingress, or queue time for internal requests.
 };
 
 static bool space_navigation_schedule_add(struct space_navigation_request *request, bool repeat);

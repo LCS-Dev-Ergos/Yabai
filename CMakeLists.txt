@@ -137,6 +137,13 @@ target_compile_options(navigation_captured_schedule_tests PRIVATE -UNDEBUG ${YAB
 target_link_options(navigation_captured_schedule_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
 add_test(NAME navigation_captured_schedule_tests COMMAND navigation_captured_schedule_tests)
 
+# Real ingress, command parser and schedule with deterministic host services.
+add_executable(navigation_ingress_tests tests/navigation/ingress.m)
+target_compile_options(navigation_ingress_tests PRIVATE -UNDEBUG -fno-objc-arc ${YABAI_SANITIZE_FLAGS})
+target_link_options(navigation_ingress_tests PRIVATE -Wl,-dead_strip ${YABAI_SANITIZE_FLAGS})
+target_link_libraries(navigation_ingress_tests PRIVATE "-framework Cocoa" "-framework Carbon")
+add_test(NAME navigation_ingress_tests COMMAND navigation_ingress_tests)
+
 add_executable(navigation_queue_tests tests/navigation/queue.c)
 target_compile_options(navigation_queue_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
 target_link_options(navigation_queue_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
