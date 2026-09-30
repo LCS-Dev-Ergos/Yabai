@@ -405,6 +405,21 @@ static enum space_snapshot_result space_navigation_snapshot_present(int token)
     return space_snapshot_request_finish(&request, false) ? SPACE_SNAPSHOT_READY : SPACE_SNAPSHOT_MISSING;
 }
 
+// Event loop: relinquish presentation without drawing or waiting. The
+// callback's reference and unresolved admission slot belong to the framework
+// request until its callback arrives; releasing this reference cancels neither.
+// Do not touch an already visible overlay before the logical switch.
+static enum space_snapshot_result space_navigation_snapshot_discard(int token)
+{
+    if (!space_snapshot_pending.capture || space_snapshot_pending.token != token) return SPACE_SNAPSHOT_CANCELLED;
+
+    struct space_snapshot_capture *capture = space_snapshot_pending.capture;
+    SNAP_DIAG("capture_discard", capture->generation, token);
+    space_snapshot_pending = (struct space_snapshot_request) { 0 };
+    space_snapshot_capture_release(capture);
+    return SPACE_SNAPSHOT_MISSING;
+}
+
 static bool space_navigation_snapshot_start(float duration, bool switched)
 {
     pthread_mutex_lock(&space_snapshot_lock);

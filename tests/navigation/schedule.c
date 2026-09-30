@@ -31,6 +31,9 @@ static enum space_navigation_result space_navigation_execute(struct space_naviga
                                                              bool activate, bool settle, float duration);
 static void space_navigation_schedule_after(uint64_t delay_ns);
 
+// Schedule policy tests leave pending step behavior to captured_schedule.c.
+static void space_navigation_step_skip_effect(void) { }
+
 #include "../../src/navigation/schedule.c"
 
 static struct

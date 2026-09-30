@@ -149,7 +149,7 @@ static void space_navigation_schedule_append(struct space_navigation_request *re
 // direction; an opposite step takes back one that has not run. Returns false
 // only when the queue is full and the request can join nothing: a `move`,
 // or a different effect.
-static bool space_navigation_schedule_add(struct space_navigation_request *request, bool repeat)
+static bool space_navigation_schedule_enqueue(struct space_navigation_request *request, bool repeat)
 {
     os_signpost_event_emit(space_navigation_log(), OS_SIGNPOST_ID_EXCLUSIVE, "request",
                            "steps %d sid %llu repeat %d queued %d", request->steps, request->sid, repeat,
@@ -225,6 +225,16 @@ static bool space_navigation_schedule_add(struct space_navigation_request *reque
     }
 
     return false;
+}
+
+// Queue first: the step already in flight must see all accepted input when
+// deciding whether to leave activation to the last step. A quick request
+// gives up only its optional snapshot; the planned switch still completes.
+static bool space_navigation_schedule_add(struct space_navigation_request *request, bool repeat)
+{
+    bool accepted = space_navigation_schedule_enqueue(request, repeat);
+    if (accepted && request->fast) space_navigation_step_skip_effect();
+    return accepted;
 }
 
 // A confirmed activation can make the next step due before the wake already
