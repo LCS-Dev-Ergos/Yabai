@@ -95,3 +95,39 @@ static TEST_SIG(signal_standard_output)
     unlink(path);
     return result;
 }
+
+// A signal action is its own responsible process for privacy permissions: it
+// does not run with our Accessibility and Screen Recording grants, which any
+// process of the user could otherwise borrow through `yabai -m signal --add`.
+pid_t responsibility_get_pid_responsible_for_pid(pid_t pid);
+
+static TEST_SIG(signal_responsibility)
+{
+    char *test_name = "signal_responsibility";
+    bool result = true;
+    char path[] = "/tmp/yabai-signal-responsibility-XXXXXX";
+    int output = mkstemp(path);
+    if (output == -1) return false;
+
+    char command[512];
+    snprintf(command, sizeof(command), "printf '%%s' \"$$\" > '%s'; /bin/sleep 2", path);
+
+    struct event_signal event = {0};
+    TEST_CHECK(event_signal_spawn(&event, command), 0);
+
+    char contents[16] = {0};
+    for (int i = 0; i < 200 && pread(output, contents, sizeof(contents) - 1, 0) <= 0; ++i) {
+        usleep(5000);
+    }
+
+    pid_t pid = (pid_t) atoi(contents);
+    TEST_CHECK(pid > 0, true);
+    if (pid > 0) {
+        TEST_CHECK(responsibility_get_pid_responsible_for_pid(pid) == pid, true);
+        kill(pid, SIGKILL);
+    }
+
+    close(output);
+    unlink(path);
+    return result;
+}

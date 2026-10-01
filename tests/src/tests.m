@@ -129,6 +129,7 @@ typedef TEST_SIG(function);
     TEST_ENTRY(sa_request_bounds)                              \
     TEST_ENTRY(signal_environment)                             \
     TEST_ENTRY(signal_standard_output)                         \
+    TEST_ENTRY(signal_responsibility)                          \
     TEST_ENTRY(navigation_numbers)                             \
     TEST_ENTRY(display_area_is_in_direction)                   \
     TEST_ENTRY(closest_display_in_direction)                  \
