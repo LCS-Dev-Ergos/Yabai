@@ -3,10 +3,19 @@
 #include "../osax/socket_path.h"
 #include "../osax/socket_identity.h"
 
+//
+// NOTE: Each connection posted to the event loop holds a descriptor until it
+// is answered. Near the descriptor limit, 256 under launchd, the kernel drops
+// a new client unanswered and the client reports success, so past this many
+// waiting connections we answer at once that we are busy instead.
+//
+#define MESSAGE_LOOP_MAX_PENDING 128
+
 static struct {
     int sockfd;
     bool is_running;
     pthread_t thread;
+    int pending;
 } g_message_loop;
 static SecRequirementRef g_message_loop_requirement;
 
@@ -33,6 +42,43 @@ void handle_message(FILE *rsp, char *message)
     }
 }
 
+// Accept thread. A client we do not hand to the event loop learns why: a
+// connection closed without a reply reads as a command with no output.
+static void message_loop_refuse(int sockfd, const char *reason)
+{
+    int flags = fcntl(sockfd, F_GETFL);
+    if (flags != -1) fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+
+    send(sockfd, reason, strlen(reason), MSG_NOSIGNAL);
+    close(sockfd);
+}
+
+// Accept thread. Whether the event loop takes the connection. One it does not
+// take has been refused, or joined a waiting navigation request.
+static bool message_loop_admit(int sockfd)
+{
+    if (!yabai_socket_peer_is_trusted(sockfd, getuid(), g_message_loop_requirement)) {
+        message_loop_refuse(sockfd, FAILURE_MESSAGE "client refused: it is not signed like the running yabai\n");
+        return false;
+    }
+
+    if (space_navigation_accept(sockfd)) return false;
+
+    if (__atomic_load_n(&g_message_loop.pending, __ATOMIC_RELAXED) >= MESSAGE_LOOP_MAX_PENDING) {
+        message_loop_refuse(sockfd, FAILURE_MESSAGE "too many requests are waiting\n");
+        return false;
+    }
+
+    __atomic_add_fetch(&g_message_loop.pending, 1, __ATOMIC_RELAXED);
+    return true;
+}
+
+// Event loop, once a connection the accept thread posted is answered.
+void message_loop_answered(void)
+{
+    __atomic_sub_fetch(&g_message_loop.pending, 1, __ATOMIC_RELAXED);
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
 static void *message_loop_run(void *context)
@@ -40,11 +86,7 @@ static void *message_loop_run(void *context)
     while (g_message_loop.is_running) {
         int sockfd = accept(g_message_loop.sockfd, NULL, 0);
         if (sockfd == -1) continue;
-        if (!yabai_socket_peer_is_trusted(sockfd, getuid(), g_message_loop_requirement)) {
-            close(sockfd);
-            continue;
-        }
-        if (space_navigation_accept(sockfd)) continue;
+        if (!message_loop_admit(sockfd)) continue;
 
         event_loop_post(&g_event_loop, DAEMON_MESSAGE, NULL, sockfd);
     }

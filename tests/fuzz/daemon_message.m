@@ -36,7 +36,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     if (size) write(fds[0], data, size);
     shutdown(fds[0], SHUT_WR);
 
-    char *message = daemon_message_read(fds[1], DAEMON_MESSAGE_TIMEOUT_MS);
+    const char *failure = NULL;
+    char *message = daemon_message_read(fds[1], DAEMON_MESSAGE_TIMEOUT_MS, &failure);
     if (message) {
         char *cursor = message;
         struct token token;

@@ -43,35 +43,47 @@ static bool daemon_message_wait(int sockfd, short events, uint64_t deadline)
     }
 }
 
-static bool daemon_message_receive(int sockfd, void *bytes, int length, uint64_t deadline)
+// NULL once all `length` bytes are in, or the failure to reply with.
+static const char *daemon_message_receive(int sockfd, void *bytes, int length, uint64_t deadline)
 {
     int received = 0;
 
     while (received < length) {
-        if (!daemon_message_wait(sockfd, POLLIN, deadline)) return false;
+        if (!daemon_message_wait(sockfd, POLLIN, deadline)) return FAILURE_MESSAGE "request timed out\n";
 
         ssize_t count = recv(sockfd, (char *) bytes + received, length - received, 0);
         if (count > 0) {
             received += (int) count;
         } else if (count == 0 || (errno != EAGAIN && errno != EINTR)) {
-            return false;
+            return FAILURE_MESSAGE "request ended early\n";
         }
     }
 
-    return true;
+    return NULL;
 }
 
-static char *daemon_message_read(int sockfd, int timeout_ms)
+// The request, or NULL with `failure` set to the reply that tells the client
+// why: a connection closed without one reads as a command with no output.
+static char *daemon_message_read(int sockfd, int timeout_ms, const char **failure)
 {
     uint64_t deadline = read_os_timer() + (uint64_t) timeout_ms * 1000000;
     int bytes_to_read = 0;
 
     daemon_message_set_nonblocking(sockfd);
-    if (!daemon_message_receive(sockfd, &bytes_to_read, sizeof(int), deadline)) return NULL;
-    if (bytes_to_read <= 0 || bytes_to_read > DAEMON_MESSAGE_MAX_LENGTH) return NULL;
+    if ((*failure = daemon_message_receive(sockfd, &bytes_to_read, sizeof(int), deadline))) return NULL;
+
+    if (bytes_to_read <= 0) {
+        *failure = FAILURE_MESSAGE "request is malformed\n";
+        return NULL;
+    }
+
+    if (bytes_to_read > DAEMON_MESSAGE_MAX_LENGTH) {
+        *failure = FAILURE_MESSAGE "request is longer than 64 KiB\n";
+        return NULL;
+    }
 
     char *message = ts_alloc_unaligned(bytes_to_read + 2);
-    if (!daemon_message_receive(sockfd, message, bytes_to_read, deadline)) return NULL;
+    if ((*failure = daemon_message_receive(sockfd, message, bytes_to_read, deadline))) return NULL;
 
     message[bytes_to_read] = '\0';
     message[bytes_to_read+1] = '\0';
@@ -107,7 +119,9 @@ static EVENT_HANDLER(DAEMON_MESSAGE)
     TIME_FUNCTION;
 
     space_navigation_queue_claim(param1);
-    char *message = daemon_message_read(param1, DAEMON_MESSAGE_TIMEOUT_MS);
+
+    const char *failure = NULL;
+    char *message = daemon_message_read(param1, DAEMON_MESSAGE_TIMEOUT_MS, &failure);
 
     if (message) {
         char *response = NULL;
@@ -123,9 +137,12 @@ static EVENT_HANDLER(DAEMON_MESSAGE)
         }
 
         free(response);
+    } else if (failure) {
+        daemon_message_reply(param1, failure, strlen(failure), DAEMON_MESSAGE_TIMEOUT_MS);
     }
 
     socket_close(param1);
+    message_loop_answered();
 }
 
 // The second half of a navigation's focus change between two windows of one

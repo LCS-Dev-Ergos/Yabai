@@ -346,5 +346,6 @@ static void handle_domain_window(FILE *rsp, struct token domain, char *message);
 
 void handle_message(FILE *rsp, char *message);
 bool message_loop_begin(char *socket_path);
+void message_loop_answered(void);
 
 #endif

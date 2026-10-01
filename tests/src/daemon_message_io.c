@@ -1,6 +1,7 @@
 // The event loop reads a request and writes its reply within a bound: a client
 // that stalls before sending, sends slowly or stops reading its reply costs at
-// most that bound instead of holding every other event behind it. TEST_CHECK
+// most that bound instead of holding every other event behind it. A request we
+// cannot read, or a client we do not take, gets a reply that says why. TEST_CHECK
 // evaluates its arguments again to report a failure, so every call with an
 // effect runs once, before its check.
 
@@ -51,19 +52,30 @@ static void *daemon_message_test_drain(void *context)
 // and an empty last one.
 static char daemon_message_test_request[] = "\x15\x00\x00\x00" "config\0debug_output\0";
 
+static bool daemon_message_test_failure(const char *failure, const char *expected)
+{
+    bool matches = failure == expected || (failure && expected && strcmp(failure, expected) == 0);
+    if (!matches) printf("                   failure '%s', expected '%s'\n", failure ? failure : "(none)", expected ? expected : "(none)");
+    return matches;
+}
+
 TEST_FUNC(daemon_message_bounded_read,
 {
     if (!g_temp_storage.memory) TEST_CHECK(ts_init(KILOBYTES(64)), true);
+    const char *failure = NULL;
+    bool matches;
     int sockets[2];
 
     // Connected, but nothing sent: the read gives up at its bound.
     TEST_CHECK(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
     uint64_t start = read_os_timer();
-    char *message = daemon_message_read(sockets[1], 100);
+    char *message = daemon_message_read(sockets[1], 100, &failure);
     double elapsed = daemon_message_test_ms(start);
 
     TEST_CHECK(message == NULL, true);
     TEST_CHECK(elapsed >= 90.0 && elapsed < 1000.0, true);
+    matches = daemon_message_test_failure(failure, FAILURE_MESSAGE "request timed out\n");
+    TEST_CHECK(matches, true);
     close(sockets[0]);
     close(sockets[1]);
 
@@ -78,11 +90,13 @@ TEST_FUNC(daemon_message_bounded_read,
     pthread_create(&thread, NULL, daemon_message_test_trickle, &peer);
 
     start = read_os_timer();
-    message = daemon_message_read(sockets[1], 150);
+    message = daemon_message_read(sockets[1], 150, &failure);
     elapsed = daemon_message_test_ms(start);
 
     TEST_CHECK(message == NULL, true);
     TEST_CHECK(elapsed >= 140.0 && elapsed < 1000.0, true);
+    matches = daemon_message_test_failure(failure, FAILURE_MESSAGE "request timed out\n");
+    TEST_CHECK(matches, true);
     close(sockets[1]);
     pthread_join(thread, NULL);
     close(sockets[0]);
@@ -93,8 +107,9 @@ TEST_FUNC(daemon_message_bounded_read,
     ssize_t written = write(sockets[0], daemon_message_test_request, sizeof(daemon_message_test_request));
     TEST_CHECK(written == (ssize_t) sizeof(daemon_message_test_request), true);
 
-    message = daemon_message_read(sockets[1], 100);
+    message = daemon_message_read(sockets[1], 100, &failure);
     TEST_CHECK(message != NULL, true);
+    TEST_CHECK(failure == NULL, true);
     if (message) {
         TEST_CHECK(strcmp(message, "config"), 0);
         TEST_CHECK(strcmp(message + 7, "debug_output"), 0);
@@ -110,12 +125,33 @@ TEST_FUNC(daemon_message_bounded_read,
     close(sockets[0]);
 
     start = read_os_timer();
-    message = daemon_message_read(sockets[1], 1000);
+    message = daemon_message_read(sockets[1], 1000, &failure);
     elapsed = daemon_message_test_ms(start);
 
     TEST_CHECK(message == NULL, true);
     TEST_CHECK(elapsed < 500.0, true);
+    matches = daemon_message_test_failure(failure, FAILURE_MESSAGE "request ended early\n");
+    TEST_CHECK(matches, true);
     close(sockets[1]);
+
+    // A length out of bounds is refused before anything else is read.
+    struct { int length; const char *failure; } lengths[] = {
+        { 0, FAILURE_MESSAGE "request is malformed\n" },
+        { -5, FAILURE_MESSAGE "request is malformed\n" },
+        { DAEMON_MESSAGE_MAX_LENGTH + 1, FAILURE_MESSAGE "request is longer than 64 KiB\n" },
+    };
+    for (int i = 0; i < array_count(lengths); ++i) {
+        TEST_CHECK(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
+        written = write(sockets[0], &lengths[i].length, sizeof(int));
+        TEST_CHECK(written == (ssize_t) sizeof(int), true);
+
+        message = daemon_message_read(sockets[1], 1000, &failure);
+        TEST_CHECK(message == NULL, true);
+        matches = daemon_message_test_failure(failure, lengths[i].failure);
+        TEST_CHECK(matches, true);
+        close(sockets[0]);
+        close(sockets[1]);
+    }
 
     ts_reset();
 });
@@ -164,7 +200,8 @@ TEST_FUNC(daemon_message_bounded_reply,
     free(reply);
 });
 
-// The handler answers on the request's connection and then closes it.
+// The handler answers on the request's connection, closes it and counts it
+// answered.
 TEST_FUNC(daemon_message_round_trip,
 {
     if (!g_temp_storage.memory) TEST_CHECK(ts_init(KILOBYTES(64)), true);
@@ -175,9 +212,11 @@ TEST_FUNC(daemon_message_round_trip,
     TEST_CHECK(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
     ssize_t written = write(sockets[0], daemon_message_test_request, sizeof(daemon_message_test_request));
     TEST_CHECK(written == (ssize_t) sizeof(daemon_message_test_request), true);
+    g_message_loop.pending = 1;
     EVENT_HANDLER_DAEMON_MESSAGE(NULL, sockets[1]);
+    TEST_CHECK(g_message_loop.pending, 0);
 
-    char reply[16] = {0};
+    char reply[64] = {0};
     char rest[4];
     int count = (int) read(sockets[0], reply, sizeof(reply) - 1);
     int closed = (int) read(sockets[0], rest, sizeof(rest));
@@ -187,6 +226,53 @@ TEST_FUNC(daemon_message_round_trip,
     TEST_CHECK(closed, 0);
     close(sockets[0]);
 
+    // A request it cannot read is answered with the reason.
+    TEST_CHECK(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
+    int malformed = 0;
+    written = write(sockets[0], &malformed, sizeof(malformed));
+    TEST_CHECK(written == (ssize_t) sizeof(malformed), true);
+    g_message_loop.pending = 1;
+    EVENT_HANDLER_DAEMON_MESSAGE(NULL, sockets[1]);
+    TEST_CHECK(g_message_loop.pending, 0);
+
+    memset(reply, 0, sizeof(reply));
+    count = (int) read(sockets[0], reply, sizeof(reply) - 1);
+    TEST_CHECK(strcmp(reply, FAILURE_MESSAGE "request is malformed\n"), 0);
+    close(sockets[0]);
+
     g_verbose = saved_verbose;
     ts_reset();
+});
+
+// Past the waiting connections we can hold, a client is told we are busy
+// instead of being dropped by the kernel at the descriptor limit.
+TEST_FUNC(daemon_message_busy,
+{
+    int sockets[2];
+    int saved_pending = g_message_loop.pending;
+
+    TEST_CHECK(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
+    g_message_loop.pending = MESSAGE_LOOP_MAX_PENDING - 1;
+    bool admitted = message_loop_admit(sockets[1]);
+    TEST_CHECK(admitted, true);
+    TEST_CHECK(g_message_loop.pending, MESSAGE_LOOP_MAX_PENDING);
+    close(sockets[0]);
+    close(sockets[1]);
+
+    TEST_CHECK(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
+    admitted = message_loop_admit(sockets[1]);
+    TEST_CHECK(admitted, false);
+    TEST_CHECK(g_message_loop.pending, MESSAGE_LOOP_MAX_PENDING);
+    if (admitted) close(sockets[1]);
+
+    char reply[64] = {0};
+    char rest[4];
+    int count = (int) read(sockets[0], reply, sizeof(reply) - 1);
+    int closed = (int) read(sockets[0], rest, sizeof(rest));
+    TEST_CHECK(count > 0, true);
+    TEST_CHECK(strcmp(reply, FAILURE_MESSAGE "too many requests are waiting\n"), 0);
+    TEST_CHECK(closed, 0);
+    close(sockets[0]);
+
+    g_message_loop.pending = saved_pending;
 });

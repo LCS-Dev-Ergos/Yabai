@@ -129,6 +129,7 @@ typedef TEST_SIG(function);
     TEST_ENTRY(daemon_message_bounded_read)                    \
     TEST_ENTRY(daemon_message_bounded_reply)                   \
     TEST_ENTRY(daemon_message_round_trip)                      \
+    TEST_ENTRY(daemon_message_busy)                            \
     TEST_ENTRY(signal_socket_lifetime)                         \
     TEST_ENTRY(signal_storage_bound)                           \
     TEST_ENTRY(sa_request_bounds)                              \
