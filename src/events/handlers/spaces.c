@@ -20,7 +20,7 @@ static void space_changed_diag(const char *phase, uint64_t sid)
 static EVENT_HANDLER(SLS_SPACE_CREATED)
 {
     uint64_t sid = (uint64_t)(intptr_t) context;
-    // The crossfade's own Space, see effects/snapshot.m.
+    // The crossfade's or veil's own Space, see effects/snapshot.m.
     if (space_navigation_snapshot_owns_space(sid)) return;
 
     int type = SLSSpaceGetType(g_connection, sid);

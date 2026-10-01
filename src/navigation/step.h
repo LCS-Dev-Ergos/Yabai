@@ -9,11 +9,13 @@
 // A step plans (destination, window, raise), switches through Dock with its
 // effect, then activates. A queued crossfade step is split in two: planning
 // requests the capture and returns, and the capture's event
-// (SPACE_NAVIGATION_CAPTURED, a hook, see hooks.h) switches and activates.
+// (SPACE_NAVIGATION_CAPTURED, a hook, see hooks.h) switches and activates. A
+// veil step captures nothing: it shows the veil, switches and activates in one
+// run, like a window fade.
 //
 // Thread: event loop. A step waits for WindowServer queries, for Dock to
 // switch (up to one second), for an application's AX raise and, when run to
-// its end at once, for the snapshot capture.
+// its end at once, for the snapshot capture or the veil's two refreshes.
 // State: the anchor, the Desktop the last step reached, which relative
 // navigation starts from for a second while WindowServer's active display
 // may still follow an application elsewhere; when the last window fade ran;
@@ -26,10 +28,11 @@
 // its activation over and hears its reports, including the end of a step in
 // flight.
 
-// One Desktop switch of a navigation. Its effect is either the fade of the
-// destination's windows from `alpha`, or a crossfade of the whole display. A
-// step that does not activate only switches and shows its effect: another
-// step queued after it will. That step can find its Desktop current already,
+// One Desktop switch of a navigation. Its effect is the fade of the
+// destination's windows from `alpha`, a crossfade of the whole display, or a
+// veil over it; `crossfade` and `veil` exclude each other. A step that does
+// not activate only switches and shows its effect: another step queued after
+// it will. That step can find its Desktop current already,
 // a jump over a whole lap of Desktops or the number of the Desktop reached;
 // `settle` then still gives the Desktop's window focus.
 struct space_navigation_step
@@ -37,6 +40,7 @@ struct space_navigation_step
     uint64_t sid;
     bool move;
     bool crossfade;
+    bool veil;
     float alpha;
     float duration;
     bool activate;

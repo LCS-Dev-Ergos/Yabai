@@ -140,6 +140,8 @@ typedef TEST_SIG(function);
     TEST_ENTRY(window_tree_lookup_and_direction)              \
     TEST_ENTRY(command_domain_errors)                          \
     TEST_ENTRY(command_domain_state_changes)                  \
+    TEST_ENTRY(config_navigation_fade_curve)                  \
+    TEST_ENTRY(config_navigation_veil_blur)                   \
     TEST_ENTRY(jankyborders_resource_lifetime)                \
     TEST_ENTRY(mouse_tap_resource_lifetime)
 

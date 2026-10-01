@@ -251,6 +251,62 @@ recognises as its own and the watchdog; and the asynchronous capture: its
 callback and deadline reports, tokens, late and denied captures, a late
 request call, cancellation and retirement by a synchronous preparation. Debug, ASan/UBSan and TSan cover this target; presented
 frames still require the live probe and installed-release check.
+The same target covers the veil, which needs no capture and so also runs on
+macOS before 26: the window at resolution 1.0 drawn solid black, its opacity
+set before it is ordered in, no capture call, the fade's alphas within the
+veil's opacity and never rising, release at the endpoint, on a failed switch,
+on cancellation and when the display leaves the target, no window or Space left
+after a failure to create the window, its context or the auxiliary Space, to
+attach the window or to order it, a new veil retiring the one showing, and a
+veil retiring a pending capture request, whose late callback then does nothing.
+The blurred veil (`navigation_veil_blur`) is covered the same way, with the
+blur call and the Reduce Transparency query mocked: radius 0 keeps the plain
+veil exactly (no blur call, opacity 0.4 before the order, an opaque fill);
+a radius above 0 asks for that radius, style 1, before the window is ordered
+in, fills at a tint of 0.25, orders the window at alpha 0, then writes
+non-decreasing alphas ending at exactly 1.0 over at least 100 ms plus the two
+refreshes, and the fade after the switch stays within [0, 1] and releases;
+Reduce Transparency gives the plain veil; a refused blur, a failed alpha write
+and a cancellation during the fade-in each return false and leave no window or
+Space. The unity tests check `config navigation_veil_blur`: its default, get
+and set of 0 to 100, and refusal of 101, negatives, fractions, hexadecimal and
+words.
+Both fade curves (`navigation_fade_curve`, `smooth` and `ease_out`) are checked
+at run time: their endpoints, monotony and the point where 5% of the change
+becomes visible, and that an overlay keeps the curve configured when it was
+created. `navigation_tests`, the schedule and ingress tests and the unity tests
+cover the veil step, the `veil` request and `config navigation_fade_curve`.
+
+### Transition timing
+
+Two tools separate where the time of a transition goes. The headless one never
+changes a Desktop: it runs the production capture request and the production
+draw into an overlay window that is never ordered in, at several output scales,
+interleaved:
+
+```sh
+xcrun clang -fno-objc-arc -O2 tools/effects/capture_scale_bench.m \
+  -framework Cocoa -framework Carbon -framework CoreGraphics \
+  -framework ScreenCaptureKit -framework QuartzCore \
+  -F/System/Library/PrivateFrameworks -framework SkyLight \
+  -o build/tools/capture-scale-bench
+build/tools/capture-scale-bench DISPLAY_ID 10 1 0.75 0.5
+```
+
+`tools/effects/transition_timing.py` is live: it switches between two Desktops
+of one display whose central content differs and stays static, and measures,
+from the request, the first presented frame that visibly changed (5% of the
+source-to-destination colour distance) and the frame from which the
+destination stays settled. Variants run interleaved and rotate each round:
+the installed daemon without effect and with its crossfade, snapshot probes
+compiled with the other curve or without the pre-switch wait
+(`-DSNAPSHOT_PROBE_CURVE=1 -DSPACE_SNAPSHOT_PRESWITCH_WAIT=0` added to the probe
+build above; the probe takes the curve from that macro, since it has no daemon
+configuration), and the capture-free veil probe (`tools/effects/veil_probe.m`).
+The script's docstring lists the variant syntax. It shares the five-second idle
+guard and restoration of the other live tools; announce the run. Probe and
+client launches add process start-up to every variant alike, so compare
+variants with each other rather than with the daemon's own internal phases.
 
 ## Static analysis
 

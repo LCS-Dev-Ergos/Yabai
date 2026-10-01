@@ -1,9 +1,22 @@
-// Crossfade one already-composited outgoing frame over an ordinary Desktop
-// switch. Space alpha affects shared Finder windows and Space levels reorder
-// global windows; this path changes only a window owned by yabai.
+// Crossfade one already-composited outgoing frame, or fade a solid veil, over
+// an ordinary Desktop switch. Space alpha affects shared Finder windows and
+// Space levels reorder global windows; this path changes only a window owned
+// by yabai.
 #include <os/signpost.h>
 
 #define SPACE_SNAPSHOT_MAX_PIXELS 24000000ULL
+
+// The veil's opacity. Perceived the same from 0.3 to 0.5 on this host's
+// displays; it only has to hide the switch.
+#define SPACE_SNAPSHOT_VEIL_OPACITY 0.4f
+
+// The blurred veil (config navigation_veil_blur): the window's alpha carries
+// the blur, so its black fill is a light tint that lets the blurred Desktop
+// show through, and the window fades in over this long, with a quadratic
+// ease-out, before the switch. Blurring at full strength at once was seen as a
+// pop, and the destination's brightness change as a jump.
+#define SPACE_SNAPSHOT_VEIL_BLUR_TINT  0.25
+#define SPACE_SNAPSHOT_VEIL_BLUR_IN_NS 100000000ULL
 
 // Signposts in subsystem com.lcs.yabai, category effects: how long each
 // snapshot took to capture and to prepare, and why one was not used.
@@ -52,6 +65,8 @@ struct space_snapshot
     uint64_t started;
     uint64_t deadline;
     dispatch_source_t timer;
+    float peak;                 // Opacity at the start of the fade: 1 for a capture.
+    int curve;                  // enum space_snapshot_curve, fixed when the overlay is created.
 #ifdef YABAI_CAPTURE_DIAGNOSTICS
     uint64_t generation;
     bool first_alpha_logged;
@@ -167,6 +182,19 @@ void space_navigation_snapshot_space_changed(void)
     pthread_mutex_unlock(&space_snapshot_lock);
 }
 
+// The share of its peak opacity the overlay keeps at fade progress t in
+// [0, 1]. Smoothstep starts slowly: 5% of the change takes 13.5% of the
+// duration. The ease-out curve changes visibly from the first frame (2.5%), so
+// the switch reads as answered sooner; the fade's duration is the same.
+static float space_snapshot_alpha(double t, int curve)
+{
+    if (t <= 0.0) return 1.0f;
+    if (t >= 1.0) return 0.0f;
+    if (curve == SPACE_SNAPSHOT_CURVE_EASE_OUT) return (float) ((1.0 - t) * (1.0 - t));
+
+    return (float) (1.0 - t * t * (3.0 - 2.0 * t));
+}
+
 static void space_snapshot_tick(struct space_snapshot *snapshot)
 {
     pthread_mutex_lock(&space_snapshot_lock);
@@ -176,7 +204,7 @@ static void space_snapshot_tick(struct space_snapshot *snapshot)
             space_snapshot_cancel_locked();
         } else if (snapshot->started) {
             double t = (double) (now - snapshot->started) / (snapshot->deadline - snapshot->started);
-            float alpha = (float) (1.0 - t * t * (3.0 - 2.0 * t));
+            float alpha = snapshot->peak * space_snapshot_alpha(t, snapshot->curve);
             if (SLSSetWindowAlpha(SLSMainConnectionID(), snapshot->window, alpha) != kCGErrorSuccess) {
                 space_snapshot_cancel_locked();
             }
@@ -189,6 +217,73 @@ static void space_snapshot_tick(struct space_snapshot *snapshot)
         }
     }
     pthread_mutex_unlock(&space_snapshot_lock);
+}
+
+// Event loop. A snapshot with its display, target and timer, which does not
+// run yet. The timer is also a watchdog before Dock replies: a failed or
+// stalled switch cannot leave an opaque overlay over the user's screen
+// indefinitely. The curve is read here, on the event loop, so the timer's queue
+// never touches the configuration. NULL when nothing could be allocated.
+static struct space_snapshot *space_snapshot_create(uint32_t display, uint64_t target, float interval, float peak)
+{
+    struct space_snapshot *snapshot = calloc(1, sizeof(*snapshot));
+    CFUUIDRef uuid = CGDisplayCreateUUIDFromDisplayID(display);
+    if (!snapshot || !uuid) {
+        free(snapshot);
+        if (uuid) CFRelease(uuid);
+        return NULL;
+    }
+    snapshot->uuid = CFUUIDCreateString(NULL, uuid);
+    CFRelease(uuid);
+    snapshot->target = target;
+    snapshot->peak = peak;
+    snapshot->curve = g_window_manager.navigation_fade_curve;
+    snapshot->timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
+                                             dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0));
+    if (!snapshot->uuid || !snapshot->timer) {
+        if (snapshot->uuid) CFRelease(snapshot->uuid);
+        if (snapshot->timer) {
+            dispatch_source_cancel(snapshot->timer);
+            dispatch_resume(snapshot->timer);
+            dispatch_release(snapshot->timer);
+        }
+        free(snapshot);
+        return NULL;
+    }
+
+    dispatch_source_set_event_handler(snapshot->timer, ^{ @autoreleasepool { space_snapshot_tick(snapshot); } });
+    dispatch_source_set_cancel_handler(snapshot->timer, ^{ free(snapshot); });
+    snapshot->deadline = read_os_timer() + 1000000000ULL;
+    dispatch_source_set_timer(snapshot->timer, dispatch_time(DISPATCH_TIME_NOW, (uint64_t) (interval * 1e9)),
+                              (uint64_t) (interval * 1e9), 1000000ULL);
+
+    return snapshot;
+}
+
+// Lock held. The overlay's window, not yet drawn into or ordered in, whose
+// backing is `resolution` pixels per point. No activation or mouse events. An
+// auxiliary Space, rather than the sticky tag, keeps the overlay visible while
+// Dock hides the source Space.
+static bool space_snapshot_window_create(struct space_snapshot *snapshot, CGRect bounds, double resolution)
+{
+    int cid = SLSMainConnectionID();
+    CFTypeRef region = NULL;
+    CFTypeRef empty = CGRegionCreateEmptyRegion();
+    CGSNewRegionWithRect(&bounds, &region);
+    uint64_t tags = (1ULL << 1) | (1ULL << 9);
+    bool success = region && empty
+        && SLSNewWindowWithOpaqueShapeAndContext(cid, 2, region, empty, 13, &tags, 0, 0, 64,
+                                                &snapshot->window, NULL) == kCGErrorSuccess
+        && snapshot->window;
+    if (region) CFRelease(region);
+    if (empty) CFRelease(empty);
+    if (success) {
+        success = SLSSetWindowResolution(cid, snapshot->window, resolution) == kCGErrorSuccess
+            && SLSSetWindowOpacity(cid, snapshot->window, false) == kCGErrorSuccess
+            && SLSSetWindowLevel(cid, snapshot->window, 1) == kCGErrorSuccess;
+    }
+
+    return success;
 }
 
 // Event loop. Capture permission is never requested here: unavailable,
@@ -279,65 +374,21 @@ static bool space_snapshot_request_finish(struct space_snapshot_request *request
         return false;
     }
 
-    struct space_snapshot *snapshot = calloc(1, sizeof(*snapshot));
-    CFUUIDRef uuid = CGDisplayCreateUUIDFromDisplayID(display);
-    if (!snapshot || !uuid) {
-        free(snapshot);
-        if (uuid) CFRelease(uuid);
+    struct space_snapshot *snapshot = space_snapshot_create(display, target, interval, 1.0f);
+    if (!snapshot) {
         CGImageRelease(image);
         space_snapshot_trace("failed", began, captured);
         return false;
     }
-    snapshot->uuid = CFUUIDCreateString(NULL, uuid);
-    CFRelease(uuid);
-    snapshot->target = target;
 #ifdef YABAI_CAPTURE_DIAGNOSTICS
     snapshot->generation = generation;
 #endif
-    snapshot->timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
-                                             dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0));
-    if (!snapshot->uuid || !snapshot->timer) {
-        if (snapshot->uuid) CFRelease(snapshot->uuid);
-        if (snapshot->timer) {
-            dispatch_source_cancel(snapshot->timer);
-            dispatch_resume(snapshot->timer);
-            dispatch_release(snapshot->timer);
-        }
-        free(snapshot);
-        CGImageRelease(image);
-        space_snapshot_trace("failed", began, captured);
-        return false;
-    }
-
-    dispatch_source_set_event_handler(snapshot->timer, ^{ @autoreleasepool { space_snapshot_tick(snapshot); } });
-    dispatch_source_set_cancel_handler(snapshot->timer, ^{ free(snapshot); });
-    // Before Dock replies the timer is also a watchdog: a failed or stalled
-    // switch cannot leave an opaque image over the user's screen indefinitely.
-    snapshot->deadline = read_os_timer() + 1000000000ULL;
-    dispatch_source_set_timer(snapshot->timer, dispatch_time(DISPATCH_TIME_NOW, (uint64_t) (interval * 1e9)),
-                              (uint64_t) (interval * 1e9), 1000000ULL);
 
     pthread_mutex_lock(&space_snapshot_lock);
     space_snapshot_active = snapshot;
     dispatch_resume(snapshot->timer);
     int cid = SLSMainConnectionID();
-    CFTypeRef region = NULL;
-    CFTypeRef empty = CGRegionCreateEmptyRegion();
-    CGSNewRegionWithRect(&bounds, &region);
-    // No activation or mouse events. An auxiliary Space, rather than the
-    // sticky tag, keeps the image visible while Dock hides the source Space.
-    uint64_t tags = (1ULL << 1) | (1ULL << 9);
-    bool success = region && empty && snapshot->uuid
-        && SLSNewWindowWithOpaqueShapeAndContext(cid, 2, region, empty, 13, &tags, 0, 0, 64,
-                                                &snapshot->window, NULL) == kCGErrorSuccess
-        && snapshot->window;
-    if (region) CFRelease(region);
-    if (empty) CFRelease(empty);
-    if (success) {
-        success = SLSSetWindowResolution(cid, snapshot->window, width / bounds.size.width) == kCGErrorSuccess
-            && SLSSetWindowOpacity(cid, snapshot->window, false) == kCGErrorSuccess
-            && SLSSetWindowLevel(cid, snapshot->window, 1) == kCGErrorSuccess;
-    }
+    bool success = space_snapshot_window_create(snapshot, bounds, width / bounds.size.width);
     if (success) {
         SNAP_DIAG("draw_begin", generation, token);
         success = space_snapshot_surface_create(snapshot, image, bounds);
@@ -361,7 +412,12 @@ static bool space_snapshot_request_finish(struct space_snapshot_request *request
 
     // Allow one refresh for the outgoing image before hiding the source.
     // This is a bounded presentation opportunity, not a presentation fence.
-    if (success) {
+    // Local probes can compile it out to check whether the switch then
+    // exposes the destination before the overlay.
+#ifndef SPACE_SNAPSHOT_PRESWITCH_WAIT
+#define SPACE_SNAPSHOT_PRESWITCH_WAIT 1
+#endif
+    if (success && SPACE_SNAPSHOT_PRESWITCH_WAIT) {
         SNAP_DIAG("preswitch_wait_begin", generation, token);
         usleep((useconds_t) (fminf(interval, 1.0f / 30.0f) * 1e6f));
         SNAP_DIAG("preswitch_wait_end", generation, token);
@@ -418,6 +474,123 @@ static enum space_snapshot_result space_navigation_snapshot_discard(int token)
     space_snapshot_pending = (struct space_snapshot_request) { 0 };
     space_snapshot_capture_release(capture);
     return SPACE_SNAPSHOT_MISSING;
+}
+
+// The share of its final alpha the blurred veil's window has u in [0, 1] of the
+// way through its fade-in: a quadratic ease-out, fastest at the start.
+static float space_snapshot_blur_alpha(double u)
+{
+    if (u <= 0.0) return 0.0f;
+    if (u >= 1.0) return 1.0f;
+
+    return (float) (1.0 - (1.0 - u) * (1.0 - u));
+}
+
+// Event loop. Fades the blurred veil's window in from alpha 0 to exactly 1, one
+// write per refresh, each under the lock and only while this snapshot is still
+// the active one. False when it was cancelled meanwhile or a write failed;
+// nothing is left alive then. The snapshot may be freed once it is cancelled,
+// so it is dereferenced only while it is the active one.
+static bool space_snapshot_blur_in(struct space_snapshot *snapshot, float interval)
+{
+    uint64_t began = read_os_timer();
+    int cid = SLSMainConnectionID();
+
+    for (;;) {
+        // A refresh is at most 1 s (see the callers' range check), which would
+        // outlast the watchdog: cap each sleep like the wait for the order-in.
+        usleep((useconds_t) (fminf(interval, 1.0f / 30.0f) * 1e6f));
+        uint64_t elapsed = read_os_timer() - began;
+        bool done = elapsed >= SPACE_SNAPSHOT_VEIL_BLUR_IN_NS;
+        float alpha = space_snapshot_blur_alpha(done ? 1.0 : (double) elapsed / SPACE_SNAPSHOT_VEIL_BLUR_IN_NS);
+
+        pthread_mutex_lock(&space_snapshot_lock);
+        bool written = space_snapshot_active == snapshot
+            && SLSSetWindowAlpha(cid, snapshot->window, alpha) == kCGErrorSuccess;
+        if (!written) space_snapshot_cancel_locked();
+        pthread_mutex_unlock(&space_snapshot_lock);
+
+        if (!written) return false;
+        if (done) return true;
+    }
+}
+
+// Event loop: shows a solid black veil over the display, ready to fade, and
+// returns once it has had two refreshes to reach the screen. It captures
+// nothing, so it needs neither Screen Recording permission nor macOS 26, and
+// costs one window order-in. With a background blur configured and Reduce
+// Transparency off, the veil is a blurred, lightly tinted window that fades in
+// before it returns. False when no veil is shown.
+static bool space_navigation_veil_prepare(uint32_t display, uint64_t target, float interval)
+{
+    space_navigation_snapshot_cancel();
+
+    uint64_t began = read_os_timer();
+    SNAP_DIAG("veil_begin", 0, 0);
+    if (!CGDisplayIsActive(display) || !target || !(interval >= 1.0f / 240.0f && interval <= 1.0f)) {
+        space_snapshot_trace("veil unavailable", began, 0);
+        return false;
+    }
+
+    CGRect bounds = CGDisplayBounds(display);
+    if (CGRectIsEmpty(bounds) || CGRectIsNull(bounds)) {
+        space_snapshot_trace("veil unavailable", began, 0);
+        return false;
+    }
+
+    // Read here, on the event loop, like the curve.
+    int radius = g_window_manager.navigation_veil_blur;
+    bool blur = radius > 0 && !space_navigation_reduce_transparency();
+    const char *shown = blur ? "veil blur" : "veil";
+    const char *failed = blur ? "veil blur failed" : "veil failed";
+
+    struct space_snapshot *snapshot = space_snapshot_create(display, target, interval,
+                                                            blur ? 1.0f : SPACE_SNAPSHOT_VEIL_OPACITY);
+    if (!snapshot) {
+        space_snapshot_trace(failed, began, 0);
+        return false;
+    }
+
+    pthread_mutex_lock(&space_snapshot_lock);
+    space_snapshot_active = snapshot;
+    dispatch_resume(snapshot->timer);
+    int cid = SLSMainConnectionID();
+    // One backing pixel per point: the veil has no detail to resolve. The
+    // blurred veil starts at alpha 0 and is ordered in invisible, so that the
+    // blur does not appear at full strength in one frame.
+    bool success = space_snapshot_window_create(snapshot, bounds, 1.0)
+        && (!blur || SLSSetWindowBackgroundBlurRadiusStyle(cid, snapshot->window, radius, 1) == kCGErrorSuccess)
+        && space_snapshot_surface_fill(snapshot, bounds, blur ? SPACE_SNAPSHOT_VEIL_BLUR_TINT : 1.0)
+        && SLSSetWindowAlpha(cid, snapshot->window, blur ? 0.0f : SPACE_SNAPSHOT_VEIL_OPACITY) == kCGErrorSuccess
+        && space_snapshot_space_create(snapshot)
+        && SLSOrderWindow(cid, snapshot->window, 1, 0) == kCGErrorSuccess;
+    if (!success) space_snapshot_cancel_locked();
+    pthread_mutex_unlock(&space_snapshot_lock);
+    SNAP_DIAG("veil_order_end", 0, 0);
+
+    // The blur reaches the screen later than a plain veil and competes with
+    // Dock for the GPU: with it at full strength only after the switch began,
+    // Dock took about twice as long and the veil once arrived later than the
+    // two refreshes below. So it is shown completely before the switch. That
+    // holds the event loop for about 130 ms at 60 Hz, which is why the blur is
+    // opt-in.
+    if (success && blur) {
+        success = space_snapshot_blur_in(snapshot, interval);
+        SNAP_DIAG("veil_blur_in_end", 0, 0);
+    }
+
+    space_snapshot_trace(success ? shown : failed, began, 0);
+
+    // A new window on a new auxiliary Space can be presented after Dock has
+    // switched: switching straight after the order showed the destination
+    // unveiled in 2 of 6 trials, and waiting 17 or 34 ms in none of 18. Two
+    // refreshes cover every flash seen. Still not a presentation fence.
+    if (success) {
+        usleep((useconds_t) (fminf(2.0f * interval, 1.0f / 30.0f) * 1e6f));
+        SNAP_DIAG("veil_wait_end", 0, 0);
+    }
+
+    return success;
 }
 
 static bool space_navigation_snapshot_start(float duration, bool switched)

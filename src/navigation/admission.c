@@ -97,8 +97,8 @@ static bool space_navigation_request_index(const char *token)
 }
 
 // Returns 1 for `space --navigate focus next <effect> <duration>`, where the
-// effect is crossfade or a starting opacity, -1 for prev, and 0 for anything
-// else, including an incomplete message. A decimal index returns
+// effect is crossfade, veil or a starting opacity, -1 for prev, and 0 for
+// anything else, including an incomplete message. A decimal index returns
 // SPACE_NAVIGATION_ABSOLUTE: it carries timing but is never coalesced.
 static int space_navigation_request_direction(const char *bytes, int length)
 {
@@ -118,7 +118,8 @@ static int space_navigation_request_direction(const char *bytes, int length)
 
     if (cursor != end || *token[6] != '\0') return 0;
     if (strcmp(token[0], "space") != 0 || strcmp(token[1], "--navigate") != 0 || strcmp(token[2], "focus") != 0) return 0;
-    if (strcmp(token[4], "crossfade") != 0 && !space_navigation_request_number(token[4], false)) return 0;
+    if (strcmp(token[4], "crossfade") != 0 && strcmp(token[4], "veil") != 0
+        && !space_navigation_request_number(token[4], false)) return 0;
     if (!space_navigation_request_number(token[5], true)) return 0;
 
     if (strcmp(token[3], "next") == 0) return 1;

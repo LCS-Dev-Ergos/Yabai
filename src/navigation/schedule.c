@@ -113,7 +113,7 @@ static int space_navigation_schedule_steps(void)
 
 static bool space_navigation_schedule_same_effect(struct space_navigation_request *a, struct space_navigation_request *b)
 {
-    return a->move == b->move && a->crossfade == b->crossfade
+    return a->move == b->move && a->crossfade == b->crossfade && a->veil == b->veil
         && a->alpha == b->alpha && a->duration == b->duration;
 }
 

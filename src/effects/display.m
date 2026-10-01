@@ -14,3 +14,8 @@ static bool space_navigation_reduce_motion(void)
 {
     return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion];
 }
+
+static bool space_navigation_reduce_transparency(void)
+{
+    return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceTransparency];
+}

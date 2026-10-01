@@ -159,8 +159,9 @@ window is created for each snapshot; the daemon recognises its own Spaces when
 WindowServer announces them, instead of asking for their type while a switch
 is under way (24–41 ms on the event loop for every step of a burst).
 
-A bounded timer applies smoothstep to the owned window's alpha, using the
-display mode's reported interval (60 Hz when unspecified, capped at 240 Hz).
+A bounded timer applies the [fade curve](#fade-curve), smoothstep by default,
+to the owned window's alpha, using the display mode's reported interval (60 Hz
+when unspecified, capped at 240 Hz).
 The timer releases everything at the endpoint; a one-second watchdog also
 retires an overlay if Dock has not replied. This is not display-link
 synchronization or a presentation fence. Fading the CALayer's opacity itself
@@ -194,6 +195,21 @@ discards the previous image; seamless retargeting in that mode is not promised. 
 blend. Fullscreen Desktops and already-visible destinations switch without it.
 No blur is applied.
 
+### Fade curve
+
+The crossfade's and the veil's alpha follows one of two curves, chosen with
+`yabai -m config navigation_fade_curve` (`smooth` by default). Both run over
+the requested duration and are read when the overlay is created, so changing
+the setting affects the next overlay only.
+
+- `smooth` is smoothstep, `1 - (3t² - 2t³)`. It starts slowly: 5% of the change
+  takes 13.5% of the duration.
+- `ease_out` is `(1 - t)²`. It changes visibly from the first frame, 5% of the
+  change taking 2.5% of the duration, so the switch reads as answered sooner.
+
+The window fade of the destination (the opacity effect above) keeps its own
+curve.
+
 ### Space-alpha crossfade (removed)
 
 Through lcs.22 the payload crossfaded Desktops itself, as Dock animates its own
@@ -212,6 +228,80 @@ it established still holds:
   and Mission Control do not reset them.
 
 The [lcs.22 report](reports/Space-Crossfade_7.1.25-lcs22.md) has the measurements.
+
+## Desktop veil
+
+`veil` is the effect for when the capture is the cost. The crossfade's capture
+takes 70-100 ms, a floor of the platform, before anything changes on the
+screen. The veil skips it: a solid black window, created and ordered exactly
+like the crossfade's overlay (an auxiliary Space of its own, no activation or
+mouse events), appears at 0.4 opacity; Dock then switches Desktop, and the veil
+fades out over the destination. Nothing is captured, so it needs neither Screen
+Recording permission nor macOS 26, and no image is held. It shares the
+crossfade's overlay, timer, watchdog, cancellation and Space-notification
+handling, one overlay at a time, and its fade follows
+[`navigation_fade_curve`](#fade-curve).
+
+A standalone probe (`tools/effects/veil_probe.m`) measured the first visible
+response after 35-60 ms, against about 280 ms for the crossfade, and the
+transition complete after 255-295 ms, against about 455 ms. Opacity 0.3 and 0.5
+were not perceptibly different from 0.4.
+
+Two display refreshes pass between ordering the veil and asking Dock to switch
+(`min(2 × interval, 1/30 s)`; 33 ms at 60 Hz). WindowServer can present a new
+window on a new auxiliary Space after Dock has switched: switching straight
+after the order showed the destination unveiled in 2 of 6 trials, while
+waiting 17 or 34 ms did so in none of 18. Two refreshes covered every flash
+observed, but the wait is not a presentation fence, and the veil's window may
+still reach the screen late. A veil still shown when Dock fails, or that Dock
+never answers, goes with the crossfade's one-second watchdog.
+
+The veil follows the crossfade's conditions: a duration (a quick burst has
+none), a destination that is hidden, and ordinary Desktops on both sides.
+Reduce Motion keeps it, as it keeps the crossfade, whose own Desktop
+transition under Reduce Motion is a crossfade.
+A veil step runs to its end within one request: unlike a queued
+crossfade it waits for no capture and never leaves the schedule pending.
+Mission Control and a display animation stop it when the step is planned; a
+click during its two refreshes removes the veil and stops the step, as it does
+during a synchronous crossfade's capture. Window moves keep their effect.
+
+### Veil background blur
+
+`yabai -m config navigation_veil_blur RADIUS` (0 to 100, `0` and off by
+default) makes the veil blur what lies below it, so the switch underneath
+stays soft. WindowServer does the blur on the GPU and live
+(`SLSSetWindowBackgroundBlurRadiusStyle`, style 1); nothing is captured. The
+radius is read when the veil is prepared. With a radius above 0 the veil is:
+
+- a window at alpha 0 when it is ordered in, filled with black at a tint of
+  0.25 (the fill's own alpha, so the blurred Desktop shows through), whose
+  window alpha carries the blur and the darkening;
+- faded in on the event loop over 100 ms, a quadratic ease-out
+  (`1 - (1 - u)²`), one alpha write per display refresh, each under the
+  overlay's lock and only while this veil is still the active one: a
+  cancellation during the fade-in stops it and the step switches without a
+  veil;
+- followed by the plain veil's two refreshes, after which Dock switches. It
+  then fades out from alpha 1 with [`navigation_fade_curve`](#fade-curve).
+
+The fade-in comes before the switch because of what was measured with the
+blur at full strength straight away: it popped in, the destination's change in
+brightness still showed as a jump, and the blur doubled Dock's switch time
+(about 65 to 135 ms) by contending for the GPU. Once the blurred window also
+reached the screen later than the two refreshes. Showing it completely first
+keeps both the pop and the contention out of the switch, at the price of the
+event loop being held for about 130 ms at 60 Hz (100 ms of fade-in, up to one
+refresh of rounding and the two refreshes), against 33 ms for the plain veil.
+That cost, and the GPU load of a live blur, are why the option is off by
+default. A radius of 0 is exactly the plain veil: opacity 0.4, an opaque fill
+and no fade-in.
+
+With Reduce Transparency on, the veil is the plain one whatever the radius.
+The trace in subsystem `com.lcs.yabai`, category `effects`, reports
+`veil blur` for a blurred veil and `veil` for a plain one. A failure to set
+the blur is a failure to set up the veil, like any other, and the step
+switches without it.
 
 ## Native compositor investigation
 

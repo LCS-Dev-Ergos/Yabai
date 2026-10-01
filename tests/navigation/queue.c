@@ -259,6 +259,12 @@ int main(void)
     assert(DIRECTION("space", "--navigate", "focus", "prev", "1", "0") == -1);
     assert(DIRECTION("space", "--navigate", "focus", "next", "crossfade", "0.2") == 1);
     assert(DIRECTION("space", "--navigate", "focus", "next", "crossfades", "0.2") == 0);
+    assert(DIRECTION("space", "--navigate", "focus", "next", "veil", "0.2") == 1);
+    assert(DIRECTION("space", "--navigate", "focus", "prev", "veil", "0") == -1);
+    assert(DIRECTION("space", "--navigate", "focus", "3", "veil", "0.25") == SPACE_NAVIGATION_ABSOLUTE);
+    assert(DIRECTION("space", "--navigate", "focus", "next", "veils", "0.2") == 0);
+    assert(DIRECTION("space", "--navigate", "focus", "next", "veil", "1.5") == 0);
+    assert(DIRECTION("space", "--navigate", "move", "next", "veil", "0.2") == 0);
 
     assert(DIRECTION("space", "--navigate", "move", "next", "0.95", "0.1") == 0);
     assert(DIRECTION("space", "--navigate", "focus", "3", "0.95", "0.1") == SPACE_NAVIGATION_ABSOLUTE);

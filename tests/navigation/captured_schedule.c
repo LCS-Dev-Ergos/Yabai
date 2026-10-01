@@ -17,7 +17,7 @@ static enum space_navigation_result space_navigation_execute(struct space_naviga
     // Deterministic six-Desktop topology; production plan/switch/finish are real.
     uint64_t sid = steps ? (uint64_t)(((int)from - 1 + steps + 600) % 6 + 1) : from;
     struct space_navigation_step step = {
-        .sid = sid, .move = request->move, .crossfade = request->crossfade,
+        .sid = sid, .move = request->move, .crossfade = request->crossfade, .veil = request->veil,
         .alpha = request->alpha, .duration = duration, .activate = activate, .settle = settle
     };
     return space_navigation_begin_step(active_space, &step);
@@ -208,6 +208,30 @@ static void test_new_flight_and_cancellation(void)
     }
 }
 
+// A veil captures nothing, so the schedule never waits for it: the step ends
+// within its run, and a fast one, which has no duration, shows no veil.
+static void test_veil(void)
+{
+    struct space_navigation_request request = { .steps = 1, .veil = true, .alpha = 1.0f, .duration = .25f };
+
+    reset();
+    assert(space_navigation_schedule_add(&request, false));
+    space_navigation_schedule_pump();
+    assert(!space_navigation_flight.active && !g_space_navigation_schedule.running);
+    assert(capture_calls == 0 && veil_prepares == 1 && snapshot_starts == 1 && focus_calls == 1);
+    assert(active_space == 2 && window_focus_calls == 1 && focused_id == 1);
+    assert(g_space_navigation_schedule.effect_until == timestamp + 250000000ULL);
+
+    timestamp += 30000000ULL;
+    request.fast = true;
+    assert(space_navigation_schedule_add(&request, false));
+    space_navigation_schedule_pump();
+    assert(g_space_navigation_schedule.count == 1 && veil_prepares == 1);
+    drain_fast();
+    assert(active_space == 3 && focus_calls == 2 && veil_prepares == 1 && snapshot_starts == 1);
+    assert(capture_calls == 0 && focused_id == 2);
+}
+
 static void test_move_and_rejected_input(void)
 {
     reset();
@@ -318,6 +342,7 @@ int main(void)
     test_order_selectors_and_bound();
     test_new_flight_and_cancellation();
     test_move_and_rejected_input();
-    puts("navigation captured schedule: early completion, order, focus, cancellation and bounds passed");
+    test_veil();
+    puts("navigation captured schedule: early completion, order, focus, cancellation, veil and bounds passed");
     return 0;
 }

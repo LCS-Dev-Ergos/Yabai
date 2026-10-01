@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Add `veil` as an effect of `space --navigate`: a solid black window at 0.4 opacity appears over the display, Dock switches Desktop two display refreshes later, and the veil fades out over the destination. It captures nothing, so it needs neither Screen Recording permission nor macOS 26, and in a standalone probe the first visible response came after 35-60 ms against about 280 ms for the crossfade, and the transition ended after 255-295 ms against about 455 ms. It follows the crossfade's rules for quick bursts, fullscreen Desktops and Reduce Motion
+- Add the `navigation_fade_curve` setting, `smooth` (default) or `ease_out`, for the fade of the crossfade and the veil: `ease_out` shows 5% of the change after 2.5% of the duration instead of 13.5%, so the switch reads as answered sooner
+- Add the `navigation_veil_blur` setting, a radius from 0 to 100 (`0`, off, by default), that blurs what lies below the veil through WindowServer on the GPU: the veil fades in over 100 ms before the switch instead of appearing at once, which holds the event loop for about 130 ms at 60 Hz, and it stays plain when Reduce Transparency is on
 
 ## [8.0.0-lcs.1] - 2026-09-29
 ### Changed
