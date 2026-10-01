@@ -118,6 +118,7 @@ typedef TEST_SIG(function);
 #include "string_escape.c"
 #include "daemon_message_io.c"
 #include "client_reply.c"
+#include "event_loop_wakeups.c"
 #include "sa_request.c"
 #include "resource_lifetime.c"
 #include "application_observation.c"
@@ -132,6 +133,7 @@ typedef TEST_SIG(function);
     TEST_ENTRY(daemon_message_round_trip)                      \
     TEST_ENTRY(daemon_message_busy)                            \
     TEST_ENTRY(client_request_and_reply)                       \
+    TEST_ENTRY(event_loop_wakeups)                             \
     TEST_ENTRY(signal_socket_lifetime)                         \
     TEST_ENTRY(signal_storage_bound)                           \
     TEST_ENTRY(sa_request_bounds)                              \

@@ -2,6 +2,7 @@
 #define EVENT_LOOP_H
 
 #include "../core_types.h"
+#include <dispatch/dispatch.h>
 
 // Area: event_queue.c, event_loop.c, handlers/*.c, window_focus_events.c
 // and event_loop_trace.c queue, dispatch and trace daemon events.
@@ -99,10 +100,11 @@ struct event_loop
 {
     bool is_running;
     pthread_t thread;
-    sem_t *semaphore;
+    dispatch_semaphore_t semaphore;
     struct event_queue queue;
 };
 
+static bool event_loop_init(struct event_loop *event_loop);
 bool event_loop_begin(struct event_loop *event_loop);
 void event_loop_post(struct event_loop *event_loop, enum event_type type, void *context, int param1);
 struct window_manager;
