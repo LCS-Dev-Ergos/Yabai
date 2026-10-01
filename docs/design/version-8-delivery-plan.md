@@ -1,29 +1,35 @@
 # Version 8: integration and acceptance plan
 
-Status, 2026-09-29: foundation, corrected capture, the GPU feasibility
-dossier and AX/callback hardening are integrated in `dev`. The IPC candidate
-is under separate review and temporarily included in the dependent release
-preparation PR. No version 8 release or installation has been performed.
+Status, 2026-09-30: all scoped corrections are integrated in `dev`. Signed
+`v8.0.0-lcs.1` was published at `93feb9b` on 2026-09-29; the Nix package was
+built from Dotfiles `4ceea80`, and version 8 was subsequently observed active
+on the exact pinned generation. Two further changes merged into `dev` on
+2026-09-30, [PR #7](https://github.com/LCS-Dev-Ergos/Yabai/pull/7) (early
+snapshot skip) and [PR #8](https://github.com/LCS-Dev-Ergos/Yabai/pull/8)
+(fast policy for absolute numeric requests), and tag `v8.0.0-lcs.2` marks
+`f33d1ac`. System activation is performed manually by the maintainer;
+automated tooling must not run the switch. New live measurements remain
+deferred until a reboot with few active processes. Exact runtime identity
+evidence and unverified coverage are kept in a local, unpublished release
+record.
 
-## Authorization and ownership
+## Process and ownership
 
-Project-bound session excerpt, user, 2026-09-29 (translated): prefer a pull
-request for current changes; the coordinating agent supervises GPT-6 Sol
-implementations; after the important corrections and new implementations,
-release version 8 and install it on the system. Improve this organization
-where useful.
+Current changes are published as pull requests. Implementation proceeds in
+isolated worktrees, each on its own branch, and is integrated after review.
+Release and installation of version 8 follow the important corrections and new
+implementations. System activation is a manual maintainer step; this
+constraint supersedes any earlier, broader permission to install.
 
-The coordinator owns integration, review, comparative acceptance and release
-decisions. Implementation workers use GPT-6 Sol High in isolated worktrees.
-Desktop-changing tests have one owner at a time. Build and deterministic tests
-can run independently; benchmark builds and live measurements are serialized
-to avoid contention and contaminated comparisons.
+Integration, review, comparative acceptance and release decisions are made by
+the maintainer. Desktop-changing tests have one owner at a time. Build and
+deterministic tests can run independently; benchmark builds and live
+measurements are serialized to avoid contention and contaminated comparisons.
 
 ## Integration sequence
 
-The fork's verified default/integration branch is `dev`; `master` mirrors
-upstream. The primary checkout has unrelated uncommitted documentation and
-must not be reset or included accidentally.
+The verified default and integration branch is `dev`; `master` mirrors
+upstream.
 
 1. Publish the six existing refactor commits ending at `9a56727` in a
    foundation PR to `dev` (remote base `dc26aa8`). Preserve their history.
@@ -50,31 +56,45 @@ Build, sanitizers, fuzzing and analysis passed on both PR heads. The capture
 merge tree equals its tested head `6690ded`. These integrations did not change
 the installed daemon or publish a release.
 
-[GPU dossier PR #4](https://github.com/LCS-Dev-Ergos/Yabai/pull/4) was
-integrated at `c7e76a2` after complete CI. It preserves the feasibility data
-and prototype; the production renderer still uses corrected rectangle capture.
-[AX/callback hardening PR #3](https://github.com/LCS-Dev-Ergos/Yabai/pull/3)
-was integrated at `7cbcf5a` after review and complete CI. Its bounded live
-checks passed before the request to defer new live campaigns until reboot.
+Subsequent integration: [GPU feasibility dossier PR #4](https://github.com/LCS-Dev-Ergos/Yabai/pull/4)
+merged at `c7e76a2`, then [AX/callback hardening PR #3](https://github.com/LCS-Dev-Ergos/Yabai/pull/3)
+at `7cbcf5a`, each after all four CI checks passed. The dossier preserves the
+feasibility data and prototype; the production renderer still uses corrected
+rectangle capture. The hardening candidate completed 12
+requests/callbacks/ready overlays/teardowns and two recorded bar/icon checks;
+its helper responsiveness and application-observation recovery are documented
+in [effects lifetime hardening](../reports/Effects-Lifetime-Hardening_8.0.0-lcs1.md).
+The signed lcs.32 baseline was restored after that campaign. Final code-only
+[IPC PR #6](https://github.com/LCS-Dev-Ergos/Yabai/pull/6) then merged at
+`267df9e`, followed by [release preparation PR #5](https://github.com/LCS-Dev-Ergos/Yabai/pull/5)
+at `93feb9b`. Both complete PR check sets passed; the final merge tree equals
+the tested combined candidate. Release and final runtime identity are recorded
+in the local release record mentioned above.
+
+After the release, PR #7 merged at `e7e8915` and PR #8 at `f33d1ac`, each
+after all four CI jobs passed. PR #7 skips a pending snapshot presentation
+when fast input is accepted; PR #8 applies the same fast policy to absolute
+numeric requests. Their live evidence is kept in a local, unpublished
+validation record, because it contains host-specific identity data.
 
 The buffer/GPU feasibility experiment remains experimental. Its full-resolution
-headless requests succeeded, but the user reported Space navigation during the
-ABBA campaign with the legacy installed daemon, followed by a daemon restart.
+headless requests succeeded, but Space navigation took place during the ABBA
+campaign with the legacy installed daemon, followed by a daemon restart.
 Those timings and WindowServer memory deltas cannot rank the backends. Keep the
 corrected rectangle renderer for this release unless later controlled,
 presented-frame evidence justifies replacing it. See
-`docs/reports/effects-buffer-gpu-spike-2026-09-29.md` in `dev`.
+[the buffer/GPU spike report](../reports/Effects-Buffer-GPU-Spike_8.0.0-lcs1.md).
 
-The user's subsequent report of more than 15,000 WindowServer ports adds a
-Mach-port lifecycle check to live acceptance. A high total alone does not
-establish a leak or ownership by Yabai. Compare per-process counts across
-controlled transitions, a client-alive hold and daemon exit. Review found a
-separate missing send-right release in JankyBorders notification lookup, an
-unchecked 512-entry notification capacity, and a stale event-tap pointer on
-failed setup. The code-only candidate `c10ccbe` corrects these with focused
-tests and is awaiting separate integration; its dependency is merged into the
-release preparation branch so combined CI can run. Do not attribute these
-defects to the WindowServer total without evidence.
+A later report of more than 15,000 WindowServer ports adds a Mach-port
+lifecycle check to live acceptance. A high total alone does not establish a
+leak or ownership by Yabai. Compare per-process counts across controlled
+transitions, a client-alive hold and daemon exit. Review found a separate
+missing send-right release in JankyBorders notification lookup, an unchecked
+512-entry notification capacity, and a stale event-tap pointer on failed
+setup. Their narrow corrections and regression tests were integrated through
+code-only PR #6. Do not attribute these defects to the WindowServer total
+without evidence. The machine diagnostic report stays local and is excluded
+from public commit history.
 
 A cherry-pick copies a commit; fast-forward advances a branch without copying
 commits. These are different operations. Use PR review and preserve the
@@ -83,15 +103,15 @@ must follow repository settings and retain clean dependency ordering.
 
 ## Parallel implementation ownership
 
-| Worker | Branch / worktree | Scope |
+| Work stream | Branch | Scope |
 | --- | --- | --- |
-| GPT-6 Sol High, baseline and GPU | `lcs-code/crossfade-capture-retention`, `4953/Yabai`; then `lcs-code/effects-buffer-gpu`, `effects-gpu/Yabai` | Prepare foundation/capture PRs, then isolated capture/presentation prototype and comparison harness |
-| GPT-6 Sol High, hardening | `lcs-code/effects-lifetime-hardening`, `effects-lifetime/Yabai` | Bound failed AX observation work/retries, then bound unresolved screenshot contexts, in separate commits |
+| Baseline and GPU | `lcs-code/crossfade-capture-retention`; then `lcs-code/effects-buffer-gpu` | Prepare foundation/capture PRs, then isolated capture/presentation prototype and comparison harness |
+| Hardening | `lcs-code/effects-lifetime-hardening` | Bound failed AX observation work/retries, then bound unresolved screenshot contexts, in separate commits |
 
-Both implementation worktrees start at `2ff0671`. The GPU worker initially
-owns only an isolated tool and its report; it must not change the production
-snapshot lifecycle owned by the hardening worker. Any shared interface change
-requires coordinator review. The old interrupted measurement worker remains
+Both implementation branches start at `2ff0671`. The GPU work initially owns
+only an isolated tool and its report; it must not change the production
+snapshot lifecycle owned by the hardening work. Any shared interface change
+requires maintainer review. The earlier interrupted measurement work remains
 inactive. No new continuous capture service is assumed.
 
 ## Required reliability work
@@ -118,7 +138,7 @@ Compare against the existing path with the same physical dimensions, display,
 SDR output, cursor policy, Space pair, duration and load, in both run orders.
 Separate acquisition, preparation, Dock/focus, first presented change and
 frame pacing. Track memory with the client alive, global GPU power and idle
-cost. GPU completion alone does not prove that the user saw a frame.
+cost. GPU completion alone does not prove that a frame was seen.
 
 Accept production integration only if the candidate demonstrates a repeatable
 useful gain without worse visual continuity, memory bounds, input latency or
@@ -129,11 +149,11 @@ requirements.
 
 ## Acceptance before release
 
-User update, 2026-09-29: complete the main implementation/release work now;
-run new live measurements only after the user reboots with few active
-processes. Preserve the completed bounded live evidence. Defer the new
-WindowServer rights-type comparison and further visual/performance campaigns
-to that fresh-system session. Offline regression checks, CI, signing, package
+Scope decision, 2026-09-29: complete the main implementation and release work
+first; run new live measurements only after a reboot with few active
+processes. Preserve the completed bounded live evidence. The new WindowServer
+rights-type comparison and further visual/performance campaigns wait for that
+fresh-system session. Offline regression checks, CI, signing, package
 preparation and minimal installed-identity verification may proceed; pending
 live coverage must remain explicit in the release handoff.
 
@@ -157,5 +177,5 @@ live coverage must remain explicit in the release handoff.
   and actual installed binary/payload. Installation success alone is not live
   behavioral acceptance.
 
-Evidence baseline: [extended capture dossier](../reports/capture-extended-results-2026-09-29.md).
-Design alternatives: [effects engine proposals](effects-engine-proposals.md).
+Evidence baseline: [extended capture dossier](../reports/Capture-Extended-Results_8.0.0-lcs1.md).
+Design alternatives: [effects engine proposals](EFFECTS-ENGINE-PROPOSALS.md).

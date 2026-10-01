@@ -11,7 +11,7 @@ yabai -m space --navigate move 3 0.95 0.1
 
 Arguments are the action (`focus` or `move`), a space selector, the effect and
 its duration in `[0,1]` seconds. The effect is `crossfade`, a
-[crossfade of the display](effects.md#desktop-crossfade), or the starting
+[crossfade of the display](EFFECTS.md#desktop-crossfade), or the starting
 opacity in `(0,1]` of the destination's windows. A zero duration disables it.
 `next` and `prev` wrap to the first/last space, like the previous shell
 script. Other selectors follow the ordinary space selectors.
@@ -81,18 +81,18 @@ Desktop from a bounded queue, in the order requested:
   The first step of a burst keeps it too: it starts before the next press is
   known, and a running blend is never shortened. Each crossfade step first
   spends about 75 ms capturing and preparing the outgoing image (see
-  [effects](effects.md#desktop-crossfade)). On the MacBook display a burst
+  [effects](EFFECTS.md#desktop-crossfade)). On the MacBook display a burst
   ran one step every 380 ms on lcs.24. On two 4K displays steps ran 300–460
   ms apart on lcs.29: capturing and preparing the 20-million-pixel image took
   about 110 ms of each, Dock's switch and the activation about 100 ms, and the
-  blend of the step before the rest; see [performance](performance.md).
+  blend of the step before the rest; see [performance](PERFORMANCE.md).
 - A valid, accepted `focus next`, `focus prev` or numeric `focus` request
   arriving within 400 ms of the previous accepted focus request starts a quick
   burst: every switch queued from then on, the last included, shows no effect
   and waits only for the 100 ms rhythm, and the next switch ends the blend of
   the step before. On two 4K displays a crossfade step takes 300–460 ms, more
-  than such presses leave between them. The bound comes from the user's own
-  presses: 150 recorded ones came 450–600 ms apart when meant to look at each
+  than such presses leave between them. The bound comes from recorded key
+  presses: 150 of them came 450–600 ms apart when meant to look at each
   Desktop, and 150–350 ms apart in quick runs. A held key's repeats are quick
   presses. Numeric requests keep their absolute destinations and do not join
   relative ingress groups; numeric and relative requests share the burst clock.
@@ -212,7 +212,7 @@ Update the package and script together. The current `crossfade` renderer runs
 in the daemon and uses the ordinary payload Space-focus operation. It requires
 macOS 15.2+ and existing Screen Recording permission; unavailable capture falls
 back to an ordinary switch. The payload's own Space-alpha crossfade was removed
-in `2.1.31-lcs.13` (see [effects](effects.md#space-alpha-crossfade-removed)).
+in `2.1.31-lcs.13` (see [effects](EFFECTS.md#space-alpha-crossfade-removed)).
 
 ## Verification boundaries
 
@@ -249,7 +249,7 @@ queries. The subsequent daemon correction removes those calls from ordinary
 navigation; its live latency still needs verification after activation.
 WindowServer consumed about 82% of one core even at rest in that session.
 
-Payload `2.1.31-lcs.3` adds the [shared, time-based opacity engine](effects.md).
+Payload `2.1.31-lcs.3` adds the [shared, time-based opacity engine](EFFECTS.md).
 The activated lcs.5 latency checks and remaining signal-dispatch bottleneck
-are recorded in [performance investigation](performance.md). Frame timing
+are recorded in [performance investigation](PERFORMANCE.md). Frame timing
 and visual acceptance remain separate from command completion.

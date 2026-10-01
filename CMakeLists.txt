@@ -177,7 +177,7 @@ target_link_libraries(fade_tests PRIVATE "-framework CoreFoundation" "-framework
 add_test(NAME fade_tests COMMAND fade_tests)
 set_tests_properties(fade_tests PROPERTIES TIMEOUT 15)
 
-# libFuzzer targets for the two socket protocols, see docs/testing.md. They need
+# libFuzzer targets for the two socket protocols, see docs/TESTING.md. They need
 # a clang that ships libFuzzer, which Apple's does not. Each also runs as a
 # short CTest test, writing new inputs to the build directory.
 option(YABAI_FUZZ "Build the libFuzzer targets and run them as tests" OFF)
@@ -216,7 +216,7 @@ if(YABAI_FUZZ)
 endif()
 
 # Tools that keep the scripting addition working across macOS releases, see
-# docs/osax.md. They inspect the running system, so they build for the host.
+# docs/OSAX.md. They inspect the running system, so they build for the host.
 option(YABAI_BUILD_TOOLS "Build the scripting-addition tools and their test" ON)
 
 if(YABAI_BUILD_TOOLS AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")

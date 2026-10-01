@@ -2,12 +2,12 @@
 
 Date: 2026-09-29. Status: candidate committed as `2131b94`; subsequently
 validated in bounded temporary live sessions. See [live results and remaining
-gates](capture-live-results-2026-09-29.md). The signed service was restored;
+gates](Capture-Live-Results_8.0.0-lcs1.md). The signed service was restored;
 no release or daily-use installation was performed.
 
 ## Why this backend
 
-The [retention diagnosis](windowserver-capture-retention-2026-09-29.md)
+The [retention diagnosis](WindowServer-Capture-Retention_7.1.25-lcs32.md)
 isolated approximately one 6016 × 3384 frame of cumulative WindowServer
 growth per call to `captureImageInRect` on the tested macOS 27.2 host. Twelve
 calls to `captureScreenshotWithRect` did not show that slope in a bounded
@@ -56,7 +56,7 @@ public ARC reproducer compiled but was not run here. These are offline checks.
 
 ## Coordinated live protocol
 
-Run only in a quiet interval agreed with the performance investigator. Keep
+Run only in a quiet interval coordinated with other measurement work. Keep
 the installed daemon and the ordinary checkout untouched until the candidate
 is selected for a separate deployment check. Record the exact binary hash,
 macOS build, WindowServer PID, display bounds/modes, scaling, color settings,
@@ -73,7 +73,7 @@ Space pair and workload before comparing.
    WindowServer rises by about three frames or 300 MiB. Measure READY, every
    STEP, the hold while the client is alive and after exit. Do not interpret
    only the post-exit value: the known growth disappeared on client exit.
-3. After an authorized candidate activation, use the same two-display
+3. After candidate activation, use the same two-display
    workload and compare six effect-free switches against six crossfades, with
    per-step `top` MEM, a hold, and no concurrent Desktop reordering. A stable
    plateau during the daemon's lifetime is required before longer trials.

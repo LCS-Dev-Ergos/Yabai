@@ -28,7 +28,7 @@ editor's root `compile_commands.json` symlink.
   size and query string escaping. The signal tests launch
   harmless local shell actions and check socket lifetime, isolated event
   variables and retained standard output/error. They do not run the daemon.
-- `navigation_tests` checks the fork's [space navigation](navigation.md)
+- `navigation_tests` checks the fork's [space navigation](NAVIGATION.md)
   implementation with simulated OS calls, including rapid repeats, failure
   restoration, the starting Desktop of relative navigation, the raise for
   applications with windows on two displays, the focus a burst's last step
@@ -61,12 +61,12 @@ editor's root `compile_commands.json` symlink.
 - `focus_tests` exercises production focus-event handling with simulated OS
   calls: reuse of pending observations, stale activations, invalid/hidden or
   minimized windows, and the normal AX fallback, including no focused window.
-- `fade_tests` checks the production [opacity engine](effects.md) with simulated
+- `fade_tests` checks the production [opacity engine](EFFECTS.md) with simulated
   SkyLight calls, including timing, focus ownership, shared navigation epochs,
   display cadence/cancellation, failure restoration and concurrent requests.
 - `osax_patterns` checks the payload's lookups against the local Dock binary
   on Apple Silicon when `YABAI_BUILD_TOOLS=ON` (the default). It inspects the
-  binary without loading a payload; see [Scripting addition](osax.md).
+  binary without loading a payload; see [Scripting addition](OSAX.md).
 - `sanitize` instruments yabai and its unit tests with ASan and UBSan.
 - `thread-sanitize` uses TSan and UBSan instead. Run it separately from ASan.
 
@@ -187,7 +187,7 @@ JSON results locally. `--images` also saves PNGs for inspection and adds
 capture work; do not use that mode to benchmark frame timing.
 
 The top 40 logical points are specific to this bar layout. Its endpoint-based
-luminance check catches the [lcs.21 disappearance](reports/lcs22-space-crossfade.md),
+luminance check catches the [lcs.21 disappearance](reports/Space-Crossfade_7.1.25-lcs22.md),
 but cannot establish Finder icon visibility, focus correctness throughout a
 burst, smooth motion or CPU/GPU performance. Notifications and changing bar
 content can affect the score; inspect images when the result is ambiguous.
@@ -321,11 +321,12 @@ schedule and snapshot tests separately under ThreadSanitizer.
 
 ## Live release checks
 
-Installing a build or running `sudo yabai --load-sa` can restart Dock. Obtain
-the user's approval before changing the active installation or loading the
-payload. After the user switches to the signed release, check space creation,
-destruction, focus and moves (`space --move`, `--swap` and `--display`), plus
-window opacity, layer, shadow and sticky state. Verify the load result and
-query spaces through the signed `yabai` binary. The unsigned `sa_client`
-works directly against the payload only in an explicit unsigned local build.
-On macOS 27 the payload handshake expects attribute bits `0x5D`.
+Installing a build or running `sudo yabai --load-sa` can restart Dock. The
+maintainer approves any change to the active installation and any payload
+load; automated tooling does not perform them. After the system is switched
+to the signed release, check space creation, destruction, focus and moves
+(`space --move`, `--swap` and `--display`), plus window opacity, layer, shadow
+and sticky state. Verify the load result and query spaces through the signed
+`yabai` binary. The unsigned `sa_client` works directly against the payload
+only in an explicit unsigned local build. On macOS 27 the payload handshake
+expects attribute bits `0x5D`.

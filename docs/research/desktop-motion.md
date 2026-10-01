@@ -63,7 +63,7 @@ do not turn it into a presentation fence or add an arbitrary waiting timer.
 
 ## Applying this to the lcs.11 baseline
 
-The subsequent implementation and its verification limits are in [effects.md](../effects.md).
+The subsequent implementation and its verification limits are in [effects](../EFFECTS.md).
 
 The [navigation path](../../src/navigation/step.c) dims destination windows,
 switches Space, focuses/possibly raises a window, then submits fades one by
@@ -123,11 +123,11 @@ compositing. [Core Animation performance](https://developer.apple.com/library/ar
 5. Gate spatial springs/private compositor interpolation on an isolated visual
    prototype proving interruption, reversal, focus, live content and cleanup.
    The prior native-alpha probe did not establish rendered interpolation or
-   cancellation; see [effects.md](../effects.md). It remains experimental.
+   cancellation; see [effects](../EFFECTS.md). It remains experimental.
 
 For each prototype test single presses, held keys, reversals, empty/populated
 Desktops, the same app across displays, cancellation, window close and display
 sleep/reconfiguration. Include Reduce Motion with immediate or restrained
-feedback. Require frame-based evidence and user comparison before adopting a
+feedback. Require frame-based evidence and a side-by-side comparison before adopting a
 visual default; clean unit tests and low daemon CPU do not certify fluidity.
 [Apple reduced-motion guidance](https://developer.apple.com/help/app-store-connect/manage-app-accessibility/reduced-motion-evaluation-criteria).

@@ -2,23 +2,22 @@
 
 Status: proposals, not an implementation specification. Recorded 2026-09-29.
 
-The user requested a design discussion and subsequently asked to preserve its
-results here. The two broader engine workstreams remain undispatched. The user
-has now authorized a focused memory correction in a new GPT-6 Sol / High chat,
-on isolated worktree `4953/Yabai`, branch `lcs-code/crossfade-capture-retention`.
-The reported WindowServer memory growth
-takes priority over selecting or implementing a replacement renderer.
+These alternatives were recorded after a design discussion. The two broader
+engine workstreams remain unscheduled. A focused memory correction proceeds
+first, on branch `lcs-code/crossfade-capture-retention`. The reported
+WindowServer memory growth takes priority over selecting or implementing a
+replacement renderer.
 
 Update after the same day's investigation: the installed lcs.32 crossfade
 reproduces cumulative WindowServer growth. The growth is independently
 reproduced by `SCScreenshotManager captureImageInRect`, without Yabai code,
 overlay windows or Space changes. Alternative capture APIs did not show that
-same pattern in bounded trials. See the [diagnostic report](../reports/windowserver-capture-retention-2026-09-29.md).
+same pattern in bounded trials. See the [diagnostic report](../reports/WindowServer-Capture-Retention_7.1.25-lcs32.md).
 Replacing or containing this capture path is a prerequisite for the two
 workstreams below; a GPU renderer alone would not address the measured trigger.
 The focused replacement and bounded live measurements are recorded in the
-[decision-data report](../reports/capture-decision-data-2026-09-29.md); its
-subsequent [extended campaign](../reports/capture-extended-results-2026-09-29.md)
+[decision-data report](../reports/Capture-Decision-Data_8.0.0-lcs1.md); its
+subsequent [extended campaign](../reports/Capture-Extended-Results_8.0.0-lcs1.md)
 completed 108 ready effects in one daemon lifetime with a 120-second live-client
 hold, matched system-wide GPU samples, and first-Space/portrait visuals. The
 focused fix remains a candidate for the next isolated optimization/prototype;
@@ -44,9 +43,9 @@ times of 51 ms capture, 58 ms preparation and 97 ms switch/activation. These are
 not measurements of the current binary. The refactor report recorded first
 SPACE_CHANGED handlers up to 0.9 s and APPLICATION_FRONT_SWITCHED at 200–340 ms.
 
-Sources: [performance](../performance.md), [navigation](../navigation.md),
-[effects](../effects.md), and the 2026-09-28 external
-`~/Desktop/Yabai-Refactor-Report.md`, section 6.
+Sources: [performance](../PERFORMANCE.md), [navigation](../NAVIGATION.md),
+[effects](../EFFECTS.md), and section 6 of the 2026-09-28 refactor report
+(kept outside the repository).
 
 ## What can be borrowed from Hyprland
 
@@ -123,7 +122,7 @@ Socket authentication and private socket creation remain separate security
 work. Replacing the renderer does not resolve them; check the concurrent
 hardening work before assigning overlapping changes.
 
-## Two candidate workstreams, not yet dispatched
+## Two candidate workstreams, not yet scheduled
 
 **A — Navigation and lifecycle baseline.** Reduce redundant reconciliation,
 discard superseded visual preparation, and establish bounded ownership and
@@ -164,7 +163,7 @@ in the same bounded test. The precise private object remains unknown. The
 installed lcs.32 daemon used 0.0–0.1% CPU and approximately 21 MiB at idle in a
 six-second sample. These observations prioritize the following work:
 
-1. **Close the capture lifetime defect first.** Validate the delegated backend
+1. **Close the capture lifetime defect first.** Validate the replacement backend
    with the daemon alive, then visual continuity and longer bounded workloads.
    Stable post-exit memory alone is insufficient. Do not require a renderer
    rewrite to deliver this fix or assume the new API is faster.
@@ -218,7 +217,7 @@ focus rather than command return time.
 
 Candidate `2131b94` now has bounded live acceptance for the capture-memory
 regression, primary-display icons/bar and the tested focus/burst cases.
-The [live report](../reports/capture-live-results-2026-09-29.md) records the
+The [live report](../reports/Capture-Live-Results_8.0.0-lcs1.md) records the
 remaining limits and orders the next experiments. No-effect presentation was
 33–43 ms; 250 ms crossfades reached 5% change in 248–292 ms. Keep the focused
 capture fix and measure the remaining phase delays before choosing a GPU

@@ -1,13 +1,13 @@
 # Capture replacement: decision data after the focused fix
 
-**Later evidence on the same date:** The [extended campaign](capture-extended-results-2026-09-29.md) completed the long same-daemon memory hold, matched GPU blocks, first-Space visuals and portrait routing. Its findings supersede the open-gate status and next-experiment recommendations below; this report preserves the earlier measurements and their original limits.
+**Later evidence on the same date:** The [extended campaign](Capture-Extended-Results_8.0.0-lcs1.md) completed the long same-daemon memory hold, matched GPU blocks, first-Space visuals and portrait routing. Its findings supersede the open-gate status and next-experiment recommendations below; this report preserves the earlier measurements and their original limits.
 
-Date: 2026-09-29. Worktree `lcs-code/crossfade-capture-retention` at
+Date: 2026-09-29. Branch `lcs-code/crossfade-capture-retention` at
 `ad3826e` before these diagnostics; capture fix `2131b94` on `9a56727`.
-The user authorized one measurement campaign with a temporary unsigned
-daemon/payload and restoration. The first long runner stopped on a fixture
-error; a guarded continuation and a final small block were needed. No release
-or permanent install occurred.
+One measurement campaign used a temporary unsigned daemon/payload with
+restoration. The first long runner stopped on a fixture error; a guarded
+continuation and a final small block were needed. No release or permanent
+install occurred.
 
 ## Decision state
 
@@ -160,7 +160,7 @@ crossfade, and no per-process energy claim is made.
   screenshot configuration. Only one Space existed on that display; no
   portrait **transition** was tested. Current capture intent is SDR/local;
   HDR fidelity and display reconfiguration were not tested. The available
-  Computer Use control had click/drag but no free pointer motion, so moving
+  UI automation tool had click/drag but no free pointer motion, so moving
   cursor coverage was not claimed. The first Space 3→1/1→3 visual cases were
   prepared but skipped when the final mini block crossed its memory cap.
 - Final mini block requested two captures: one became ready and one callback

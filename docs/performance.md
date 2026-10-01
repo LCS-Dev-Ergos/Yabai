@@ -16,7 +16,7 @@ is not an isolated estimate of the release's improvement.
 
 WindowServer used 0.40 CPU seconds during a 2.66 s idle control, about 15% of
 one core. Its earlier 82% idle observation did not recur in this control.
-Neither result establishes that the user's intermittent 90% peak is fixed.
+Neither result establishes that the intermittent 90% peak that was reported is fixed.
 
 Stack sampling identified the focus path's explicit 40 ms delay, AX queries
 in event handlers, and substantial time in `event_signal_flush`'s `fork`.
@@ -54,7 +54,7 @@ environment. Subscribers and filters are retained; events are not dropped.
 See Apple's [spawn flag documentation](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/man/man3/posix_spawnattr_setflags.3).
 
 Local regression tests do not establish live latency. The activated lcs.7
-measurements below include this signal change and Claude's Desktop-move fix.
+measurements below include this signal change and the macOS 27 Desktop-move fix.
 
 ## Activated lcs.7 and focus events
 
@@ -64,7 +64,7 @@ spaces 7/6 measured 1.107 s and 261 ms median in two runs; direct focus measured
 249 ms. All succeeded. Daemon CPU was 0.03–0.05 s, but WindowServer used
 1.96–2.41 s during the navigation trials. An idle control used 0.15 s over
 2.65 s (about 6% of one core). Lower daemon CPU did not establish lower latency
-or better perceived fluidity; the user reported little visible improvement.
+or better perceived fluidity; little visible improvement was reported.
 
 A five-second sample during 24 switches located most event-loop waiting in
 the activation handler's AX focused-window lookup (1,145 of 4,095 samples),
@@ -84,10 +84,10 @@ delay is unchanged. The new `focus_tests` regression failed on redundant AX
 lookup before the fix and exercises observation validity and fallback paths.
 Its effect on the live workload still requires activation and measurement.
 
-The user also reported intermittent navigation from the last occupied Desktop
-back to the first, skipping empty Desktops. Two controlled `next` sequences
+Intermittent navigation from the last occupied Desktop back to the first,
+skipping empty Desktops, was also reported. Two controlled `next` sequences
 from Desktop 7 traversed 8, 9, 10, 11, 1; 11 belongs to the second display.
-That did not reproduce the reported skip. The user confirmed it also happens
+That did not reproduce the reported skip. It was confirmed to happen
 with well-spaced individual key presses, so it is not confined to key repeat.
 Keep focus/display changes in the investigation; this change does not claim
 to fix it.
@@ -107,7 +107,7 @@ active display there.
 
 Isolated navigations completed in 63–278 ms. WindowServer used 5.3–5.5 CPU
 seconds over 12.3–12.5 s runs, the daemon 0.06–0.07 s. A five-second control
-without navigation measured 1.9 s, but the user was active and a video was
+without navigation measured 1.9 s, but the Mac was in use and a video was
 playing, so it does not isolate the cost of switching.
 
 A 1 ms sample of 13 navigations kept the event loop busy for 2.2 s, about
@@ -129,7 +129,7 @@ The follow-up merges relative requests that arrive while one waits, counts
 from the Desktop the last navigation switched to, raises the destination
 window when its application has a window visible on another display, and
 lets the activation handler reuse the window navigation focused. See
-[navigation](navigation.md). The Dotfiles `sketchybar_focus` signal triggered
+[navigation](NAVIGATION.md). The Dotfiles `sketchybar_focus` signal triggered
 a SketchyBar event that no item subscribes to. None of this has been measured
 live yet.
 
@@ -148,7 +148,7 @@ Sixteen absolute navigations between Desktops 7/6 at 150 ms intervals measured
 (78–85% of one core). The idle control used 0.66 WindowServer CPU seconds over
 2.66 seconds (25%). Absolute selectors deliberately are not merged. These
 runs do not establish a uniform latency reduction or elimination of the CPU
-peak reported by the user.
+peak that was reported.
 
 Two 40-request runs through the installed wrapper at 30 ms intervals drained
 0.91/1.61 seconds after the last submission. A separate probe sent the same
@@ -258,7 +258,7 @@ On 2026-09-27 lcs.16 ran with payload `2.1.31-lcs.7` / `0x5D` and the main
 display at "looks like 2560×1440". Two kitty windows showed intermediate alpha
 values at the same timestamps. That does not show that transactions set other
 applications' window alpha: after the first frame, these payloads wrote each
-window on its own (see [effects](effects.md)).
+window on its own (see [effects](EFFECTS.md)).
 A fade trace wrote its first frame about 2 ms after the start, then stood still
 for 54 ms: Dock's main thread delivered the display callbacks late after the
 switch, and the display-paced watchdog was 50 ms. lcs.17 writes a frame from
@@ -381,7 +381,7 @@ ms median focus for 3/4 with one of five bursts ending on the wrong window, and
 
 The daemon's event loop was held by single events for up to 512 ms (a
 navigation step raising Edge), 212 ms (`APPLICATION_FRONT_SWITCHED`), 301 ms
-(`SPACE_NAVIGATION_FOCUS`) and 577 ms (`SPACE_CHANGED`, during the user's own
+(`SPACE_NAVIGATION_FOCUS`) and 577 ms (`SPACE_CHANGED`, during manual
 navigation). A paced step ran 186 ms late behind two of them. A 1 ms profile
 of ten Edge switches spent the loop's time in WindowServer queries (the
 visibility snapshot, window lists per Desktop, a window's Desktop) and in
@@ -397,9 +397,9 @@ every 16.7 ms. First and last visible change, two runs per duration: 150 ms
 63-130 and 147-163 ms (one run shrank to 2 frames behind a WindowServer
 stall), 200 ms 59-96 and 193-196 ms, 250 ms 73-81 and 231-240 ms. Edge bursts
 ended 6 of 6 right through `space.sh` and 6 of 6 through the socket, with no
-"ordered on non-visible space" switch in Dock's log. The user reports that
-SketchyBar briefly disappears during a crossfade to an empty or an Edge
-Desktop; not measured yet. Raw evidence is in ignored `build/lcs21-*.log`.
+"ordered on non-visible space" switch in Dock's log. SketchyBar was reported to
+disappear briefly during a crossfade to an empty or an Edge Desktop; not
+measured yet. Raw evidence is in ignored `build/lcs21-*.log`.
 
 ## Activated lcs.24: rapid navigation
 
@@ -438,7 +438,7 @@ refusing them. Raw evidence is in ignored `build/lcs24-burst-*.log`.
 
 On 2026-09-28 lcs.29 ran on the MacBook Pro (M1 Pro, 16 GB) with two Dell
 U3223QE displays at 3008 × 1692 points, 6016 × 3384 pixels each, and
-`crossfade 0.25`. The user kept away from keyboard and pointer; requests went
+`crossfade 0.25`. Keyboard and pointer stayed idle; requests went
 to the socket from Desktop 2 through `tools/live`:
 
 | Workload | Switches | Result |
@@ -485,6 +485,6 @@ behavior in scope when measuring the focus-event changes.
 
 The current fade worker is time-based but not synchronized to display refresh.
 Display-linked pacing and WindowServer-side opacity interpolation remain
-investigations; see [effects](effects.md). Removing avoidable IPC, process
+investigations; see [effects](EFFECTS.md). Removing avoidable IPC, process
 creation and AX work is measurable without changing the compositor. No
 Hyprland-equivalent frame latency or rendering quality has been established.

@@ -2,8 +2,8 @@
 
 Payload `2.1.31-lcs.6` separates temporary Desktop navigation effects from
 ordinary focus opacity. This implements the ownership and pacing work from
-the [live investigation](reports/lcs11-opacity-conflict.md) and
-[Apple motion research](research/desktop-motion.md).
+the [live investigation](reports/Opacity-Conflict_7.1.25-lcs11.md) and
+[Apple motion research](research/DESKTOP-MOTION.md).
 
 ## Navigation lifecycle
 
@@ -124,7 +124,7 @@ normally, and fades that image out over the destination. It preserves the full
 Desktop blend without changing Space alpha/levels or the alpha of Finder,
 wallpaper, SketchyBar or application windows. The installed lcs.22 Space-based
 path reproduced both disappearing Finder icons and a black transition into
-Desktop 1; the [lcs.23 report](reports/lcs23-snapshot-crossfade.md) records the comparison.
+Desktop 1; the [lcs.23 report](reports/Snapshot-Crossfade_7.1.25-lcs23.md) records the comparison.
 
 Snapshot capture now uses the macOS 26+ `captureScreenshotWithRect` API, with
 SDR output in the local display's colour space and explicit physical pixel
@@ -132,7 +132,7 @@ dimensions. It requests the cursor, whose visual match with the previous
 API still needs a live check. Earlier macOS versions omit this optional
 effect: the prior rectangle API produced cumulative WindowServer memory growth
 on the tested macOS 27.2 host, and no older-system replacement has been
-validated. See the [capture backend report](reports/crossfade-capture-backend-2026-09-29.md).
+validated. See the [capture backend report](reports/Crossfade-Capture-Backend_8.0.0-lcs1.md).
 Existing Screen Recording permission is required; the navigation path never
 requests permission. Unsupported or
 refused capture, allocation failure and capture timeout all fall back to an
@@ -149,7 +149,7 @@ late the event loop comes to it.
 The image is drawn into the window's backing before the window is shown: a
 Core Animation remote surface presented uninitialized white frames during
 rapid preparation and cancellation (see the
-[lcs.24 report](reports/lcs24-snapshot-continuity.md)). The window takes the capture's
+[lcs.24 report](reports/Snapshot-Continuity_7.1.25-lcs24.md)). The window takes the capture's
 colour space, the display's own profile, before its context is created.
 Without it every pixel was converted to the window's default space: the draw
 of a 4112 × 2658 capture took 46–69 ms, against 15–18 ms without conversion,
@@ -189,7 +189,7 @@ freeze within that image for the short blend.
 
 The pacing lets each blend end before the next step starts; steps queued
 behind others, and those a held key repeats, blend in 125 ms at most (see
-[navigation](navigation.md#pacing)). With pacing disabled, interruption
+[navigation](NAVIGATION.md#pacing)). With pacing disabled, interruption
 discards the previous image; seamless retargeting in that mode is not promised. Reduce Motion retains this nonspatial
 blend. Fullscreen Desktops and already-visible destinations switch without it.
 No blur is applied.
@@ -211,7 +211,7 @@ it established still holds:
 - A Desktop left at another alpha or level stays that way: Dock's own switches
   and Mission Control do not reset them.
 
-The [lcs.22 report](reports/lcs22-space-crossfade.md) has the measurements.
+The [lcs.22 report](reports/Space-Crossfade_7.1.25-lcs22.md) has the measurements.
 
 ## Native compositor investigation
 

@@ -1,9 +1,9 @@
 # Capture replacement: live results and next decision
 
-**Latest evidence:** The [extended campaign](capture-extended-results-2026-09-29.md) completed the longer memory, GPU, first-Space and portrait measurements. The follow-up status below is historical and superseded.
+**Latest evidence:** The [extended campaign](Capture-Extended-Results_8.0.0-lcs1.md) completed the longer memory, GPU, first-Space and portrait measurements. The follow-up status below is historical and superseded.
 
 **Follow-up on the same date:**
-[capture-decision-data-2026-09-29.md](capture-decision-data-2026-09-29.md)
+[decision data](Capture-Decision-Data_8.0.0-lcs1.md)
 supersedes the next-experiment plan below. The longer 50-effect client-alive
 gate stopped at 20 on a conservative WindowServer memory threshold. A later
 short block showed an even larger transient peak that returned to baseline
@@ -12,8 +12,8 @@ remained bounded for 30 captures. The long gate and first-Space/GPU acceptance
 are still open; do not extrapolate the 12-effect pass below to them.
 
 Date: 2026-09-29. Candidate `2131b94`, based on `9a56727`, branch
-`lcs-code/crossfade-capture-retention`. The user authorized local unsigned
-validation and continuing work in this worktree. No release was created.
+`lcs-code/crossfade-capture-retention`. Validation used a local unsigned
+build; no release was created.
 
 ## Decision
 
@@ -28,15 +28,15 @@ Space reconciliation. Keep renderer experiments out of the memory-fix patch.
 
 ## Reproducible setup
 
-- Worktree `/Users/lcs-dev/.codex/worktrees/4953/Yabai`.
+- Branch `lcs-code/crossfade-capture-retention`.
 - Release configured in `build/live-release` with
   `-DYABAI_ALLOW_UNSIGNED_LOCAL=ON -DYABAI_LINK_COMPILE_COMMANDS=OFF`.
 - Candidate SHA-256:
   `b4bc68c8319503020ac4ba3b1615178f460ead41c013815528c0c01d4b5aafef`.
 - Snapshot, scheduling and queue CTests passed 3/3 in this Release build.
-  Previous agent's Debug and targeted sanitizer evidence remains separate.
+  Earlier Debug and targeted sanitizer evidence remains separate.
 - Temporary matching local payload `2.1.31-lcs.14`; private daemon/payload
-  sockets. The test config copied the ordinary user's config and omitted only
+  sockets. The test config copied the regular configuration and omitted only
   its automatic installed-payload reload commands. Candidate clients were
   resolved first in the test environment; ordinary on-disk config was unchanged.
 - macOS 27.2, WindowServer PID 453 throughout. Both external displays connected:
@@ -65,7 +65,7 @@ and restart Dock. The portable analysis command after recording is:
 python3 build/live-validation/analyze-presented.py
 ```
 
-The first invocation failed before changing the service because this tool's
+The first invocation failed before changing the service because the runner's
 process environment lacked `USER`; the runner now fills the actual login name
 from `getpwuid`. This is a harness environment issue, not candidate behavior.
 
@@ -84,9 +84,9 @@ by omitted effects.
 | After twelve crossfades and 8-second hold, daemon alive | 1981 MiB |
 
 This lacks the previous approximately 80 MiB-per-capture cumulative slope.
-A later planned 20-second hold was interrupted by user input after about seven
-seconds; the completed eight-second hold is the acceptance evidence. Restoration
-preserved the user's new focus. Do not report a completed 20-second hold.
+A later planned 20-second hold was interrupted by keyboard or pointer input
+after about seven seconds; the completed eight-second hold is the acceptance
+evidence. Restoration preserved the newly focused window. Do not report a completed 20-second hold.
 
 Across the three sessions there were 26 ready snapshots and zero missing-capture
 signposts. The daemon lifetime was reset between sessions: 26 is not a continuous

@@ -4,8 +4,8 @@ This map describes the daemon, its client and the Dock payload as they stand
 on `dev` with the local translation-unit refactor: which components exist,
 which thread runs what, how events flow and who owns each piece of state.
 It also lists the risks found while drawing the original map. Details of
-the fork's own features are in [navigation](navigation.md),
-[effects](effects.md) and [scripting addition](osax.md).
+the fork's own features are in [navigation](NAVIGATION.md),
+[effects](EFFECTS.md) and [scripting addition](OSAX.md).
 
 ## Components and processes
 
@@ -216,7 +216,7 @@ has not been checked on screen, so visual ordering remains open.
 The first-visit performance issue in `window_manager/spaces.c` is still open.
 That path lists Space windows, reconciles the BSP view and flushes visible
 window frames with AX. Deferring or batching those operations can change
-tiling order and focus timing. The requested first-lap `sample` profile has
+tiling order and focus timing. The planned first-lap `sample` profile has
 not run under the current compile-only verification limit, so no scheduling
 change is included in this candidate.
 
