@@ -9,13 +9,14 @@ static void parse_signal_text(char **text, char *value)
     *text = string_copy(value);
 }
 
-static bool parse_signal_pattern(char **text, regex_t *regex, bool *valid, bool *exclude, char *value, bool exclusion)
+static bool parse_signal_pattern(FILE *rsp, char **text, regex_t *regex, bool *valid, bool *exclude,
+                                 char *key, char *value, bool exclusion)
 {
     if (*valid) regfree(regex);
     parse_signal_text(text, value);
 
     *exclude = exclusion;
-    *valid = regcomp(regex, value, REG_EXTENDED) == 0;
+    *valid = pattern_compile(rsp, regex, key, value);
     return *valid;
 }
 
@@ -48,15 +49,13 @@ static void handle_domain_signal(FILE *rsp, struct token domain, char *message)
                 if (exclusion) unsupported_exclusion = key;
                 parse_signal_text(&signal.label, value);
             } else if (string_equals(key, ARGUMENT_SIGNAL_KEY_APP)) {
-                if (!parse_signal_pattern(&signal.app, &signal.app_regex, &signal.app_regex_valid,
-                                          &signal.app_regex_exclude, value, exclusion)) {
-                    daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
+                if (!parse_signal_pattern(rsp, &signal.app, &signal.app_regex, &signal.app_regex_valid,
+                                          &signal.app_regex_exclude, key, value, exclusion)) {
                     did_parse = false;
                 }
             } else if (string_equals(key, ARGUMENT_SIGNAL_KEY_TITLE)) {
-                if (!parse_signal_pattern(&signal.title, &signal.title_regex, &signal.title_regex_valid,
-                                          &signal.title_regex_exclude, value, exclusion)) {
-                    daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
+                if (!parse_signal_pattern(rsp, &signal.title, &signal.title_regex, &signal.title_regex_valid,
+                                          &signal.title_regex_exclude, key, value, exclusion)) {
                     did_parse = false;
                 }
             } else if (string_equals(key, ARGUMENT_SIGNAL_KEY_ACTIVE)) {

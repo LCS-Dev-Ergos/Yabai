@@ -3,8 +3,9 @@
 
 #include "../core_types.h"
 
-// Area: message.c parses tokens and selectors; commands/*.c handles domains;
-// message_loop.c accepts socket clients and dispatches their messages.
+// Area: message.c parses tokens and selectors; pattern.c bounds and compiles
+// rule and signal patterns; commands/*.c handles domains; message_loop.c
+// accepts socket clients and dispatches their messages.
 // Threads: the accept thread owns the socket; the event loop runs commands.
 // State: the accept thread's g_message_loop; command state lives in managers.
 // Callers: clients through the socket, startup and DAEMON_MESSAGE events.
@@ -323,6 +324,7 @@ static inline bool token_is_valid(struct token token);
 struct token_value token_to_value(struct token token);
 static bool token_value_to_finite_float(struct token_value value, float *result);
 static bool parse_grid(char *text, unsigned grid[6]);
+static bool pattern_compile(FILE *rsp, regex_t *regex, char *key, char *value);
 void daemon_fail(FILE *rsp, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 static void parse_key_value_pair(char *token, char **key, char **value, bool *exclusion);
 static uint8_t parse_value_type(char *type);

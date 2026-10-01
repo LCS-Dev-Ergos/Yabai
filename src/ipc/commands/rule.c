@@ -10,8 +10,8 @@ static void parse_rule_text(char **text, char *value)
     *text = string_copy(value);
 }
 
-static bool parse_rule_pattern(struct rule *rule, char **text, regex_t *regex, enum rule_flag valid,
-                               enum rule_flag exclude, char *value, bool exclusion)
+static bool parse_rule_pattern(FILE *rsp, struct rule *rule, char **text, regex_t *regex, enum rule_flag valid,
+                               enum rule_flag exclude, char *key, char *value, bool exclusion)
 {
     if (rule_check_flag(rule, valid)) regfree(regex);
     rule_clear_flag(rule, valid);
@@ -23,7 +23,7 @@ static bool parse_rule_pattern(struct rule *rule, char **text, regex_t *regex, e
         rule_clear_flag(rule, exclude);
     }
 
-    if (regcomp(regex, value, REG_EXTENDED) != 0) return false;
+    if (!pattern_compile(rsp, regex, key, value)) return false;
 
     rule_set_flag(rule, valid);
     return true;
@@ -72,26 +72,26 @@ static bool parse_rule(FILE *rsp, char **message, struct rule *rule, struct toke
             }
         } else if (string_equals(key, ARGUMENT_RULE_KEY_APP)) {
             has_filter = true;
-            if (!parse_rule_pattern(rule, &rule->app, &rule->app_regex, RULE_APP_VALID, RULE_APP_EXCLUDE, value, exclusion)) {
-                daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
+            if (!parse_rule_pattern(rsp, rule, &rule->app, &rule->app_regex, RULE_APP_VALID, RULE_APP_EXCLUDE,
+                                    key, value, exclusion)) {
                 did_parse = false;
             }
         } else if (string_equals(key, ARGUMENT_RULE_KEY_TITLE)) {
             has_filter = true;
-            if (!parse_rule_pattern(rule, &rule->title, &rule->title_regex, RULE_TITLE_VALID, RULE_TITLE_EXCLUDE, value, exclusion)) {
-                daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
+            if (!parse_rule_pattern(rsp, rule, &rule->title, &rule->title_regex, RULE_TITLE_VALID, RULE_TITLE_EXCLUDE,
+                                    key, value, exclusion)) {
                 did_parse = false;
             }
         } else if (string_equals(key, ARGUMENT_RULE_KEY_ROLE)) {
             has_filter = true;
-            if (!parse_rule_pattern(rule, &rule->role, &rule->role_regex, RULE_ROLE_VALID, RULE_ROLE_EXCLUDE, value, exclusion)) {
-                daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
+            if (!parse_rule_pattern(rsp, rule, &rule->role, &rule->role_regex, RULE_ROLE_VALID, RULE_ROLE_EXCLUDE,
+                                    key, value, exclusion)) {
                 did_parse = false;
             }
         } else if (string_equals(key, ARGUMENT_RULE_KEY_SUBROLE)) {
             has_filter = true;
-            if (!parse_rule_pattern(rule, &rule->subrole, &rule->subrole_regex, RULE_SUBROLE_VALID, RULE_SUBROLE_EXCLUDE, value, exclusion)) {
-                daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
+            if (!parse_rule_pattern(rsp, rule, &rule->subrole, &rule->subrole_regex, RULE_SUBROLE_VALID, RULE_SUBROLE_EXCLUDE,
+                                    key, value, exclusion)) {
                 did_parse = false;
             }
         } else if (string_equals(key, ARGUMENT_RULE_KEY_DISPLAY)) {
