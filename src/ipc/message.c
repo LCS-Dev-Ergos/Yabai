@@ -191,7 +191,7 @@ void daemon_fail(FILE *rsp, char *fmt, ...)
     va_end(ap);
 }
 
-__unused static inline void daemon_deprecated(FILE *rsp, char *fmt, ...)
+__unused __attribute__((format(printf, 2, 3))) static inline void daemon_deprecated(FILE *rsp, char *fmt, ...)
 {
     if (!rsp) return;
 
