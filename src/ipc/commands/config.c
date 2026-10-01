@@ -205,6 +205,15 @@ static void handle_domain_config(FILE *rsp, struct token domain, char *message)
                 }
                 if (!match) daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
             }
+        } else if (token_equals(command, COMMAND_CONFIG_NAVIGATION_VEIL_BLUR)) {
+            struct token_value value = token_to_value(get_token(&message));
+            if (value.type == TOKEN_TYPE_INVALID) {
+                fprintf(rsp, "%d\n", g_window_manager.navigation_veil_blur);
+            } else if (value.type == TOKEN_TYPE_INT && in_range_ii(value.int_value, 0, 100)) {
+                g_window_manager.navigation_veil_blur = value.int_value;
+            } else {
+                daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.token.length, value.token.text, command.length, command.text, domain.length, domain.text);
+            }
         } else if (token_equals(command, COMMAND_CONFIG_SHADOW)) {
             struct token value = get_token(&message);
             if (!token_is_valid(value)) {

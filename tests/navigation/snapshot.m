@@ -25,6 +25,14 @@ static int orders;
 static CGContextRef last_context;
 static int context_color_space_writes;
 static bool deny_capture, fail_create, fail_context, fail_order, fail_attach, fail_alpha;
+// The blurred veil: what it asked of the blur, the alphas it wrote in order,
+// and hooks that fail or cancel it at a given alpha write (1-based, 0 = off).
+static bool fail_blur, reduce_transparency_on;
+static int blur_calls, last_blur_radius, last_blur_style, orders_at_blur;
+#define ALPHA_LOG_MAX 512
+static float alpha_log[ALPHA_LOG_MAX];
+static int alpha_log_count;
+static int fail_at_alpha_write, cancel_at_alpha_write;
 static bool wrong_capture_size;
 static uint64_t capture_delay, capture_start_delay;
 static uint64_t active_sid = 2;
@@ -147,6 +155,9 @@ static CGError SLSSetWindowLevel(int c, uint32_t w, int level)
     return 0;
 }
 
+// Called with space_snapshot_lock held, like the writes it stands for.
+static void space_snapshot_cancel_locked(void);
+
 static CGError SLSSetWindowAlpha(int c, uint32_t w, float alpha)
 {
     (void)c;
@@ -155,8 +166,23 @@ static CGError SLSSetWindowAlpha(int c, uint32_t w, float alpha)
     if (last_alpha >= 0 && alpha > last_alpha) ++alpha_rises;
     if (alpha > max_alpha) max_alpha = alpha;
     last_alpha = alpha;
+    if (alpha_log_count < ALPHA_LOG_MAX) alpha_log[alpha_log_count] = alpha;
+    ++alpha_log_count;
     __atomic_add_fetch(&alpha_writes, 1, __ATOMIC_SEQ_CST);
+    if (cancel_at_alpha_write && alpha_log_count == cancel_at_alpha_write) space_snapshot_cancel_locked();
+    if (fail_at_alpha_write && alpha_log_count == fail_at_alpha_write) return kCGErrorFailure;
     return fail_alpha ? kCGErrorFailure : 0;
+}
+
+static CGError SLSSetWindowBackgroundBlurRadiusStyle(int c, uint32_t w, int radius, int style)
+{
+    (void)c;
+    assert(w == 77);
+    ++blur_calls;
+    last_blur_radius = radius;
+    last_blur_style = style;
+    orders_at_blur = orders;
+    return fail_blur ? kCGErrorFailure : 0;
 }
 
 static CGError SLSReleaseWindow(int c, uint32_t w)
@@ -330,8 +356,14 @@ static void space_navigation_snapshot_captured(int token)
     __atomic_add_fetch(&captured_reports, 1, __ATOMIC_SEQ_CST);
 }
 
-// The fade curve the event loop reads when it creates an overlay.
-static struct { int navigation_fade_curve; } g_window_manager;
+// The fade curve and the veil's blur radius the event loop reads when it
+// creates an overlay, and the Reduce Transparency setting it asks the system.
+static struct { int navigation_fade_curve; int navigation_veil_blur; } g_window_manager;
+
+static bool space_navigation_reduce_transparency(void)
+{
+    return reduce_transparency_on;
+}
 
 #define dispatch_source_cancel cancel_and_let_handler_run
 #define SCScreenshotManager SnapshotCaptureMock
@@ -452,8 +484,9 @@ static void snapshot_fields(float *peak, int *curve)
     pthread_mutex_unlock(&space_snapshot_lock);
 }
 
-// The backing the veil drew: every pixel opaque black.
-static void expect_black(CGContextRef ctx)
+// The backing the veil drew: every pixel black at the given alpha byte, give
+// or take the rounding of the fill alpha.
+static void expect_fill(CGContextRef ctx, int alpha)
 {
     assert(ctx && CGBitmapContextGetWidth(ctx) == 16 && CGBitmapContextGetHeight(ctx) == 16);
     const uint8_t *row = CGBitmapContextGetData(ctx);
@@ -461,7 +494,7 @@ static void expect_black(CGContextRef ctx)
     for (size_t y = 0; y < 16; ++y) {
         for (size_t x = 0; x < 16; ++x) {
             const uint8_t *pixel = row + y * stride + x * 4;
-            assert(pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0 && pixel[3] == 255);
+            assert(pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0 && abs(pixel[3] - alpha) <= 1);
         }
     }
 }
@@ -472,6 +505,7 @@ static void expect_veil(void)
 {
     int modern = modern_capture_calls, legacy = legacy_capture_calls;
     int orders_before = orders;
+    int blurs_before = blur_calls;
 
     // It is shown at its opacity before it is ordered in, on a backing of one
     // pixel per point drawn without a capture's colour space, and its
@@ -482,7 +516,7 @@ static void expect_veil(void)
     assert(live_windows == 1 && live_spaces == 1 && orders == orders_before + 1);
     assert(last_resolution == 1.0 && alpha_at_order == SPACE_SNAPSHOT_VEIL_OPACITY);
     assert(context_color_space_writes == 0);
-    expect_black(last_context);
+    expect_fill(last_context, 255);
     float peak;
     int curve;
     snapshot_fields(&peak, &curve);
@@ -587,7 +621,131 @@ static void expect_veil(void)
     expect_released();
     assert(max_alpha <= SPACE_SNAPSHOT_VEIL_OPACITY && alpha_rises == 0);
 
+    // Without a configured blur nothing asks WindowServer for one.
+    assert(blur_calls == blurs_before);
     assert(modern_capture_calls == modern && legacy_capture_calls == legacy);
+}
+
+// The blurred veil: the plain veil's setup with a blur radius, a light tint
+// and an alpha of 0 before it is ordered in, then a fade-in to exactly 1 and
+// the usual two-refresh wait, all before the step switches. Reduce
+// Transparency, a failing blur and a cancellation during the fade-in each end
+// with nothing alive.
+static void expect_veil_blur(void)
+{
+    // The fade-in's curve: a quadratic ease-out from 0 to exactly 1.
+    assert(space_snapshot_blur_alpha(-1.0) == 0.0f && space_snapshot_blur_alpha(0.0) == 0.0f);
+    assert(space_snapshot_blur_alpha(1.0) == 1.0f && space_snapshot_blur_alpha(2.0) == 1.0f);
+    assert(fabsf(space_snapshot_blur_alpha(0.5) - 0.75f) < 1e-6f);
+    float previous = 0.0f;
+    for (int i = 1; i <= 1000; ++i) {
+        float alpha = space_snapshot_blur_alpha(i / 1000.0);
+        assert(alpha >= previous && alpha <= 1.0f);
+        previous = alpha;
+    }
+
+    int orders_before = orders;
+    int blurs_before = blur_calls;
+    g_window_manager.navigation_veil_blur = 40;
+    alpha_log_count = 0;
+    uint64_t began = read_os_timer();
+    assert(veil());
+    uint64_t took = read_os_timer() - began;
+
+    // The blur is asked for with the configured radius and style 1 before the
+    // window is ordered in, which happens at alpha 0 and on a light tint, and
+    // the preparation covers the fade-in and the two refreshes (1/120 s each).
+    assert(blur_calls == blurs_before + 1 && last_blur_radius == 40 && last_blur_style == 1);
+    assert(orders_at_blur == orders_before && orders == orders_before + 1);
+    assert(live_windows == 1 && live_spaces == 1);
+    assert(alpha_at_order == 0.0f && last_resolution == 1.0 && context_color_space_writes == 0);
+    expect_fill(last_context, (int) (SPACE_SNAPSHOT_VEIL_BLUR_TINT * 255.0 + 0.5));
+    assert(took >= SPACE_SNAPSHOT_VEIL_BLUR_IN_NS + 15000000ULL);
+
+    // Alpha 0 first, then writes that never fall and end at exactly 1.
+    assert(alpha_log_count >= 3 && alpha_log_count <= ALPHA_LOG_MAX);
+    assert(alpha_log[0] == 0.0f);
+    for (int i = 1; i < alpha_log_count; ++i)
+        assert(alpha_log[i] >= alpha_log[i - 1] && alpha_log[i] <= 1.0f);
+    assert(alpha_log[alpha_log_count - 1] == 1.0f);
+    float peak;
+    int curve;
+    snapshot_fields(&peak, &curve);
+    assert(peak == 1.0f && curve == SPACE_SNAPSHOT_CURVE_SMOOTH);
+
+    // The fade after the switch runs from the full window alpha down and
+    // releases the window and its Space.
+    int writes = __atomic_load_n(&alpha_writes, __ATOMIC_SEQ_CST);
+    max_alpha = 0.0f;
+    alpha_rises = 0;
+    assert(space_navigation_snapshot_start(.25f, true));
+    expect_released();
+    assert(__atomic_load_n(&alpha_writes, __ATOMIC_SEQ_CST) > writes + 2);
+    assert(max_alpha <= 1.0f && max_alpha > 0.0f && alpha_rises == 0);
+
+    // Dock failed: the blurred veil goes at once, like the plain one.
+    assert(veil());
+    assert(!space_navigation_snapshot_start(.2f, false));
+    expect_released();
+
+    // With Reduce Transparency on, the veil is the plain one.
+    reduce_transparency_on = true;
+    blurs_before = blur_calls;
+    assert(veil());
+    assert(blur_calls == blurs_before && alpha_at_order == SPACE_SNAPSHOT_VEIL_OPACITY);
+    expect_fill(last_context, 255);
+    snapshot_fields(&peak, &curve);
+    assert(peak == SPACE_SNAPSHOT_VEIL_OPACITY);
+    space_navigation_snapshot_cancel();
+    expect_released();
+    reduce_transparency_on = false;
+
+    // A radius of 0 is the plain veil too, whatever Reduce Transparency says.
+    g_window_manager.navigation_veil_blur = 0;
+    blurs_before = blur_calls;
+    assert(veil());
+    assert(blur_calls == blurs_before && alpha_at_order == SPACE_SNAPSHOT_VEIL_OPACITY);
+    space_navigation_snapshot_cancel();
+    expect_released();
+    g_window_manager.navigation_veil_blur = 40;
+
+    // The radius is the configured one when the veil is prepared.
+    g_window_manager.navigation_veil_blur = 100;
+    assert(veil());
+    assert(last_blur_radius == 100);
+    space_navigation_snapshot_cancel();
+    expect_released();
+    g_window_manager.navigation_veil_blur = 40;
+
+    // A refused blur fails the veil before anything is drawn or ordered in.
+    fail_blur = true;
+    orders_before = orders;
+    assert(!veil());
+    assert(orders == orders_before);
+    fail_blur = false;
+    expect_released();
+
+    // A failed alpha write during the fade-in ends the veil.
+    alpha_log_count = 0;
+    fail_at_alpha_write = 3;
+    assert(!veil());
+    fail_at_alpha_write = 0;
+    assert(alpha_log_count == 3);
+    expect_released();
+
+    // Cancelled during the fade-in: it stops writing, fails and leaves
+    // nothing alive. The window had been ordered in.
+    alpha_log_count = 0;
+    orders_before = orders;
+    cancel_at_alpha_write = 3;
+    assert(!veil());
+    cancel_at_alpha_write = 0;
+    assert(alpha_log_count == 3 && orders == orders_before + 1);
+    assert(!live_windows && !live_spaces);
+    expect_released();
+    assert(!space_navigation_snapshot_start(.2f, true)); // Nothing to fade.
+
+    g_window_manager.navigation_veil_blur = 0;
 }
 
 // A veil retires the capture waiting for its step, whether the image arrived
@@ -646,9 +804,10 @@ int main(void)
     {
         expect_alpha_curve();
         expect_veil(); // No capture: this runs on every system.
+        expect_veil_blur();
         if (@available(macOS 26.0, *)) { } else {
             assert(!prepare()); // Older systems switch without the crossfade.
-            puts("snapshot: alpha curves and veil passed; the crossfade needs macOS 26");
+            puts("snapshot: alpha curves, veil and blurred veil passed; the crossfade needs macOS 26");
             return 0;
         }
         CGContextRef ctx = bitmap();
@@ -952,7 +1111,7 @@ int main(void)
         assert(modern_capture_calls > 0 && legacy_capture_calls == 0);
         CGImageRelease(wrong_image);
         CGImageRelease(fixture_image);
-        puts("snapshot: alpha curves, veil, endpoint, cancellation, allocation failures, late and lost capture, asynchronous capture, colour space and watchdog passed");
+        puts("snapshot: alpha curves, veil, blurred veil, endpoint, cancellation, allocation failures, late and lost capture, asynchronous capture, colour space and watchdog passed");
     }
     return 0;
 }

@@ -216,6 +216,12 @@ Global Settings
     'ease_out' changes fastest at the start: 5% of the change takes 2.5% of the duration. +
     The duration is the same for both.
 
+*navigation_veil_blur* ['<0-100>']::
+    Blur radius of the veil that *space --navigate* shows over a Desktop switch. +
+    The veil then blurs what lies below it, and fades in over 100 ms before Desktop is switched. +
+    This holds the event loop for about 130 ms at 60 Hz and loads the GPU, so it is off by default. +
+    0 disables the blur. The veil is plain when Reduce Transparency is enabled.
+
 *insert_feedback_color* ['0xAARRGGBB']::
     Color of the *window --insert* message and mouse_drag selection. +
     The purpose is to provide a visual preview of the new window frame.

@@ -259,6 +259,18 @@ on cancellation and when the display leaves the target, no window or Space left
 after a failure to create the window, its context or the auxiliary Space, to
 attach the window or to order it, a new veil retiring the one showing, and a
 veil retiring a pending capture request, whose late callback then does nothing.
+The blurred veil (`navigation_veil_blur`) is covered the same way, with the
+blur call and the Reduce Transparency query mocked: radius 0 keeps the plain
+veil exactly (no blur call, opacity 0.4 before the order, an opaque fill);
+a radius above 0 asks for that radius, style 1, before the window is ordered
+in, fills at a tint of 0.25, orders the window at alpha 0, then writes
+non-decreasing alphas ending at exactly 1.0 over at least 100 ms plus the two
+refreshes, and the fade after the switch stays within [0, 1] and releases;
+Reduce Transparency gives the plain veil; a refused blur, a failed alpha write
+and a cancellation during the fade-in each return false and leave no window or
+Space. The unity tests check `config navigation_veil_blur`: its default, get
+and set of 0 to 100, and refusal of 101, negatives, fractions, hexadecimal and
+words.
 Both fade curves (`navigation_fade_curve`, `smooth` and `ease_out`) are checked
 at run time: their endpoints, monotony and the point where 5% of the change
 becomes visible, and that an overlay keeps the curve configured when it was

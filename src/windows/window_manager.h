@@ -106,6 +106,7 @@ struct window_manager
     float window_animation_duration;
     int window_animation_easing;
     int navigation_fade_curve;  // enum space_snapshot_curve; read on the event loop.
+    int navigation_veil_blur;   // Veil background blur radius, 0 (off) to 100; read on the event loop.
     struct rgba_color insert_feedback_color;
     struct scratchpad *scratchpad_window;
 };

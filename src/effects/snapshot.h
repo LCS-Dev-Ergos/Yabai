@@ -13,14 +13,16 @@
 // synchronously waits for the capture (up to 150 ms); capturing
 // asynchronously returns at once, and the capture's callback or its deadline
 // reports back through space_navigation_snapshot_captured. Presenting the
-// image waits for one refresh, the veil for two. ScreenCaptureKit completes
-// the capture on its own queue. The overlay's alpha timer runs on a global
-// queue, and its cancel handler frees the snapshot there.
+// image waits for one refresh, the veil for two; a veil with a background blur
+// first fades in over 100 ms, about 130 ms in all at 60 Hz. ScreenCaptureKit
+// completes the capture on its own queue. The overlay's alpha timer runs on a
+// global queue, and its cancel handler frees the snapshot there.
 // State: space_snapshot_active and the auxiliary Spaces created last, under
 // space_snapshot_lock; the capture in flight, under
 // space_snapshot_captures.lock; the asynchronous request waiting for its
-// capture, space_snapshot_pending, on the event loop only. The fade curve is
-// read from g_window_manager on the event loop, when the overlay is created.
+// capture, space_snapshot_pending, on the event loop only. The fade curve and
+// the veil's blur radius are read from g_window_manager on the event loop, when
+// the overlay is created.
 // Callers: step (prepare, or capture and present, or the veil, before the
 // switch; start after it). Cancellation and the Space notifications are
 // hooks, see hooks.h.
@@ -57,7 +59,9 @@ static enum space_snapshot_result space_navigation_snapshot_present(int token);
 // ownership and its unresolved slot until it really returns. Active overlays stay.
 static enum space_snapshot_result space_navigation_snapshot_discard(int token);
 // Event loop: shows a solid black veil over the display without capturing it,
-// and waits two refreshes for it to reach the screen. False when none is shown.
+// and waits two refreshes for it to reach the screen. With navigation_veil_blur
+// above 0 and Reduce Transparency off, the veil blurs what lies below it and
+// is faded in completely first. False when none is shown.
 static bool space_navigation_veil_prepare(uint32_t display, uint64_t target, float interval);
 // Starts the fade of the overlay prepared or presented, once Dock switched.
 static bool space_navigation_snapshot_start(float duration, bool switched);

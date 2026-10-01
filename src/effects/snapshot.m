@@ -10,6 +10,14 @@
 // displays; it only has to hide the switch.
 #define SPACE_SNAPSHOT_VEIL_OPACITY 0.4f
 
+// The blurred veil (config navigation_veil_blur): the window's alpha carries
+// the blur, so its black fill is a light tint that lets the blurred Desktop
+// show through, and the window fades in over this long, with a quadratic
+// ease-out, before the switch. Blurring at full strength at once was seen as a
+// pop, and the destination's brightness change as a jump.
+#define SPACE_SNAPSHOT_VEIL_BLUR_TINT  0.25
+#define SPACE_SNAPSHOT_VEIL_BLUR_IN_NS 100000000ULL
+
 // Signposts in subsystem com.lcs.yabai, category effects: how long each
 // snapshot took to capture and to prepare, and why one was not used.
 static os_log_t space_snapshot_log(void)
@@ -468,10 +476,51 @@ static enum space_snapshot_result space_navigation_snapshot_discard(int token)
     return SPACE_SNAPSHOT_MISSING;
 }
 
+// The share of its final alpha the blurred veil's window has u in [0, 1] of the
+// way through its fade-in: a quadratic ease-out, fastest at the start.
+static float space_snapshot_blur_alpha(double u)
+{
+    if (u <= 0.0) return 0.0f;
+    if (u >= 1.0) return 1.0f;
+
+    return (float) (1.0 - (1.0 - u) * (1.0 - u));
+}
+
+// Event loop. Fades the blurred veil's window in from alpha 0 to exactly 1, one
+// write per refresh, each under the lock and only while this snapshot is still
+// the active one. False when it was cancelled meanwhile or a write failed;
+// nothing is left alive then. The snapshot may be freed once it is cancelled,
+// so it is dereferenced only while it is the active one.
+static bool space_snapshot_blur_in(struct space_snapshot *snapshot, float interval)
+{
+    uint64_t began = read_os_timer();
+    int cid = SLSMainConnectionID();
+
+    for (;;) {
+        // A refresh is at most 1 s (see the callers' range check), which would
+        // outlast the watchdog: cap each sleep like the wait for the order-in.
+        usleep((useconds_t) (fminf(interval, 1.0f / 30.0f) * 1e6f));
+        uint64_t elapsed = read_os_timer() - began;
+        bool done = elapsed >= SPACE_SNAPSHOT_VEIL_BLUR_IN_NS;
+        float alpha = space_snapshot_blur_alpha(done ? 1.0 : (double) elapsed / SPACE_SNAPSHOT_VEIL_BLUR_IN_NS);
+
+        pthread_mutex_lock(&space_snapshot_lock);
+        bool written = space_snapshot_active == snapshot
+            && SLSSetWindowAlpha(cid, snapshot->window, alpha) == kCGErrorSuccess;
+        if (!written) space_snapshot_cancel_locked();
+        pthread_mutex_unlock(&space_snapshot_lock);
+
+        if (!written) return false;
+        if (done) return true;
+    }
+}
+
 // Event loop: shows a solid black veil over the display, ready to fade, and
 // returns once it has had two refreshes to reach the screen. It captures
 // nothing, so it needs neither Screen Recording permission nor macOS 26, and
-// costs one window order-in. False when no veil is shown.
+// costs one window order-in. With a background blur configured and Reduce
+// Transparency off, the veil is a blurred, lightly tinted window that fades in
+// before it returns. False when no veil is shown.
 static bool space_navigation_veil_prepare(uint32_t display, uint64_t target, float interval)
 {
     space_navigation_snapshot_cancel();
@@ -489,9 +538,16 @@ static bool space_navigation_veil_prepare(uint32_t display, uint64_t target, flo
         return false;
     }
 
-    struct space_snapshot *snapshot = space_snapshot_create(display, target, interval, SPACE_SNAPSHOT_VEIL_OPACITY);
+    // Read here, on the event loop, like the curve.
+    int radius = g_window_manager.navigation_veil_blur;
+    bool blur = radius > 0 && !space_navigation_reduce_transparency();
+    const char *shown = blur ? "veil blur" : "veil";
+    const char *failed = blur ? "veil blur failed" : "veil failed";
+
+    struct space_snapshot *snapshot = space_snapshot_create(display, target, interval,
+                                                            blur ? 1.0f : SPACE_SNAPSHOT_VEIL_OPACITY);
     if (!snapshot) {
-        space_snapshot_trace("veil failed", began, 0);
+        space_snapshot_trace(failed, began, 0);
         return false;
     }
 
@@ -499,17 +555,31 @@ static bool space_navigation_veil_prepare(uint32_t display, uint64_t target, flo
     space_snapshot_active = snapshot;
     dispatch_resume(snapshot->timer);
     int cid = SLSMainConnectionID();
-    // One backing pixel per point: the veil has no detail to resolve.
+    // One backing pixel per point: the veil has no detail to resolve. The
+    // blurred veil starts at alpha 0 and is ordered in invisible, so that the
+    // blur does not appear at full strength in one frame.
     bool success = space_snapshot_window_create(snapshot, bounds, 1.0)
-        && space_snapshot_surface_fill(snapshot, bounds)
-        && SLSSetWindowAlpha(cid, snapshot->window, SPACE_SNAPSHOT_VEIL_OPACITY) == kCGErrorSuccess
+        && (!blur || SLSSetWindowBackgroundBlurRadiusStyle(cid, snapshot->window, radius, 1) == kCGErrorSuccess)
+        && space_snapshot_surface_fill(snapshot, bounds, blur ? SPACE_SNAPSHOT_VEIL_BLUR_TINT : 1.0)
+        && SLSSetWindowAlpha(cid, snapshot->window, blur ? 0.0f : SPACE_SNAPSHOT_VEIL_OPACITY) == kCGErrorSuccess
         && space_snapshot_space_create(snapshot)
         && SLSOrderWindow(cid, snapshot->window, 1, 0) == kCGErrorSuccess;
     if (!success) space_snapshot_cancel_locked();
     pthread_mutex_unlock(&space_snapshot_lock);
     SNAP_DIAG("veil_order_end", 0, 0);
 
-    space_snapshot_trace(success ? "veil" : "veil failed", began, 0);
+    // The blur reaches the screen later than a plain veil and competes with
+    // Dock for the GPU: with it at full strength only after the switch began,
+    // Dock took about twice as long and the veil once arrived later than the
+    // two refreshes below. So it is shown completely before the switch. That
+    // holds the event loop for about 130 ms at 60 Hz, which is why the blur is
+    // opt-in.
+    if (success && blur) {
+        success = space_snapshot_blur_in(snapshot, interval);
+        SNAP_DIAG("veil_blur_in_end", 0, 0);
+    }
+
+    space_snapshot_trace(success ? shown : failed, began, 0);
 
     // A new window on a new auxiliary Space can be presented after Dock has
     // switched: switching straight after the order showed the destination

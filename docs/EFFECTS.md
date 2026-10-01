@@ -266,6 +266,43 @@ Mission Control and a display animation stop it when the step is planned; a
 click during its two refreshes removes the veil and stops the step, as it does
 during a synchronous crossfade's capture. Window moves keep their effect.
 
+### Veil background blur
+
+`yabai -m config navigation_veil_blur RADIUS` (0 to 100, `0` and off by
+default) makes the veil blur what lies below it, so the switch underneath
+stays soft. WindowServer does the blur on the GPU and live
+(`SLSSetWindowBackgroundBlurRadiusStyle`, style 1); nothing is captured. The
+radius is read when the veil is prepared. With a radius above 0 the veil is:
+
+- a window at alpha 0 when it is ordered in, filled with black at a tint of
+  0.25 (the fill's own alpha, so the blurred Desktop shows through), whose
+  window alpha carries the blur and the darkening;
+- faded in on the event loop over 100 ms, a quadratic ease-out
+  (`1 - (1 - u)²`), one alpha write per display refresh, each under the
+  overlay's lock and only while this veil is still the active one: a
+  cancellation during the fade-in stops it and the step switches without a
+  veil;
+- followed by the plain veil's two refreshes, after which Dock switches. It
+  then fades out from alpha 1 with [`navigation_fade_curve`](#fade-curve).
+
+The fade-in comes before the switch because of what was measured with the
+blur at full strength straight away: it popped in, the destination's change in
+brightness still showed as a jump, and the blur doubled Dock's switch time
+(about 65 to 135 ms) by contending for the GPU. Once the blurred window also
+reached the screen later than the two refreshes. Showing it completely first
+keeps both the pop and the contention out of the switch, at the price of the
+event loop being held for about 130 ms at 60 Hz (100 ms of fade-in, up to one
+refresh of rounding and the two refreshes), against 33 ms for the plain veil.
+That cost, and the GPU load of a live blur, are why the option is off by
+default. A radius of 0 is exactly the plain veil: opacity 0.4, an opaque fill
+and no fade-in.
+
+With Reduce Transparency on, the veil is the plain one whatever the radius.
+The trace in subsystem `com.lcs.yabai`, category `effects`, reports
+`veil blur` for a blurred veil and `veil` for a plain one. A failure to set
+the blur is a failure to set up the veil, like any other, and the step
+switches without it.
+
 ## Native compositor investigation
 
 The reconstructed [Mousecape SkyLight declarations](https://github.com/alexzielenski/Mousecape/blob/master/Mousecape/mousecloak/CGSInternal/CGSWindow.h)

@@ -25,7 +25,7 @@ static void space_navigation_snapshot_captured(int token)
 #ifndef SNAPSHOT_PROBE_CURVE
 #define SNAPSHOT_PROBE_CURVE SPACE_SNAPSHOT_CURVE_SMOOTH
 #endif
-static struct { int navigation_fade_curve; } g_window_manager = { SNAPSHOT_PROBE_CURVE };
+static struct { int navigation_fade_curve; int navigation_veil_blur; } g_window_manager = { SNAPSHOT_PROBE_CURVE, 0 };
 
 #include "../../src/effects/snapshot.m"
 

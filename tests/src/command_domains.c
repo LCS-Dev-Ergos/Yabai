@@ -187,4 +187,51 @@ TEST_FUNC(config_navigation_fade_curve,
     g_window_manager.navigation_fade_curve = saved;
 });
 
+// The veil's blur radius: off by default, any integer from 0 to 100 through
+// get and set, and nothing else.
+TEST_FUNC(config_navigation_veil_blur,
+{
+    int saved = g_window_manager.navigation_veil_blur;
+    char *output;
+
+    // Get prints the radius; 0, the default, means off.
+    g_window_manager.navigation_veil_blur = 0;
+    output = TEST_COMMAND("config", "navigation_veil_blur");
+    TEST_CHECK(strcmp(output, "0\n") == 0, true);
+    free(output);
+
+    const int accepted[] = { 1, 40, 99, 100, 0 };
+    for (int i = 0; i < array_count(accepted); ++i) {
+        char value[8], expected[8];
+        snprintf(value, sizeof(value), "%d", accepted[i]);
+        snprintf(expected, sizeof(expected), "%d\n", accepted[i]);
+        output = TEST_COMMAND("config", "navigation_veil_blur", value);
+        TEST_CHECK(strcmp(output, "") == 0, true);
+        TEST_CHECK(g_window_manager.navigation_veil_blur, accepted[i]);
+        free(output);
+        output = TEST_COMMAND("config", "navigation_veil_blur");
+        TEST_CHECK(strcmp(output, expected) == 0, true);
+        free(output);
+    }
+
+    // A refused value, out of range or not an integer, leaves the setting as
+    // it was.
+    g_window_manager.navigation_veil_blur = 40;
+    const char *invalid[] = { "101", "1000", "99999999999", "-1", "1.5", "0x10", "off", "on", "blur", "1e1", "+5" };
+    for (int i = 0; i < array_count(invalid); ++i) {
+        char expected[160];
+        snprintf(expected, sizeof(expected),
+                 "\x07unknown value '%s' given to command 'navigation_veil_blur' for domain 'config'\n", invalid[i]);
+        output = TEST_COMMAND("config", "navigation_veil_blur", invalid[i]);
+        if (strcmp(output, expected) != 0) {
+            printf("                   %s returned '%s'\n", invalid[i], output);
+            result = false;
+        }
+        TEST_CHECK(g_window_manager.navigation_veil_blur, 40);
+        free(output);
+    }
+
+    g_window_manager.navigation_veil_blur = saved;
+});
+
 #undef TEST_COMMAND

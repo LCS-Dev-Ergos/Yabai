@@ -17,6 +17,9 @@ its duration in `[0,1]` seconds. The effect is `crossfade`, a
 opacity in `(0,1]` of the destination's windows. A zero duration disables it.
 `yabai -m config navigation_fade_curve smooth|ease_out` sets how the crossfade
 and the veil fade out (see [effects](EFFECTS.md#fade-curve)).
+`yabai -m config navigation_veil_blur RADIUS` (0 to 100, off by default)
+blurs what lies below the veil, at the price of about 130 ms on the event loop
+(see [effects](EFFECTS.md#veil-background-blur)).
 `next` and `prev` wrap to the first/last space, like the previous shell
 script. Other selectors follow the ordinary space selectors.
 `move` sends the focused window to the destination and follows it. It does

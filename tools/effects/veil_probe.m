@@ -62,7 +62,7 @@ static void space_navigation_snapshot_captured(int token)
 #include "../../src/effects/snapshot.h"
 
 // The overlay reads its fade curve from the daemon's configuration.
-static struct { int navigation_fade_curve; } g_window_manager;
+static struct { int navigation_fade_curve; int navigation_veil_blur; } g_window_manager;
 
 #include "../../src/effects/snapshot.m"
 
