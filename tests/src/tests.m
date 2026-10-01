@@ -108,6 +108,7 @@ typedef TEST_SIG(function);
 #include "command_domains.c"
 #include "command_values.c"
 #include "query_labels.c"
+#include "duplicate_keys.c"
 #include "navigation_args.c"
 #include "signal_dispatch.c"
 #include "signal_environment.c"
@@ -153,6 +154,7 @@ typedef TEST_SIG(function);
     TEST_ENTRY(window_value_bounds)                           \
     TEST_ENTRY(rule_grid_bounds)                              \
     TEST_ENTRY(query_label_escape)                            \
+    TEST_ENTRY(duplicate_rule_and_signal_keys)                \
     TEST_ENTRY(jankyborders_resource_lifetime)                \
     TEST_ENTRY(mouse_tap_resource_lifetime)
 

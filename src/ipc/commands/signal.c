@@ -1,6 +1,24 @@
 // `yabai -m signal`: adding, listing and removing signal subscriptions.
 // Event loop.
 
+// A key given again replaces its value, as it always has; the text and the
+// compiled pattern it replaces are released.
+static void parse_signal_text(char **text, char *value)
+{
+    free(*text);
+    *text = string_copy(value);
+}
+
+static bool parse_signal_pattern(char **text, regex_t *regex, bool *valid, bool *exclude, char *value, bool exclusion)
+{
+    if (*valid) regfree(regex);
+    parse_signal_text(text, value);
+
+    *exclude = exclusion;
+    *valid = regcomp(regex, value, REG_EXTENDED) == 0;
+    return *valid;
+}
+
 static void handle_domain_signal(FILE *rsp, struct token domain, char *message)
 {
     TIME_FUNCTION;
@@ -28,20 +46,16 @@ static void handle_domain_signal(FILE *rsp, struct token domain, char *message)
 
             if (string_equals(key, ARGUMENT_SIGNAL_KEY_LABEL)) {
                 if (exclusion) unsupported_exclusion = key;
-                signal.label = string_copy(value);
+                parse_signal_text(&signal.label, value);
             } else if (string_equals(key, ARGUMENT_SIGNAL_KEY_APP)) {
-                signal.app = string_copy(value);
-                signal.app_regex_exclude = exclusion;
-                signal.app_regex_valid = regcomp(&signal.app_regex, value, REG_EXTENDED) == 0;
-                if (!signal.app_regex_valid) {
+                if (!parse_signal_pattern(&signal.app, &signal.app_regex, &signal.app_regex_valid,
+                                          &signal.app_regex_exclude, value, exclusion)) {
                     daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
                     did_parse = false;
                 }
             } else if (string_equals(key, ARGUMENT_SIGNAL_KEY_TITLE)) {
-                signal.title = string_copy(value);
-                signal.title_regex_exclude = exclusion;
-                signal.title_regex_valid = regcomp(&signal.title_regex, value, REG_EXTENDED) == 0;
-                if (!signal.title_regex_valid) {
+                if (!parse_signal_pattern(&signal.title, &signal.title_regex, &signal.title_regex_valid,
+                                          &signal.title_regex_exclude, value, exclusion)) {
                     daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
                     did_parse = false;
                 }
@@ -60,7 +74,7 @@ static void handle_domain_signal(FILE *rsp, struct token domain, char *message)
                 if (exclusion) unsupported_exclusion = key;
 
                 has_command = true;
-                signal.command = string_copy(value);
+                parse_signal_text(&signal.command, value);
             } else if (string_equals(key, ARGUMENT_SIGNAL_KEY_EVENT)) {
                 if (exclusion) unsupported_exclusion = key;
 
