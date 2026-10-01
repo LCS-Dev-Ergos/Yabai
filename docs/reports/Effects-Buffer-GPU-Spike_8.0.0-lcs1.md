@@ -16,14 +16,14 @@ same 6812-byte ICC profile (probe hash `99bc000c39985d17`), but this does
 
 The filtered path's warm one-shot acquisition was shorter in these runs; its
 first request was substantially slower. This compares different
-ScreenCaptureKit contracts and offscreen preparation only. The user reported
-moving between Spaces during this campaign while the installed legacy daemon
-was active, then restarting Yabai to restore its baseline. The campaign did
+ScreenCaptureKit contracts and offscreen preparation only. Spaces were also
+navigated manually during this campaign while the installed legacy daemon was
+active, and Yabai was then restarted to restore its baseline. The campaign did
 not continuously track those moves or the daemon PID. WindowServer memory and
-timing comparisons are therefore **confounded** and cannot attribute a rise
-or a speedup to the filtered API. There is no basis yet to replace the
-corrected rectangle renderer in version 8. The existing capture fix and
-bounded callback/AX work remain the release priority.
+timing comparisons are therefore **confounded** and cannot attribute a rise or
+a speedup to the filtered API. There is no basis yet to replace the corrected
+rectangle renderer in version 8. The existing capture fix and bounded
+callback/AX work remain the release priority.
 
 ## Contract and workload
 
@@ -74,7 +74,7 @@ added twice.
 | Filtered B | 166.98 | 75.70 | 7.78 complete | 1.50 | 81.77 |
 | Rectangle B | 77.11 | 83.74 | 13.46 draw | — | 96.79 |
 
-The small sample, different API semantics and user Space navigation prevent
+The small sample, different API semantics and manual Space navigation prevent
 a controlled speedup claim. The original effect's measured phases remain
 approximately 72 ms rectangle capture, 18 ms `CGContextDrawImage`, 21 ms
 pre-switch wait and
@@ -103,26 +103,25 @@ PID stayed alive for all hold samples.
 | Rectangle B | 5.36 / 5.77 / 5.77 | 3931 / 3838 / 3838 / 3835 / 3926 / 3828 / 3828 |
 
 The filtered client's per-capture samples reached about 86 MiB while each
-iteration's autorelease pool was live, then fell to about 7 MiB after the
-load and stayed there through hold 60. Rectangle client samples stayed near
-6 MiB. WindowServer's roughly 0.9–1.0 GiB higher post-exit level after
-Filtered A persisted during the later runs, although Filtered B did not add
-another comparable step and the later readings fluctuated. **This is not
-evidence of buffer retention:** the user reports moving between Spaces during
-the campaign with the installed legacy daemon, which had a previously
-documented capture-memory defect. The runner did not continuously record
-Space transitions or daemon identity; the user restarted Yabai afterward to
-restore its baseline. The runner's first prelaunch top reading was 3142 MiB,
-but the probe's pre-load reading
-was 2899 MiB, showing that WindowServer was already varying before the
-first request. At one read-only checkpoint, the installed daemon was the signed
+iteration's autorelease pool was live, then fell to about 7 MiB after the load
+and stayed there through hold 60. Rectangle client samples stayed near 6 MiB.
+WindowServer's roughly 0.9–1.0 GiB higher post-exit level after Filtered A
+persisted during the later runs, although Filtered B did not add another
+comparable step and the later readings fluctuated. **This is not evidence of
+buffer retention:** Spaces were navigated manually during the campaign with the
+installed legacy daemon, which had a previously documented capture-memory
+defect. The runner did not continuously record Space transitions or daemon
+identity; Yabai was restarted afterward to restore its baseline. The runner's
+first prelaunch top reading was 3142 MiB, but the probe's pre-load reading was
+2899 MiB, showing that WindowServer was already varying before the first
+request. At one read-only checkpoint, the installed daemon was the signed
 `/opt/yabai/bin/yabai` (PID 79476, SHA-256 beginning `89682384`, signing
-authority `yabai-lcs-dev`); no Yabai or Space operation was made by the
-probe or runner. At that checkpoint, the active Space had ID 14,
-**index 1**, display ID 1, with ChatGPT window 2222 focused. HID idle time
-was about 36 s at that instant, not continuously observed. The user's report
-is an attributed explanation, not a timestamped mapping from each move to a
-memory sample. These WindowServer numbers cannot rank backend retention.
+authority `yabai-lcs-dev`); no Yabai or Space operation was made by the probe
+or runner. At that checkpoint, the active Space had ID 14, **index 1**, display
+ID 1, with ChatGPT window 2222 focused. HID idle time was about 36 s at that
+instant, not continuously observed. The manual-navigation explanation is not a
+timestamped mapping from each move to a memory sample. These WindowServer
+numbers cannot rank backend retention.
 
 ## Reproduce and next gates
 
@@ -159,6 +158,6 @@ system-wide GPU energy against the corrected renderer. Attribute the
 WindowServer behavior with a controlled no-other-work baseline and hold,
 including behavior after client exit. A future runner should continuously
 record active Space ID **and index**, input idle time and daemon PID/identity,
-and flag any user navigation or daemon restart. A host demo passing would
+and flag any manual navigation or daemon restart. A host demo passing would
 still leave the SkyLight overlay contract and combined version-8 acceptance
 open.

@@ -135,7 +135,7 @@ Privileged WS `footprint` was 1986 MB before stopping the signed service and
 port count did not drop when that daemon stopped. The effect segment changed
 WS ports 15753→15752, then the client-alive hold reached 15769; these short,
 noisy samples do not show a per-effect port slope or explain the already-high
-15k absolute count. Dock and daemon restarts, user/Desktop activity before
+15k absolute count. Dock and daemon restarts, interactive use and Desktop activity before
 the campaign, and unrelated clients remain confounders. This does not prove
 that Yabai cannot retain WS ports. No matched no-effect navigation block was
 run in this lifetime, and WindowServer was never restarted.
@@ -151,5 +151,5 @@ aborted socket-fixture attempt is preserved separately at
 recordings are local fixtures, not part of the PR. Representative cold-app
 latency, long-duration port behavior, intentionally missing live callbacks,
 and signed-candidate acceptance remain open. Further live port attribution
-and other new measurements are deferred at the user's request until a fresh
-reboot with few active processes.
+and other new measurements are deferred until a fresh reboot with few active
+processes.

@@ -1,8 +1,8 @@
 # WindowServer memory growth: isolated to the rectangle capture path
 
 Date: 2026-09-29. Initial investigation: diagnosis and replacement candidates.
-Subsequent authorized implementation and temporary daemon/payload validation
-are recorded in [the live results](capture-live-results-2026-09-29.md).
+Subsequent implementation and temporary daemon/payload validation are
+recorded in [the live results](Capture-Live-Results_8.0.0-lcs1.md).
 The initial diagnostic evidence below predates that candidate.
 
 ## Finding
@@ -21,7 +21,7 @@ capture framework. Its own small `calloc` is not a direct allocation inside
 WindowServer's address space.
 
 Exact server object type and internal ownership were not established. Initial
-unprivileged inspection failed; the later authorized footprint comparison below
+unprivileged inspection failed; the later privileged footprint comparison below
 identifies an accounting category, not the internal object. The evidence supports a capture-path
 retention defect on this OS; it is not an Apple-confirmed diagnosis or a claim
 that every supported macOS version has the same defect.
@@ -36,11 +36,11 @@ that every supported macOS version has the same defect.
 - Displays reported 3008x1692 and 1692x3008 logical points. The tested display
   produced 6016x3384 captured pixels, 81,432,576 bytes for one 4-byte image:
   approximately 77.7 MiB.
-- Initial daemon PID 1156. Another agent restarted it at approximately
-  12:29:43 local time; replacement PID 27864, same binary checksum. The user
-  explicitly confirmed: "Sì, un altro agente ha riavviato Yabai."
+- Initial daemon PID 1156. A concurrent task outside this investigation
+  restarted it at approximately 12:29:43 local time; replacement PID 27864,
+  same binary checksum.
 - WindowServer then fell from roughly 7.6 GiB to 1.8 GiB without its own PID
-  changing. This investigator did not request or perform that restart.
+  changing. This investigation did not request or perform that restart.
 - Working tree base was 4ae5811 with concurrent hardening modifications.
   Compared with tag v7.1.25-lcs.32, the examined snapshot files differ only in
   exported linkage of three hooks; capture and surface implementations match.
@@ -55,10 +55,10 @@ noise; they are not an exact byte-level allocation trace.
 
 The live A/B used six alternating changes between empty Desktops 3 and 4,
 spaced by approximately one second, first with effect `1 0`, then with
-`crossfade .25`. It waited for idle input and stopped on new user input, with
-a 500 MiB growth limit. The no-effect run restored its starting Desktop; the
-crossfade run was interrupted after its sixth measurement and deliberately
-did not override the user's subsequent input.
+`crossfade .25`. It waited for idle input and stopped on new keyboard or
+pointer input, with a 500 MiB growth limit. The no-effect run restored its
+starting Desktop; the crossfade run was interrupted by input after its sixth
+measurement and was deliberately not resumed.
 
 The isolated probes keep their process alive after releasing their own image
 or surface resources, sample WindowServer, then exit and sample again. No
@@ -74,7 +74,7 @@ Memory is the total attributed to WindowServer, in MiB as displayed by top.
 | Experiment | Requests | Before | After requests / while process lives | After process exit |
 | --- | ---: | ---: | --- | ---: |
 | Live navigation without effect | 6 | 7173 | 7167 after step 6; 7165 after 12 s | Not applicable |
-| Live crossfade | 6 | 7165 | 7261, 7335, 7418, 7498, 7564, 7645; 7628 about 34 s later | Daemon subsequently restarted by another agent |
+| Live crossfade | 6 | 7165 | 7261, 7335, 7418, 7498, 7564, 7645; 7628 about 34 s later | Daemon subsequently restarted by another process |
 | Production capture code only; images explicitly released | 3 | 1844 | 1937, 2017, 2083; 2080 after 5 s | 1841 |
 | Direct rectangle API; no client image retain | 3 | 1845 | 1931, 2011, 2094; 2071 after 5 s | 1844 |
 | Hidden overlay surface with synthetic image; no capture or auxiliary Space | 3 | 1839 | 1858, 1842, 1842; 1847 after 5 s | 1846 |
@@ -150,7 +150,7 @@ At DONE, keep the process alive several seconds and measure again; then press
 Enter to exit and remeasure. Use `top -l 1 -pid <WindowServer-PID> -stats
 pid,command,mem,cmprs,purg`. Avoid unbounded legacy loops on a loaded system.
 
-Actual automated invocations used in this session:
+Automated invocations used in this investigation:
 
 ```sh
 python3 build/diagnostics/windowserver-20260929/measure.py none 6
@@ -172,15 +172,13 @@ that is insufficient for this bug. Use the recorded STEP and hold values. The
 runner was updated to report `retained_while_alive_mib`; the standalone ARC run
 reported `RETAINED_WHILE_ALIVE`.
 
-## Correction dispatched; live acceptance pending
+## Correction: live acceptance pending
 
-The user subsequently authorized implementation in a new GPT-6 Sol / High
-chat. Its isolated worktree is `/Users/lcs-dev/.codex/worktrees/4953/Yabai`,
-branch `lcs-code/crossfade-capture-retention`, based on `9a56727`.
-Scope: replace the capture backend, preserve the renderer and request lifetime
-contract, add meaningful offline tests and prepare a local candidate. No live
-capture, service replacement, Dock restart or release is part of that initial
-dispatch. This investigation continues separately in the ordinary checkout.
+The implementation proceeds on branch `lcs-code/crossfade-capture-retention`,
+based on `9a56727`. Scope: replace the capture backend, preserve the renderer
+and request lifetime contract, add meaningful offline tests and prepare a local
+candidate. Live capture, service replacement, Dock restart and release are not
+part of that initial scope. The diagnostic investigation continues separately.
 
 First replace or contain the problematic capture entry point while preserving
 the current renderer. On macOS 26+, `captureScreenshotWithRect:configuration:`
@@ -204,14 +202,13 @@ Temporary containment is navigation without crossfade. Restarting Yabai
 released the observed accumulation, but periodic restarts are not a fix. No
 temporary setting was applied during this investigation.
 
-The [engine proposals](../design/effects-engine-proposals.md) now put this
+The [engine proposals](../design/EFFECTS-ENGINE-PROPOSALS.md) now put this
 capture-lifetime gate before the planned two parallel implementation worktrees.
 
-## Authorized WindowServer footprint comparison
+## Privileged WindowServer footprint comparison
 
-The user offered administrative access to obtain meaningful evidence. A native
-macOS authorization dialog allowed read-only `/usr/bin/footprint -p WindowServer
---swapped --wired`. No binary patching, debugger attachment or protection change
+Administrative access, granted through a native macOS authorization dialog,
+allowed read-only `/usr/bin/footprint -p WindowServer --swapped --wired`. No binary patching, debugger attachment or protection change
 was needed. WindowServer stayed PID 453. The same standalone ARC reproducer ran
 three requests per backend, releasing each client image, then remained alive
 for five seconds before the held measurement. The final measurement followed

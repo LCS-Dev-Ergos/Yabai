@@ -8,11 +8,10 @@ was replaced during these checks.
 
 ## Direction and diagnosis
 
-The user reaffirmed the full-Desktop crossfade, reported disappearing Finder
-icons and a black transient entering Desktop 1 from 2 or 10, and asked for
-effects to remain the priority. Blur was considered but explicitly not as a
-substitute for correcting those defects. The user requested a dedicated
-GPT-6 Luna chat for final publication/package/install preparation.
+The full-Desktop crossfade was reaffirmed. Disappearing Finder icons and a
+black transient entering Desktop 1 from 2 or 10 were reported, and effects
+remain the priority. Blur was considered, but not as a substitute for
+correcting those defects.
 
 The installed lcs.22 path reproduces both defects in captured frames. In a
 2→1 crossfade, whole-screen luminance falls from 42.06 to 2.18/255; a fixed
@@ -29,8 +28,8 @@ particularly dark first Desktop.
 SketchyBar's click failure had a separate, measured cause: native
 MenuBarAgent windows at level 25 intercepted the hit-test grid over the
 visible bar at levels 2/3. Runtime `topmost=on` moves the bar above them;
-the same grid then reaches SketchyBar, and the user confirmed first-click
-response. The matching Dotfiles change in `bar.lua` awaits packaging.
+the same grid then reaches SketchyBar, and first-click response was
+confirmed. The matching Dotfiles change in `bar.lua` awaits packaging.
 Temporary click/callback instrumentation was removed.
 
 ## Implementation
@@ -119,7 +118,7 @@ passed without baseline changes. Both parser fuzz targets passed a local
 20-second campaign. These checks do not run the injected payload under a
 sanitizer or establish live signed-daemon integration.
 
-After signed release/package preparation, the user performs the existing
+After signed release/package preparation, the maintainer performs the existing
 `darwin-rebuild switch` step. Verify daemon version, payload handshake,
 Screen Recording availability inside the daemon, captured 2→1 and 10→1,
 rapid reversals, held keys, individual presses and final keyboard focus.

@@ -1,7 +1,7 @@
 # Crossfade continuity after lcs.23 activation
 
-On 2026-09-28 the user described the activated lcs.23 dissolve as trembling
-and stuttering. The active Nix binary was verified as lcs.23; only the internal
+On 2026-09-28 the activated lcs.23 dissolve was reported as trembling and
+stuttering. The active Nix binary was verified as lcs.23; only the internal
 MacBook display was connected. The full Desktop crossfade remains the chosen
 effect. Blur is not used to conceal the defect.
 
@@ -60,8 +60,8 @@ performance claim follows from these checks.
 ## Remaining activation gate
 
 These are candidate-renderer results, not acceptance of the next signed daemon.
-After user activation, repeat the no-PNG progression check in that daemon,
+After activation, repeat the no-PNG progression check in that daemon,
 empty-Desktop icon/black checks, rapid reversals, individual and held keys,
-and final keyboard focus. The dedicated GPT-6 Luna publication chat handles
-signed release and the Nix package; the user performs the final Darwin switch.
+and final keyboard focus. The signed release and the Nix package are prepared separately; the maintainer
+performs the final Darwin switch.
 External-display behavior remains unverified while those displays are disconnected.

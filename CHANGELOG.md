@@ -20,7 +20,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Verification and limits
 - Bounded SDR capture and navigation evidence comes from macOS 27.2; the corrected capture API path targets macOS 26 and later. HDR, moving cursor, display reconfiguration, and broad application coverage remain unverified
 - The buffer/GPU work is an experimental feasibility prototype and is not used by the production renderer; no general smoothness or WindowServer resource improvement is claimed
-- New visual, performance, and WindowServer attribution tests are deferred until the user reboots with a fresh system; signed installed-daemon acceptance is still required
+- New visual, performance, and WindowServer attribution tests are deferred until a fresh-system reboot; signed installed-daemon acceptance is still required
 
 ## Fork history through v7.1.25-lcs.32
 ### Changed

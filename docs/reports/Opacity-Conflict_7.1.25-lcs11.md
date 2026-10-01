@@ -1,7 +1,7 @@
 # Effects investigation on lcs.11
 
 Measured on 2026-09-27. Read this alongside the primary-source
-[Apple motion research](../research/desktop-motion.md). This pass investigates
+[Apple motion research](../research/DESKTOP-MOTION.md). This pass investigates
 the current visual complaint; it does not change the production animator.
 
 ## Host and current policy
@@ -119,4 +119,4 @@ templates. A controlled trace or frame capture remains necessary to distinguish
 application rendering, compositor work and presentation irregularity. The
 alpha probe does not replace that check. Keep display-mode scaling and
 persistent inactive transparency as separate future controls; coordinate
-those measurements with any parallel performance work by Claude.
+those measurements with any parallel performance work.

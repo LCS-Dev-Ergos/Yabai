@@ -1,8 +1,8 @@
 # Capture candidate: decision-oriented live validation
 
-Worktree: `lcs-code/crossfade-capture-retention`, candidate `2131b94`, base
-`9a56727`. The user authorized continuing here and testing the unsigned local
-build. Keep the renderer fixed while assessing this capture replacement.
+Branch: `lcs-code/crossfade-capture-retention`, candidate `2131b94`, base
+`9a56727`. The unsigned local build is tested here. Keep the renderer fixed
+while assessing this capture replacement.
 
 ## Ordered gates
 
@@ -14,7 +14,7 @@ build. Keep the renderer fixed while assessing this capture replacement.
 3. On empty Spaces 3/4, warm once, then six effect-free and twelve isolated
    crossfade switches. Record destination, client return time and WindowServer
    footprint at every step. Hold the client alive after the workload. Stop
-   on user input, daemon failure, incorrect destination or growth over 300 MiB.
+   on keyboard or pointer input, daemon failure, incorrect destination or growth over 300 MiB.
 4. Require actual `snapshot ready` evidence: stable memory with effects skipped
    is not acceptance. Retain phase signposts. `prepare` is cumulative from the
    request start; subtract capture time before calling it drawing/preparation.

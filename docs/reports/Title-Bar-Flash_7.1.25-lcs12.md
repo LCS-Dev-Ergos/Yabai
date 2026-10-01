@@ -1,9 +1,9 @@
 # lcs.12 live follow-up
 
 2026-09-27. Active daemon: signed `7.1.25-lcs.12`, PID 15093. The read-only
-handshake returned payload `2.1.31-lcs.6` with attributes `0x5D`. The user
-reported visibly smoother transitions and better perceived performance, with
-a small title-bar flash in VS Code and other applications during transitions.
+handshake returned payload `2.1.31-lcs.6` with attributes `0x5D`. Visibly
+smoother transitions and better perceived performance were reported, with a
+small title-bar flash in VS Code and other applications during transitions.
 
 ## Configuration and bounded comparisons
 
@@ -35,7 +35,7 @@ A second on/off/off/on experiment disabled only ordinary opacity; navigation
 fading stayed enabled. On medians were 1753/945 ms and off medians 1635/1567 ms.
 WindowServer CPU time per active workload was 3.22/2.74 s on and 3.05/3.05 s off.
 These variable, queue-building absolute-request workloads do not demonstrate a
-repeatable configuration speedup. No navigation request failed. The user also
+repeatable configuration speedup. No navigation request failed. It was also
 reported that disabling ordinary opacity left the title-bar flash unchanged.
 The original opacity settings were restored; this is not a confirmed config bug.
 

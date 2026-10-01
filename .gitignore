@@ -11,3 +11,6 @@
 /leak-*
 /timeout-*
 /oom-*
+
+# Host-specific diagnostic records that stay out of the public history.
+/docs/reports/local/

@@ -108,7 +108,7 @@ debug`). The tools land in `build/debug/tools/`.
    ```sh
    tools/osax/macho.py extract $DOCK /tmp/dock
    llvm-objdump --macho -d /tmp/dock/Dock.0 | tools/osax/macho.py annotate $DOCK > dock0.s
-   tools/osax/macho.py callers 'addSpace' < dock0.s     # functions sending a selector
+   tools/osax/macho.py callers 'addSpace' < dock0.s      # functions sending a selector
    tools/osax/macho.py methods $DOCK | grep -i space     # Objective-C IMPs
    tools/osax/macho.py ivars $DOCK Spaces                # ivar offsets
    ```

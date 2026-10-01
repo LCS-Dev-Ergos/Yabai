@@ -5,20 +5,19 @@
 payload `2.1.31-lcs.12`. Local checks pass; live acceptance of this candidate
 has not been performed.
 
-## User direction
+## Direction
 
-In this project's continuation on 2026-09-28, the user explicitly chose
-“Continuare col crossfade dell’intero Desktop” after seeing a comparison with
-window-only fades. Keep the whole-Desktop effect and address its interference
-with SketchyBar, Desktop content and rapid navigation. Do not substitute a
-window-only fade as the everyday default.
+On 2026-09-28 the whole-Desktop crossfade was chosen over window-only fades
+after a side-by-side comparison. Keep the whole-Desktop effect and address its
+interference with SketchyBar, Desktop content and rapid navigation. Do not
+substitute a window-only fade as the everyday default.
 
 ## Reproduced on the installed version
 
 The landscape display is ID 3, 3008 by 1692 logical points. Desktops 9 and 10
 are empty; 6 has ChatGPT and 7/8 have Edge. The second display's Desktop 11
-was empty in this session, so this workload does not reproduce the handoff's
-Edge-on-two-displays configuration.
+was empty in this session, so this workload does not reproduce the
+Edge-on-two-displays configuration reported earlier.
 
 ScreenCaptureKit recorded presented frames, including the top 40 logical
 points containing SketchyBar. The bar's luminance normally remained near
@@ -36,7 +35,7 @@ transition. The no-effect and window-fade controls preserved it.
 | 9 to 10, tracked diagnostic, PNGs disabled | 10.63 | FAIL |
 | 9 to 10, same diagnostic without effect | 0.02 | PASS |
 
-The last pair is reproducible with the command in [testing](../testing.md#presented-bar-frames).
+The last pair is reproducible with the command in [testing](../TESTING.md#presented-bar-frames).
 Its data is in ignored `build/lcs21-bar-regression/`. Earlier image captures
 remain in ignored `build/visual-*`; enabling PNG output adds work and makes
 those runs unsuitable for presentation-timing comparisons. An excursion over
@@ -120,7 +119,6 @@ activation remain open. No macOS defaults were changed. Native transition
 entry points returned success in an exploratory check but did not establish
 intermediate presented frames, so they were not adopted.
 
-Activation follows the existing handoff boundary: ask before replacing the
-installed yabai, reloading the scripting addition or restarting Dock. The user
-runs `darwin-rebuild switch`; changing the payload version restarts Dock during
-that activation. Release/package preparation is separate from live acceptance.
+Replacing the installed yabai, reloading the scripting addition and restarting
+Dock are manual maintainer steps. The maintainer runs `darwin-rebuild switch`;
+changing the payload version restarts Dock during that activation. Release/package preparation is separate from live acceptance.

@@ -1,5 +1,5 @@
 // Opt-in, headless ScreenCaptureKit retention reproducer. Uses only public APIs.
-// See docs/reports/windowserver-capture-retention-2026-09-29.md.
+// See docs/reports/WindowServer-Capture-Retention_7.1.25-lcs32.md.
 // Build with ARC. Each READY/STEP/DONE waits for a newline so an external
 // observer can measure WindowServer while this process remains alive.
 // Does not save images, switch Spaces, create overlays or change the daemon.
