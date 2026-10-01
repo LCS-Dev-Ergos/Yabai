@@ -1,0 +1,87 @@
+name: Signed veil candidate
+
+on:
+  push:
+    branches: [lcs-code/navigation-veil]
+
+permissions:
+  contents: read
+
+env:
+  SIGNING_IDENTITY: yabai-lcs-dev
+
+jobs:
+  signed-test:
+    if: github.repository == 'LCS-Dev-Ergos/Yabai'
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Import the existing signing certificate
+        env:
+          P12: ${{ secrets.YABAI_SIGNING_P12 }}
+          P12_PASSWORD: ${{ secrets.YABAI_SIGNING_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keychain="$RUNNER_TEMP/effects-signing.keychain-db"
+          keychain_password=$(openssl rand -hex 16)
+          test -n "$P12" && test -n "$P12_PASSWORD"
+          printf '%s' "$P12" | base64 --decode > "$RUNNER_TEMP/effects-signing.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/effects-signing.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          existing=()
+          while IFS= read -r line; do existing+=("$(printf '%s' "$line" | tr -d '\" ')"); done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain" "${existing[@]}"
+          rm "$RUNNER_TEMP/effects-signing.p12"
+
+      - name: Build the signed Release candidate
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DYABAI_CODESIGN_IDENTITY="$SIGNING_IDENTITY" \
+            -DYABAI_ALLOW_UNSIGNED_LOCAL=OFF -DYABAI_LINK_COMPILE_COMMANDS=OFF \
+            -DYABAI_ARCHITECTURES=arm64 -DYABAI_OSAX_ARCHITECTURES=arm64e
+          cmake --build build --target yabai --parallel
+
+      - name: Verify and package the test binary
+        env:
+          VARIANT: veil
+        run: |
+          set -euo pipefail
+          grep -qx 'YABAI_ALLOW_UNSIGNED_LOCAL:BOOL=OFF' build/CMakeCache.txt
+          test "$(lipo -archs build/bin/yabai)" = "arm64"
+          test "$(lipo -archs build/src/osax/payload)" = "arm64e"
+          codesign --verify --strict --all-architectures build/bin/yabai
+          codesign -dvv build/bin/yabai 2>&1 | grep -qx "Authority=$SIGNING_IDENTITY"
+          mkdir -p archive/bin
+          cp build/bin/yabai archive/bin/yabai
+          git rev-parse HEAD > archive/source-sha.txt
+          printf '%s\n' "$VARIANT" > archive/variant.txt
+          printf '%s\n' 'Release; unsigned-local=OFF; capture-diagnostics=0; daemon=arm64; payload=arm64e' > archive/build-flags.txt
+          codesign -d -r- build/bin/yabai 2>&1 | sed -n 's/^designated => //p' > archive/daemon.requirement
+          test -s archive/daemon.requirement
+          COPYFILE_DISABLE=1 tar -czf "effects-$VARIANT.tar.gz" archive
+          shasum -a 256 "effects-$VARIANT.tar.gz" > "effects-$VARIANT.tar.gz.sha256"
+
+      - name: Upload temporary test artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: veil-signed-candidate
+          path: |
+            effects-veil.tar.gz
+            effects-veil.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Remove the signing keychain
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/effects-signing.p12"
+          security delete-keychain "$RUNNER_TEMP/effects-signing.keychain-db" || true
