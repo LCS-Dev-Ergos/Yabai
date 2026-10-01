@@ -150,24 +150,28 @@ static void handle_domain_config(FILE *rsp, struct token domain, char *message)
             }
         } else if (token_equals(command, COMMAND_CONFIG_OPACITY_DURATION)) {
             struct token_value value = token_to_value(get_token(&message));
+            float duration;
             if (value.type == TOKEN_TYPE_INVALID) {
                 fprintf(rsp, "%f\n", g_window_manager.window_opacity_duration);
-            } else if (value.type == TOKEN_TYPE_FLOAT) {
-                g_window_manager.window_opacity_duration = value.float_value;
+            } else if (token_value_to_finite_float(value, &duration) && duration >= 0.0f) {
+                g_window_manager.window_opacity_duration = duration;
             } else {
                 daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.token.length, value.token.text, command.length, command.text, domain.length, domain.text);
             }
         } else if (token_equals(command, COMMAND_CONFIG_ANIMATION_DURATION)) {
+            // An animation ends when its elapsed share of the duration reaches
+            // 1, which a negative or non-finite duration never lets happen.
             struct token_value value = token_to_value(get_token(&message));
+            float duration;
             if (value.type == TOKEN_TYPE_INVALID) {
                 fprintf(rsp, "%f\n", g_window_manager.window_animation_duration);
-            } else if (value.type == TOKEN_TYPE_FLOAT) {
-                if (value.float_value == 0.0f) {
-                    g_window_manager.window_animation_duration = value.float_value;
+            } else if (token_value_to_finite_float(value, &duration) && duration >= 0.0f) {
+                if (duration == 0.0f) {
+                    g_window_manager.window_animation_duration = duration;
                 } else if (!scripting_addition_is_sip_friendly()) {
                     daemon_fail(rsp, "command '%.*s' for domain '%.*s' requires System Integrity Protection to be partially disabled! ignoring request..\n", command.length, command.text, domain.length, domain.text);
                 } else if (CGPreflightScreenCaptureAccess()) {
-                    g_window_manager.window_animation_duration = value.float_value;
+                    g_window_manager.window_animation_duration = duration;
                 } else {
                     daemon_fail(rsp, "command '%.*s' for domain '%.*s' requires Screen Recording permissions! ignoring request..\n", command.length, command.text, domain.length, domain.text);
                     CGRequestScreenCaptureAccess();
@@ -229,28 +233,31 @@ static void handle_domain_config(FILE *rsp, struct token domain, char *message)
             }
         } else if (token_equals(command, COMMAND_CONFIG_MENUBAR_OPACITY)) {
             struct token_value value = token_to_value(get_token(&message));
+            float opacity;
             if (value.type == TOKEN_TYPE_INVALID) {
                 fprintf(rsp, "%.4f\n", g_window_manager.menubar_opacity);
-            } else if (value.type == TOKEN_TYPE_FLOAT && in_range_ii(value.float_value, 0.0f, 1.0f)) {
-                window_manager_set_menubar_opacity(&g_window_manager, value.float_value);
+            } else if (token_value_to_finite_float(value, &opacity) && in_range_ii(opacity, 0.0f, 1.0f)) {
+                window_manager_set_menubar_opacity(&g_window_manager, opacity);
             } else {
                 daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.token.length, value.token.text, command.length, command.text, domain.length, domain.text);
             }
         } else if (token_equals(command, COMMAND_CONFIG_ACTIVE_WINDOW_OPACITY)) {
             struct token_value value = token_to_value(get_token(&message));
+            float opacity;
             if (value.type == TOKEN_TYPE_INVALID) {
                 fprintf(rsp, "%.4f\n", g_window_manager.active_window_opacity);
-            } else if (value.type == TOKEN_TYPE_FLOAT && in_range_ei(value.float_value, 0.0f, 1.0f)) {
-                window_manager_set_active_window_opacity(&g_window_manager, value.float_value);
+            } else if (token_value_to_finite_float(value, &opacity) && in_range_ei(opacity, 0.0f, 1.0f)) {
+                window_manager_set_active_window_opacity(&g_window_manager, opacity);
             } else {
                 daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.token.length, value.token.text, command.length, command.text, domain.length, domain.text);
             }
         } else if (token_equals(command, COMMAND_CONFIG_NORMAL_WINDOW_OPACITY)) {
             struct token_value value = token_to_value(get_token(&message));
+            float opacity;
             if (value.type == TOKEN_TYPE_INVALID) {
                 fprintf(rsp, "%.4f\n", g_window_manager.normal_window_opacity);
-            } else if (value.type == TOKEN_TYPE_FLOAT && in_range_ei(value.float_value, 0.0f, 1.0f)) {
-                window_manager_set_normal_window_opacity(&g_window_manager, value.float_value);
+            } else if (token_value_to_finite_float(value, &opacity) && in_range_ei(opacity, 0.0f, 1.0f)) {
+                window_manager_set_normal_window_opacity(&g_window_manager, opacity);
             } else {
                 daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.token.length, value.token.text, command.length, command.text, domain.length, domain.text);
             }
@@ -428,10 +435,11 @@ static void handle_domain_config(FILE *rsp, struct token domain, char *message)
             }
         } else if (token_equals(command, COMMAND_CONFIG_SPLIT_RATIO)) {
             struct token_value value = token_to_value(get_token(&message));
+            float ratio;
             if (value.type == TOKEN_TYPE_INVALID) {
                 fprintf(rsp, "%.4f\n", g_space_manager.split_ratio);
-            } else if (value.type == TOKEN_TYPE_FLOAT && in_range_ii(value.float_value, 0.1f, 0.9f)) {
-                g_space_manager.split_ratio = value.float_value;
+            } else if (token_value_to_finite_float(value, &ratio) && in_range_ii(ratio, 0.1f, 0.9f)) {
+                g_space_manager.split_ratio = ratio;
             } else {
                 daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.token.length, value.token.text, command.length, command.text, domain.length, domain.text);
             }

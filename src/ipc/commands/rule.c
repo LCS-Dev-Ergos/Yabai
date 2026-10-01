@@ -113,10 +113,7 @@ static bool parse_rule(FILE *rsp, char **message, struct rule *rule, struct toke
         } else if (string_equals(key, ARGUMENT_RULE_KEY_GRID)) {
             if (exclusion) unsupported_exclusion = key;
 
-            if ((sscanf(value, ARGUMENT_RULE_VALUE_GRID,
-                        &rule->effects.grid[0], &rule->effects.grid[1],
-                        &rule->effects.grid[2], &rule->effects.grid[3],
-                        &rule->effects.grid[4], &rule->effects.grid[5]) != 6)) {
+            if (!parse_grid(value, rule->effects.grid)) {
                 daemon_fail(rsp, "invalid value '%s' for key '%s'\n", value, key);
                 did_parse = false;
             }

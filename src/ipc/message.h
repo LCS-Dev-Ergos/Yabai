@@ -221,7 +221,6 @@
 #define ARGUMENT_RULE_KEY_SCRATCHPAD "scratchpad"
 
 #define ARGUMENT_RULE_VALUE_SPACE '^'
-#define ARGUMENT_RULE_VALUE_GRID  "%d:%d:%d:%d:%d:%d"
 /* ----------------------------------------------------------------------------- */
 
 /* --------------------------------DOMAIN SIGNAL-------------------------------- */
@@ -322,6 +321,8 @@ struct token get_token(char **message);
 bool token_equals(struct token token, char *match);
 static inline bool token_is_valid(struct token token);
 struct token_value token_to_value(struct token token);
+static bool token_value_to_finite_float(struct token_value value, float *result);
+static bool parse_grid(char *text, unsigned grid[6]);
 void daemon_fail(FILE *rsp, char *fmt, ...);
 static void parse_key_value_pair(char *token, char **key, char **value, bool *exclusion);
 static uint8_t parse_value_type(char *type);

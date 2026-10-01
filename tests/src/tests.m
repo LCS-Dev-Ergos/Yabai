@@ -106,6 +106,7 @@ typedef TEST_SIG(function);
 #include "view_layout.c"
 #include "window_rules.c"
 #include "command_domains.c"
+#include "command_values.c"
 #include "navigation_args.c"
 #include "signal_dispatch.c"
 #include "signal_environment.c"
@@ -147,6 +148,9 @@ typedef TEST_SIG(function);
     TEST_ENTRY(command_domain_state_changes)                  \
     TEST_ENTRY(config_navigation_fade_curve)                  \
     TEST_ENTRY(config_navigation_veil_blur)                   \
+    TEST_ENTRY(config_decimal_values)                         \
+    TEST_ENTRY(window_value_bounds)                           \
+    TEST_ENTRY(rule_grid_bounds)                              \
     TEST_ENTRY(jankyborders_resource_lifetime)                \
     TEST_ENTRY(mouse_tap_resource_lifetime)
 
