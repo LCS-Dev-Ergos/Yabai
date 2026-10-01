@@ -52,7 +52,7 @@ void space_navigation_note_message(char *message)
 // 0, or no switch when it names none. A jump from a Desktop number counts from
 // that Desktop. A request handled at once reuses its snapshot of the Desktops;
 // a later one takes its own. A crossfade step returns while its capture is
-// under way, see step.h.
+// under way, see step.h; a veil step does not.
 static enum space_navigation_result space_navigation_execute(struct space_navigation_request *request, int steps,
                                                              bool activate, bool settle, float duration)
 {
@@ -67,6 +67,7 @@ static enum space_navigation_result space_navigation_execute(struct space_naviga
         .sid = sid,
         .move = request->move,
         .crossfade = request->crossfade,
+        .veil = request->veil,
         .alpha = request->alpha,
         .duration = duration,
         .activate = activate,
@@ -170,11 +171,12 @@ static void space_navigation_run_request(FILE *rsp, char **message)
     struct token from = get_token(message);
     struct token time = get_token(message);
     bool crossfade = token_equals(from, "crossfade");
+    bool veil = token_equals(from, "veil");
 
     if (!current || !selector.did_parse || !selector.sid
-        || (!crossfade && (!space_navigation_number(from, &alpha) || alpha == 0.0f))
+        || (!crossfade && !veil && (!space_navigation_number(from, &alpha) || alpha == 0.0f))
         || !space_navigation_number(time, &duration)) {
-        daemon_fail(rsp, "navigate expects SPACE_SEL, crossfade or an opacity in (0,1], and a duration in [0,1] seconds.\n");
+        daemon_fail(rsp, "navigate expects SPACE_SEL, crossfade, veil or an opacity in (0,1], and a duration in [0,1] seconds.\n");
         return;
     }
 
@@ -184,6 +186,7 @@ static void space_navigation_run_request(FILE *rsp, char **message)
             .sid = selector.sid,
             .move = move,
             .crossfade = crossfade,
+            .veil = veil,
             .alpha = alpha,
             .duration = duration,
             .activate = true
@@ -215,6 +218,7 @@ static void space_navigation_run_request(FILE *rsp, char **message)
         .sid = steps ? 0 : selector.sid,
         .fast = !move && claim.time && gap < SPACE_NAVIGATION_FAST_NS,
         .crossfade = crossfade,
+        .veil = veil,
         .alpha = alpha,
         .duration = duration,
         .time = claim.first_time

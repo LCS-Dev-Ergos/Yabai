@@ -274,3 +274,131 @@ static void test_steps(void)
     assert(!space_navigation_run_step(active_space, &settle));
     assert(window_focus_calls == 0);
 }
+
+static struct space_navigation_step veil_step(uint64_t sid, bool activate, float duration)
+{
+    return (struct space_navigation_step) {
+        .sid = sid,
+        .veil = true,
+        .alpha = 1.0f,
+        .duration = duration,
+        .activate = activate
+    };
+}
+
+// A veil shows before Dock switches, like the prepared image, but captures
+// nothing and never waits for the schedule: it runs to its end within the
+// step, under the same conditions as the crossfade.
+static void test_veil_steps(void)
+{
+    struct space_navigation_step step;
+
+    reset();
+    step = veil_step(2, true, .2f);
+    assert(space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 1 && snapshot_prepares == 0 && capture_calls == 0);
+    assert(snapshot_starts == 1 && last_crossfade_duration == .2f && switched_duration == .2f);
+    assert(focus_calls == 1 && batch_calls == 0 && opacity_calls == 0);
+    assert(window_focus_calls == 1 && focused_id == 1 && activated_id == 1 && noted_id == 1);
+    assert(space_navigation_anchor.sid == 2);
+
+    // A queued step starts and ends at once: never pending, no capture event.
+    reset();
+    step = veil_step(2, true, .2f);
+    assert(space_navigation_begin_step(active_space, &step) == SPACE_NAVIGATION_SWITCHED);
+    assert(veil_prepares == 1 && capture_calls == 0 && present_calls == 0 && completed_calls == 0);
+    assert(!space_navigation_flight.active && snapshot_starts == 1 && switched_duration == .2f);
+    assert(window_focus_calls == 1 && activated_id == 1);
+
+    reset();
+    focus_success = false;
+    step = veil_step(2, true, .2f);
+    assert(space_navigation_begin_step(active_space, &step) == SPACE_NAVIGATION_FAILED);
+    assert(veil_prepares == 1 && snapshot_starts == 1 && window_focus_calls == 0 && activated_id == 0);
+
+    // No veil could be shown: the step switches without an effect.
+    reset();
+    veil_success = false;
+    step = veil_step(2, true, .2f);
+    assert(space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 1 && snapshot_starts == 0 && focus_calls == 1 && active_space == 2);
+    assert(switched_duration == 0.0f && window_focus_calls == 1);
+
+    // Dock fails with the veil shown: it is ended, nothing is activated.
+    reset();
+    focus_success = false;
+    step = veil_step(2, true, .2f);
+    assert(!space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 1 && snapshot_starts == 1 && window_focus_calls == 0);
+
+    // A click while the veil came up wins over the switch and ends the veil.
+    reset();
+    click_during_snapshot = true;
+    step = veil_step(2, true, .2f);
+    assert(!space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 1 && snapshot_starts == 0 && focus_calls == 0);
+    assert(snapshot_cancels == 2);
+
+    // A visible or fullscreen destination, a fullscreen source, and a request
+    // without duration (a fast one) run without the veil; Mission Control
+    // fails the step before anything is shown.
+    reset();
+    visible = true;
+    step = veil_step(3, true, .2f);
+    assert(space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 0 && snapshot_starts == 0 && focus_calls == 1);
+
+    reset();
+    fullscreen = true;
+    step = veil_step(2, true, .2f);
+    assert(space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 0 && snapshot_starts == 0 && focus_calls == 1);
+
+    reset();
+    step = veil_step(2, true, 0.0f);
+    assert(space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 0 && snapshot_starts == 0 && focus_calls == 1 && window_focus_calls == 1);
+    assert(batch_calls == 0 && opacity_calls == 0 && switched_duration == 0.0f);
+
+    reset();
+    mission_control = true;
+    step = veil_step(2, true, .2f);
+    assert(!space_navigation_run_step(active_space, &step));
+    assert(space_navigation_begin_step(active_space, &step) == SPACE_NAVIGATION_FAILED);
+    assert(veil_prepares == 0 && focus_calls == 0);
+
+    // Reduce Motion keeps the veil, as it keeps the crossfade.
+    reset();
+    reduce_motion = true;
+    step = veil_step(2, true, .2f);
+    assert(space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 1 && snapshot_starts == 1 && focus_calls == 1);
+
+    // An intermediate step shows the veil and activates nothing; a step to
+    // the Desktop already reached has nothing to veil.
+    reset();
+    other_window_space = visible_space = 3;
+    step = veil_step(2, false, .2f);
+    assert(space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 1 && snapshot_starts == 1 && window_focus_calls == 0 && raise_calls == 0);
+    assert(window_list_queries == 0 && activated_id == 0 && display_calls == 0);
+
+    reset();
+    step = veil_step(active_space, true, .2f);
+    assert(space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 0 && focus_calls == 0);
+
+    // A window move keeps the effect of its request.
+    reset();
+    step = veil_step(2, true, .2f);
+    step.move = true;
+    assert(space_navigation_run_step(active_space, &step));
+    assert(move_calls == 1 && veil_prepares == 1 && snapshot_starts == 1 && click_raise_calls == 1);
+
+    // The effects exclude each other: a step with both is a veil.
+    reset();
+    step = veil_step(2, true, .2f);
+    step.crossfade = true;
+    assert(space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 1 && snapshot_prepares == 0);
+}

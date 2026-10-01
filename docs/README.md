@@ -6,8 +6,8 @@ How the fork works:
   ownership, known risks and the refactor plan. Start here.
 - [Navigation](NAVIGATION.md): `space --navigate`, pacing, relative requests,
   focus and raise.
-- [Effects](EFFECTS.md): the snapshot crossfade, window fades and the opacity
-  policy.
+- [Effects](EFFECTS.md): the snapshot crossfade, the veil, window fades and the
+  opacity policy.
 - [Scripting addition](OSAX.md): the Dock payload, its protocol and the
   macOS 27 lookups.
 

@@ -7,7 +7,8 @@ static uint64_t now = 10000000000ULL;
 static uint64_t current = 1;
 static uint64_t target[32];
 static float durations[32];
-static bool activations[32];
+static bool activations[32], crossfades[32], veils[32];
+static char last_reply[256];
 static int switches, skips;
 static double click_seconds = 1000.0;
 static uint64_t dispatch_delay;
@@ -48,12 +49,24 @@ static enum space_navigation_result space_navigation_begin_step(uint64_t from, s
     assert(switches < 32);
     target[switches] = step->sid;
     durations[switches] = step->duration;
+    crossfades[switches] = step->crossfade;
+    veils[switches] = step->veil;
     activations[switches++] = step->activate;
     current = step->sid;
     space_navigation_schedule_switched(step->duration);
     return SPACE_NAVIGATION_SWITCHED;
 }
-static bool space_navigation_run_step(uint64_t from, struct space_navigation_step *step) { return true; }
+static int veil_runs;
+static bool last_run_veil, last_run_crossfade;
+static float last_run_duration;
+static bool space_navigation_run_step(uint64_t from, struct space_navigation_step *step)
+{
+    veil_runs += step->veil;
+    last_run_veil = step->veil;
+    last_run_crossfade = step->crossfade;
+    last_run_duration = step->duration;
+    return true;
+}
 #define event_loop_post(...) ((void)0)
 #include "../../src/navigation/schedule.c"
 #include "../../src/navigation/command.c"
@@ -70,7 +83,7 @@ static void reset(void)
     space_navigation_note_message(cancel);
     now += 10000000000ULL;
     current = 1;
-    switches = skips = 0;
+    switches = skips = veil_runs = 0;
     click_seconds = 1000.0;
     dispatch_delay = 0;
 }
@@ -101,6 +114,9 @@ static bool submit(const char *selector, const char *action, const char *effect,
     assert(response);
     space_navigation_command(response, &message);
     bool accepted = ftell(response) == 0;
+    memset(last_reply, 0, sizeof(last_reply));
+    rewind(response);
+    fread(last_reply, 1, sizeof(last_reply) - 1, response);
     fclose(response);
     close(pair[0]);
     close(pair[1]);
@@ -116,37 +132,83 @@ static void drain(void)
     assert(!g_space_navigation_schedule.count);
 }
 
-static void test_mixed_and_wrapping(void)
+static void test_mixed_and_wrapping(const char *effect)
 {
     const char *first[] = { "3", "next", "6", "1" };
     const char *second[] = { "next", "5", "next", "prev" };
     uint64_t expected[] = { 4, 5, 1, 6 };
     for (int i = 0; i < 4; ++i) {
         reset();
-        assert(submit(first[i], "focus", "crossfade", "0.25"));
+        assert(submit(first[i], "focus", effect, "0.25"));
         now += 30000000ULL;
-        assert(submit(second[i], "focus", "crossfade", "0.25"));
+        assert(submit(second[i], "focus", effect, "0.25"));
         drain();
         assert(switches == 2 && target[1] == expected[i] && durations[1] == 0 && activations[1]);
     }
 
     reset();
-    assert(submit("2", "focus", "crossfade", "0.25"));
+    assert(submit("2", "focus", effect, "0.25"));
     now += 30000000ULL;
-    assert(submit("3", "focus", "crossfade", "0.25"));
+    assert(submit("3", "focus", effect, "0.25"));
     now += 30000000ULL;
-    assert(submit("3", "focus", "crossfade", "0.25"));
+    assert(submit("3", "focus", effect, "0.25"));
     assert(g_space_navigation_schedule.count == 1);
     drain();
     assert(switches == 2 && target[1] == 3 && activations[1]);
 
     // Queue delays must not hide an actual quick ingress.
     reset();
-    assert(submit("3", "focus", "crossfade", "0.25"));
+    assert(submit("3", "focus", effect, "0.25"));
     now += 30000000ULL;
     dispatch_delay = 600000000ULL;
-    assert(submit("4", "focus", "crossfade", "0.25"));
+    assert(submit("4", "focus", effect, "0.25"));
     assert(switches == 2 && durations[1] == 0);
+}
+
+// The veil is a request effect like the crossfade: it reaches the step as its
+// own flag, has no duration in a quick burst, and only its exact name counts.
+static void test_veil(void)
+{
+    reset();
+    assert(submit("3", "focus", "veil", "0.25"));
+    assert(switches == 1 && target[0] == 3 && durations[0] == .25f && veils[0] && !crossfades[0] && activations[0]);
+    now += 30000000ULL;
+    assert(submit("6", "focus", "veil", "0.25"));
+    assert(g_space_navigation_schedule.queue[0].fast && g_space_navigation_schedule.queue[0].veil);
+    drain();
+    assert(switches == 2 && target[1] == 6 && durations[1] == 0 && veils[1] && !crossfades[1] && activations[1]);
+
+    reset();
+    assert(submit("3", "focus", "crossfade", "0.25"));
+    assert(switches == 1 && crossfades[0] && !veils[0]);
+    assert(submit("4", "move", "veil", "0.25"));
+    drain();
+    assert(switches == 2 && veils[1] && !crossfades[1] && durations[1] == .25f);
+
+    reset();
+    assert(submit("3", "focus", "0.5", "0.25"));
+    assert(!crossfades[0] && !veils[0]);
+
+    // Another word, or the right one in another case, is refused with the
+    // message that names the veil.
+    const char *invalid[] = { "veils", "vei", "Veil", "VEIL", "veil1", "crossfades" };
+    for (int i = 0; i < 6; ++i) {
+        reset();
+        assert(!submit("3", "focus", invalid[i], "0.25"));
+        assert(strstr(last_reply, "veil") && strstr(last_reply, "crossfade") && switches == 0);
+    }
+
+    reset();
+    assert(!submit("3", "focus", "veil", "1.5"));
+    assert(!submit("3", "focus", "veil", "-0.1"));
+    assert(switches == 0);
+
+    // Pacing off: the step is made at once with the flag.
+    reset();
+    g_space_navigation_schedule.pacing = false;
+    assert(submit("3", "focus", "veil", "0.25"));
+    assert(switches == 0 && veil_runs == 1 && last_run_veil && !last_run_crossfade && last_run_duration == .25f);
+    g_space_navigation_schedule.pacing = true;
 }
 
 static void test_invalid_and_cancel(void)
@@ -222,9 +284,11 @@ int main(void)
     assert(g_space_navigation_schedule.queue[0].fast);
     drain();
     assert(switches == 2 && target[1] == 6 && durations[1] == 0 && activations[1]);
-    test_mixed_and_wrapping();
+    test_mixed_and_wrapping("crossfade");
+    test_mixed_and_wrapping("veil");
+    test_veil();
     test_invalid_and_cancel();
     test_rejection();
-    puts("navigation ingress: numeric and mixed bursts, wrapping, validation, rejection and cancellation passed");
+    puts("navigation ingress: numeric and mixed bursts, veil, wrapping, validation, rejection and cancellation passed");
     return 0;
 }

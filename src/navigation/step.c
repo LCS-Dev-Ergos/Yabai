@@ -168,12 +168,13 @@ static bool space_navigation_clicked_since(uint64_t time)
     return space_navigation_seconds_since_click() * 1e9 < (double) (read_os_timer() - time);
 }
 
-// The crossfade blends two opaque Desktops, so it stays under Reduce Motion,
-// whose own Desktop transition is a crossfade. It needs a hidden destination
-// and ordinary Desktops on both sides.
-static bool space_navigation_crossfades(uint64_t current, struct space_navigation_step *step)
+// The crossfade and the veil cover the whole display, so both stay under
+// Reduce Motion, whose own Desktop transition is a crossfade. They need a
+// hidden destination and ordinary Desktops on both sides, and a duration: a
+// fast request has none.
+static bool space_navigation_overlays(uint64_t current, struct space_navigation_step *step)
 {
-    return step->crossfade && step->duration > 0.0f && !space_navigation_space_visible(step->sid)
+    return (step->crossfade || step->veil) && step->duration > 0.0f && !space_navigation_space_visible(step->sid)
         && !space_navigation_space_fullscreen(step->sid) && !space_navigation_space_fullscreen(current);
 }
 
@@ -264,10 +265,10 @@ static void space_navigation_finish(struct space_navigation_plan *plan, bool suc
     }
 }
 
-// Switches under the prepared snapshot, if there is one: Dock's own switch,
+// Switches under the prepared overlay, if there is one: Dock's own switch,
 // with only our overlay fading. Never apply alpha to Spaces: Finder content
 // is shared between them.
-static bool space_navigation_switch_crossfade(struct space_navigation_plan *plan, bool prepared)
+static bool space_navigation_switch_overlay(struct space_navigation_plan *plan, bool prepared)
 {
 #ifdef YABAI_CAPTURE_DIAGNOSTICS
     uint64_t generation = space_snapshot_diag_active_generation();
@@ -312,7 +313,8 @@ static bool space_navigation_switch_fade(struct space_navigation_plan *plan, str
     return success && effects_ok;
 }
 
-// Runs a step to its end. A crossfade waits here for its capture.
+// Runs a step to its end. A crossfade waits here for its capture, a veil for
+// its two refreshes.
 static bool space_navigation_run_step(uint64_t current, struct space_navigation_step *step)
 {
     if (current == step->sid) return step->activate && step->settle ? space_navigation_settle(step->sid) : true;
@@ -322,13 +324,15 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
     int count;
     if (!space_navigation_plan(current, step, &plan, &ids, &count)) return false;
 
-    if (!step->crossfade) return space_navigation_switch_fade(&plan, step, ids, count);
+    if (!step->crossfade && !step->veil) return space_navigation_switch_fade(&plan, step, ids, count);
 
     bool prepared = false;
 
-    if (space_navigation_crossfades(current, step)) {
+    if (space_navigation_overlays(current, step)) {
         uint64_t capture_started = read_os_timer();
-        prepared = space_navigation_snapshot_prepare(plan.display, plan.sid, space_navigation_frame_interval(plan.display));
+        float interval = space_navigation_frame_interval(plan.display);
+        prepared = step->veil ? space_navigation_veil_prepare(plan.display, plan.sid, interval)
+                              : space_navigation_snapshot_prepare(plan.display, plan.sid, interval);
 
         if (space_navigation_clicked_since(capture_started)) {
             space_navigation_snapshot_cancel();
@@ -336,7 +340,7 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
         }
     }
 
-    return space_navigation_switch_crossfade(&plan, prepared);
+    return space_navigation_switch_overlay(&plan, prepared);
 }
 
 // The step waiting for its snapshot capture. Only the event loop touches it.
@@ -351,7 +355,7 @@ static struct
 // Starts a step. A crossfade requests its capture and returns
 // SPACE_NAVIGATION_PENDING; space_navigation_step_captured switches when the
 // capture comes back or its deadline passes, and reports the outcome to the
-// schedule. Any other step runs to its end here.
+// schedule. Any other step, a veil included, runs to its end here.
 static enum space_navigation_result space_navigation_begin_step(uint64_t current, struct space_navigation_step *step)
 {
     if (current == step->sid || !step->crossfade) {
@@ -363,7 +367,7 @@ static enum space_navigation_result space_navigation_begin_step(uint64_t current
     int count;
     if (!space_navigation_plan(current, step, &plan, &ids, &count)) return SPACE_NAVIGATION_FAILED;
 
-    if (space_navigation_crossfades(current, step)) {
+    if (space_navigation_overlays(current, step)) {
         uint64_t capture_started = read_os_timer();
         int token = ++space_navigation_flight.token;
         if (!token) token = ++space_navigation_flight.token;
@@ -381,7 +385,7 @@ static enum space_navigation_result space_navigation_begin_step(uint64_t current
         }
     }
 
-    return space_navigation_switch_crossfade(&plan, false) ? SPACE_NAVIGATION_SWITCHED : SPACE_NAVIGATION_FAILED;
+    return space_navigation_switch_overlay(&plan, false) ? SPACE_NAVIGATION_SWITCHED : SPACE_NAVIGATION_FAILED;
 }
 
 // Check before expensive presentation, and again afterwards: pointer input
@@ -410,7 +414,7 @@ static void space_navigation_complete_capture(int token, bool skip)
     bool success = false;
 
     if (!stopped) {
-        success = space_navigation_switch_crossfade(&plan, result == SPACE_SNAPSHOT_READY);
+        success = space_navigation_switch_overlay(&plan, result == SPACE_SNAPSHOT_READY);
     } else if (result == SPACE_SNAPSHOT_READY) {
         space_navigation_snapshot_cancel();
     }

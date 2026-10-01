@@ -210,6 +210,12 @@ Global Settings
     Easing function to use for window animations. +
     See https://easings.net for details.
 
+*navigation_fade_curve* ['smooth|ease_out']::
+    Opacity curve of the crossfade and the veil that *space --navigate* shows over a Desktop switch. +
+    'smooth' starts slowly and ends slowly: 5% of the change takes 13.5% of the duration. +
+    'ease_out' changes fastest at the start: 5% of the change takes 2.5% of the duration. +
+    The duration is the same for both.
+
 *insert_feedback_color* ['0xAARRGGBB']::
     Color of the *window --insert* message and mouse_drag selection. +
     The purpose is to provide a visual preview of the new window frame.

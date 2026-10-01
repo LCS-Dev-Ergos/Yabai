@@ -24,17 +24,17 @@ static void window_manager_handle_front_focus(struct application *application);
 static void window_focus_consume(uint32_t window_id);
 void space_navigation_schedule_focused(uint32_t window_id);
 
-// events/handlers/spaces.c, SLS_SPACE_CREATED: the crossfade's auxiliary
+// events/handlers/spaces.c, SLS_SPACE_CREATED: the crossfade's and veil's auxiliary
 // Spaces are not Desktops and need no view.
 bool space_navigation_snapshot_owns_space(uint64_t sid);
 
-// events/handlers/spaces.c, SPACE_CHANGED: a crossfade ends once its display
+// events/handlers/spaces.c, SPACE_CHANGED: a crossfade or veil ends once its display
 // leaves the Desktop it switched to.
 void space_navigation_snapshot_space_changed(void);
 
 // events/handlers/displays.c (display changes), mouse.c (MOUSE_DOWN),
 // mission_control.c (Mission Control), and system.c (Dock restart and wake):
-// these handlers end a crossfade. The navigation step and command do too.
+// these handlers end a crossfade or veil. The navigation step and command do too.
 void space_navigation_snapshot_cancel(void);
 
 // events/handlers/messages.c, DAEMON_MESSAGE, before the request is read:
@@ -60,7 +60,7 @@ uint64_t space_navigation_active_space(void);
 void space_navigation_command(FILE *rsp, char **message);
 
 // ipc/message_loop.c, handle_message, before any command: every command but a query
-// or a navigation ends the anchor, the deferred focus, the crossfade and the
+// or a navigation ends the anchor, the deferred focus, the crossfade or veil and the
 // queued navigation.
 void space_navigation_note_message(char *message);
 

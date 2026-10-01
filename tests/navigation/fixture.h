@@ -55,7 +55,8 @@ static int focus_calls, opacity_calls, window_focus_calls, raise_calls, move_cal
 static int click_raise_calls;
 static bool crossfade_success;
 static float last_crossfade_duration;
-static int snapshot_prepares, snapshot_starts, snapshot_cancels;
+static int snapshot_prepares, snapshot_starts, snapshot_cancels, veil_prepares;
+static bool veil_success;
 static bool click_during_snapshot;
 static bool capture_starts;
 static int capture_calls, present_calls, completed_calls, capture_token;
@@ -146,7 +147,8 @@ static void reset(void)
     click_raise_calls = 0;
     crossfade_success = true;
     last_crossfade_duration = 0.0f;
-    snapshot_prepares = snapshot_starts = snapshot_cancels = 0;
+    snapshot_prepares = snapshot_starts = snapshot_cancels = veil_prepares = 0;
+    veil_success = true;
     click_during_snapshot = false;
     capture_starts = true;
     capture_calls = present_calls = completed_calls = capture_token = 0;

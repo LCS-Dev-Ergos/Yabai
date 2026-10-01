@@ -277,9 +277,10 @@ Navigation (`space --navigate`), in the order a request travels:
 
 Effects:
 
-- **Snapshot crossfade** (`effects/snapshot*.m`): the capture
+- **Snapshot crossfade and veil** (`effects/snapshot*.m`): the capture
   (`snapshot_capture.m`), the owned overlay window in an auxiliary Space
-  (`snapshot_surface.m`), its alpha timer and cancellation (`snapshot.m`).
+  (`snapshot_surface.m`), its alpha timer and cancellation (`snapshot.m`). The
+  veil is the same overlay filled with black instead of a capture.
 - **Window fade** (`effects/window_fade.c`, `sa_opacity.c`, payload
   `window_fade*.c`): the older per-window fade and the opacity policy.
 - **Display facts** (`effects/display.m`): the refresh interval effects are

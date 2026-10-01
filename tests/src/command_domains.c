@@ -143,4 +143,48 @@ TEST_FUNC(command_domain_state_changes,
     g_verbose = saved_verbose;
 });
 
+// The fade curve of the navigation overlays: the default, each listed name
+// through get and set, and nothing else.
+TEST_FUNC(config_navigation_fade_curve,
+{
+    int saved = g_window_manager.navigation_fade_curve;
+    char *output;
+
+    g_window_manager.navigation_fade_curve = SPACE_SNAPSHOT_CURVE_SMOOTH;
+    output = TEST_COMMAND("config", "navigation_fade_curve");
+    TEST_CHECK(strcmp(output, "smooth\n") == 0, true);
+    free(output);
+
+    output = TEST_COMMAND("config", "navigation_fade_curve", "ease_out");
+    TEST_CHECK(strcmp(output, "") == 0, true);
+    TEST_CHECK(g_window_manager.navigation_fade_curve, SPACE_SNAPSHOT_CURVE_EASE_OUT);
+    free(output);
+    output = TEST_COMMAND("config", "navigation_fade_curve");
+    TEST_CHECK(strcmp(output, "ease_out\n") == 0, true);
+    free(output);
+
+    output = TEST_COMMAND("config", "navigation_fade_curve", "smooth");
+    TEST_CHECK(strcmp(output, "") == 0, true);
+    TEST_CHECK(g_window_manager.navigation_fade_curve, SPACE_SNAPSHOT_CURVE_SMOOTH);
+    free(output);
+
+    // A refused value leaves the setting as it was; names match exactly.
+    g_window_manager.navigation_fade_curve = SPACE_SNAPSHOT_CURVE_EASE_OUT;
+    const char *invalid[] = { "cubic", "ease-out", "ease_out2", "Smooth", "0", "ease" };
+    for (int i = 0; i < array_count(invalid); ++i) {
+        char expected[160];
+        snprintf(expected, sizeof(expected),
+                 "\x07unknown value '%s' given to command 'navigation_fade_curve' for domain 'config'\n", invalid[i]);
+        output = TEST_COMMAND("config", "navigation_fade_curve", invalid[i]);
+        if (strcmp(output, expected) != 0) {
+            printf("                   %s returned '%s'\n", invalid[i], output);
+            result = false;
+        }
+        TEST_CHECK(g_window_manager.navigation_fade_curve, SPACE_SNAPSHOT_CURVE_EASE_OUT);
+        free(output);
+    }
+
+    g_window_manager.navigation_fade_curve = saved;
+});
+
 #undef TEST_COMMAND

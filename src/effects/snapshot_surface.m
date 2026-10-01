@@ -31,6 +31,21 @@ static bool space_snapshot_surface_create(struct space_snapshot *snapshot, CGIma
     return true;
 }
 
+// The veil: one opaque black rectangle over the whole window, drawn before the
+// window is ordered in for the same reason as the image. Copy mode writes
+// the black without blending with whatever the backing held.
+static bool space_snapshot_surface_fill(struct space_snapshot *snapshot, CGRect bounds)
+{
+    snapshot->backing = SLWindowContextCreate(SLSMainConnectionID(), snapshot->window, NULL);
+    if (!snapshot->backing) return false;
+
+    CGContextSetBlendMode(snapshot->backing, kCGBlendModeCopy);
+    CGContextSetRGBFillColor(snapshot->backing, 0.0, 0.0, 0.0, 1.0);
+    CGContextFillRect(snapshot->backing, CGRectMake(0, 0, bounds.size.width, bounds.size.height));
+    CGContextFlush(snapshot->backing);
+    return true;
+}
+
 // Sticky windows are temporarily hidden and reattached during the ordinary
 // switch. That produces destination -> outgoing image -> destination. Keep
 // this owned overlay outside both user Spaces, as SketchyBar does for its bar.

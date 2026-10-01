@@ -17,6 +17,13 @@ static uint64_t read_os_timer(void)
 }
 
 static int live_windows, live_spaces, alpha_writes, color_space_writes;
+// What the veil asks of the window, in the order WindowServer sees it.
+static double last_resolution;
+static float last_alpha, alpha_at_order, max_alpha;
+static int alpha_rises;
+static int orders;
+static CGContextRef last_context;
+static int context_color_space_writes;
 static bool deny_capture, fail_create, fail_context, fail_order, fail_attach, fail_alpha;
 static bool wrong_capture_size;
 static uint64_t capture_delay, capture_start_delay;
@@ -28,7 +35,7 @@ static CGRect fixture_bounds = {{0, 0}, {16, 16}};
 
 // Captures whose callbacks do not arrive until the test delivers them.
 static bool capture_lost;
-static void (^lost_handlers[8])(SCScreenshotOutput *, NSError *);
+static void (^lost_handlers[16])(SCScreenshotOutput *, NSError *);
 static int lost_count;
 static int modern_capture_calls, legacy_capture_calls;
 
@@ -109,6 +116,8 @@ static CGError SLSNewWindowWithOpaqueShapeAndContext(int c, int t, CFTypeRef r, 
     assert(*tags & (1ULL << 9)); // Overlay must never intercept clicks.
     if (fail_create) return kCGErrorFailure;
     color_space_writes = 0;
+    last_resolution = 0;
+    last_alpha = -1.0f;
     *w = 77;
     __atomic_add_fetch(&live_windows, 1, __ATOMIC_SEQ_CST);
     return 0;
@@ -118,7 +127,7 @@ static CGError SLSSetWindowResolution(int c, uint32_t w, double s)
 {
     (void)c;
     (void)w;
-    (void)s;
+    last_resolution = s;
     return 0;
 }
 
@@ -143,6 +152,9 @@ static CGError SLSSetWindowAlpha(int c, uint32_t w, float alpha)
     (void)c;
     (void)w;
     assert(alpha >= 0 && alpha <= 1);
+    if (last_alpha >= 0 && alpha > last_alpha) ++alpha_rises;
+    if (alpha > max_alpha) max_alpha = alpha;
+    last_alpha = alpha;
     __atomic_add_fetch(&alpha_writes, 1, __ATOMIC_SEQ_CST);
     return fail_alpha ? kCGErrorFailure : 0;
 }
@@ -162,6 +174,8 @@ static CGError SLSOrderWindow(int c, uint32_t w, int mode, uint32_t rel)
     (void)mode;
     (void)rel;
     assert(overlay_attached); // Attach before presenting the outgoing image.
+    alpha_at_order = last_alpha;
+    ++orders;
     return fail_order ? kCGErrorFailure : 0;
 }
 
@@ -188,8 +202,9 @@ static CGContextRef SLWindowContextCreate(int c, uint32_t w, void *options)
     (void)c;
     (void)w;
     (void)options;
-    assert(color_space_writes > 0);
-    return fail_context ? NULL : bitmap();
+    context_color_space_writes = color_space_writes;
+    last_context = fail_context ? NULL : bitmap();
+    return last_context;
 }
 
 static bool fail_space;
@@ -315,6 +330,9 @@ static void space_navigation_snapshot_captured(int token)
     __atomic_add_fetch(&captured_reports, 1, __ATOMIC_SEQ_CST);
 }
 
+// The fade curve the event loop reads when it creates an overlay.
+static struct { int navigation_fade_curve; } g_window_manager;
+
 #define dispatch_source_cancel cancel_and_let_handler_run
 #define SCScreenshotManager SnapshotCaptureMock
 #define CGPreflightScreenCaptureAccess fake_access
@@ -386,18 +404,270 @@ static void deliver_lost(int index)
     Block_release(handler);
 }
 
+// Each curve starts fully opaque, ends transparent, never brightens again and
+// stays within [0, 1] even when a late tick lands outside the interval. The
+// point where 5% of the change becomes visible is the documented one: 13.5% of
+// the duration for the smooth curve, 2.5% for ease-out.
+static void expect_alpha_curve(void)
+{
+    double visible[SPACE_SNAPSHOT_CURVE_COUNT] = {
+        [SPACE_SNAPSHOT_CURVE_SMOOTH] = 0.1354,
+        [SPACE_SNAPSHOT_CURVE_EASE_OUT] = 0.0253
+    };
+
+    for (int curve = 0; curve < SPACE_SNAPSHOT_CURVE_COUNT; ++curve) {
+        assert(space_snapshot_alpha(-0.5, curve) == 1.0f && space_snapshot_alpha(0.0, curve) == 1.0f);
+        assert(space_snapshot_alpha(1.0, curve) == 0.0f && space_snapshot_alpha(1.5, curve) == 0.0f);
+        float previous = 1.0f;
+        for (int i = 1; i <= 1000; ++i) {
+            float alpha = space_snapshot_alpha(i / 1000.0, curve);
+            assert(alpha >= 0.0f && alpha <= previous);
+            previous = alpha;
+        }
+        assert(space_snapshot_alpha(visible[curve] - 0.002, curve) > 0.95f);
+        assert(space_snapshot_alpha(visible[curve] + 0.002, curve) < 0.95f);
+    }
+
+    // Ease-out is ahead of smooth early on, and an unknown value is smooth.
+    assert(space_snapshot_alpha(0.1, SPACE_SNAPSHOT_CURVE_EASE_OUT) < space_snapshot_alpha(0.1, SPACE_SNAPSHOT_CURVE_SMOOTH));
+    assert(space_snapshot_alpha(0.3, 99) == space_snapshot_alpha(0.3, SPACE_SNAPSHOT_CURVE_SMOOTH));
+
+    // The names the config option accepts.
+    assert(!strcmp(space_snapshot_curve_str[SPACE_SNAPSHOT_CURVE_SMOOTH], "smooth"));
+    assert(!strcmp(space_snapshot_curve_str[SPACE_SNAPSHOT_CURVE_EASE_OUT], "ease_out"));
+}
+
+static bool veil(void)
+{
+    return space_navigation_veil_prepare(1, 2, 1.0f / 120.0f);
+}
+
+// The overlay's fields, read where the timer's queue reads them.
+static void snapshot_fields(float *peak, int *curve)
+{
+    pthread_mutex_lock(&space_snapshot_lock);
+    assert(space_snapshot_active);
+    *peak = space_snapshot_active->peak;
+    *curve = space_snapshot_active->curve;
+    pthread_mutex_unlock(&space_snapshot_lock);
+}
+
+// The backing the veil drew: every pixel opaque black.
+static void expect_black(CGContextRef ctx)
+{
+    assert(ctx && CGBitmapContextGetWidth(ctx) == 16 && CGBitmapContextGetHeight(ctx) == 16);
+    const uint8_t *row = CGBitmapContextGetData(ctx);
+    size_t stride = CGBitmapContextGetBytesPerRow(ctx);
+    for (size_t y = 0; y < 16; ++y) {
+        for (size_t x = 0; x < 16; ++x) {
+            const uint8_t *pixel = row + y * stride + x * 4;
+            assert(pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0 && pixel[3] == 255);
+        }
+    }
+}
+
+// The veil needs no capture and no macOS 26: it is a window, a Space and a
+// fade, and every failure on the way leaves nothing behind.
+static void expect_veil(void)
+{
+    int modern = modern_capture_calls, legacy = legacy_capture_calls;
+    int orders_before = orders;
+
+    // It is shown at its opacity before it is ordered in, on a backing of one
+    // pixel per point drawn without a capture's colour space, and its
+    // preparation waits two refreshes (1/120 s each) before returning.
+    uint64_t began = read_os_timer();
+    assert(veil());
+    assert(read_os_timer() - began >= 15000000ULL);
+    assert(live_windows == 1 && live_spaces == 1 && orders == orders_before + 1);
+    assert(last_resolution == 1.0 && alpha_at_order == SPACE_SNAPSHOT_VEIL_OPACITY);
+    assert(context_color_space_writes == 0);
+    expect_black(last_context);
+    float peak;
+    int curve;
+    snapshot_fields(&peak, &curve);
+    assert(peak == SPACE_SNAPSHOT_VEIL_OPACITY && curve == SPACE_SNAPSHOT_CURVE_SMOOTH);
+
+    // The fade writes alphas that never exceed the veil's opacity or rise
+    // again, and the endpoint releases the window and its Space.
+    int writes = __atomic_load_n(&alpha_writes, __ATOMIC_SEQ_CST);
+    max_alpha = 0.0f;
+    alpha_rises = 0;
+    assert(space_navigation_snapshot_start(.25f, true));
+    expect_released();
+    assert(__atomic_load_n(&alpha_writes, __ATOMIC_SEQ_CST) > writes + 2);
+    assert(max_alpha <= SPACE_SNAPSHOT_VEIL_OPACITY && max_alpha > 0.0f && alpha_rises == 0);
+
+    // Dock failed, or the switch was abandoned: the veil goes at once.
+    assert(veil());
+    assert(!space_navigation_snapshot_start(.2f, false));
+    expect_released();
+
+    // Cancelled while it waits for Dock, twice, and by leaving the target.
+    assert(veil());
+    space_navigation_snapshot_cancel();
+    space_navigation_snapshot_cancel();
+    expect_released();
+
+    assert(veil());
+    assert(space_navigation_snapshot_start(.2f, true));
+    active_sid = 3;
+    space_navigation_snapshot_space_changed();
+    expect_released();
+    active_sid = 2;
+
+    // One overlay at a time: a new veil retires the one showing.
+    assert(veil());
+    assert(veil());
+    assert(live_windows == 1 && live_spaces == 1);
+    space_navigation_snapshot_cancel();
+    expect_released();
+
+    // An unprepared veil is a watchdog case like any overlay: Dock never
+    // replying removes it.
+    assert(veil());
+    expect_released();
+
+    // A failure at any step leaves no window and no Space, and orders nothing
+    // unless it fails at the order itself.
+    fail_create = true;
+    assert(!veil());
+    fail_create = false;
+    expect_released();
+    fail_context = true;
+    assert(!veil());
+    fail_context = false;
+    expect_released();
+    fail_alpha = true;
+    orders_before = orders;
+    assert(!veil()); // Never ordered in at the wrong opacity.
+    assert(orders == orders_before);
+    fail_alpha = false;
+    expect_released();
+    fail_space = true;
+    assert(!veil());
+    fail_space = false;
+    expect_released();
+    fail_attach = true;
+    orders_before = orders;
+    assert(!veil());
+    assert(orders == orders_before);
+    fail_attach = false;
+    expect_released();
+    fail_order = true;
+    assert(!veil());
+    fail_order = false;
+    expect_released();
+
+    // An inactive display, no target, a refresh interval out of range and an
+    // empty display show nothing.
+    assert(!space_navigation_veil_prepare(2, 2, 1.0f / 120.0f));
+    assert(!space_navigation_veil_prepare(1, 0, 1.0f / 120.0f));
+    assert(!space_navigation_veil_prepare(1, 2, 0.0f));
+    assert(!space_navigation_veil_prepare(1, 2, 1.0f / 1000.0f));
+    assert(!space_navigation_veil_prepare(1, 2, 2.0f));
+    CGRect bounds = fixture_bounds;
+    fixture_bounds = CGRectZero;
+    assert(!veil());
+    fixture_bounds = bounds;
+    expect_released();
+
+    // The curve is the configured one when the overlay is created, and
+    // changing it afterwards leaves that overlay alone.
+    g_window_manager.navigation_fade_curve = SPACE_SNAPSHOT_CURVE_EASE_OUT;
+    assert(veil());
+    snapshot_fields(&peak, &curve);
+    assert(peak == SPACE_SNAPSHOT_VEIL_OPACITY && curve == SPACE_SNAPSHOT_CURVE_EASE_OUT);
+    g_window_manager.navigation_fade_curve = SPACE_SNAPSHOT_CURVE_SMOOTH;
+    snapshot_fields(&peak, &curve);
+    assert(curve == SPACE_SNAPSHOT_CURVE_EASE_OUT);
+    max_alpha = 0.0f;
+    alpha_rises = 0;
+    assert(space_navigation_snapshot_start(.1f, true));
+    expect_released();
+    assert(max_alpha <= SPACE_SNAPSHOT_VEIL_OPACITY && alpha_rises == 0);
+
+    assert(modern_capture_calls == modern && legacy_capture_calls == legacy);
+}
+
+// A veil retires the capture waiting for its step, whether the image arrived
+// or its callback is still missing, and needs none of the capture admission.
+static void expect_veil_retires_capture(void)
+{
+    capture_delay = SPACE_SNAPSHOT_CAPTURE_NS / 2;
+    assert(capture(16));
+    while (space_snapshot_capture_pending())
+        usleep(1000);
+    capture_delay = 0;
+    assert(veil());
+    assert(!space_snapshot_pending.capture);
+    assert(space_navigation_snapshot_present(16) == SPACE_SNAPSHOT_CANCELLED);
+    space_navigation_snapshot_cancel();
+    expect_released();
+    expect_reports(2);
+
+    capture_lost = true;
+    int lost = lost_count;
+    assert(capture(17));
+    assert(space_snapshot_pending.capture && space_snapshot_capture_unresolved() == 1);
+    assert(veil());
+    assert(!space_snapshot_pending.capture);
+    assert(space_navigation_snapshot_present(17) == SPACE_SNAPSHOT_CANCELLED);
+    assert(space_snapshot_capture_unresolved() == 1); // The framework's slot stays.
+    space_navigation_snapshot_cancel();
+    expect_released();
+    deliver_lost(lost); // The callback, when it comes, finds nothing to touch.
+    assert(space_snapshot_capture_unresolved() == 0 && !space_snapshot_capture_pending());
+    capture_lost = false;
+    expect_reports(2);
+    assert(!live_windows && !live_spaces);
+
+    // Two callbacks still missing refuse a capture; the veil is unaffected.
+    capture_lost = true;
+    lost = lost_count;
+    assert(!prepare());
+    usleep((useconds_t)(SPACE_SNAPSHOT_STALE_NS / 1000));
+    assert(!prepare());
+    assert(space_snapshot_capture_unresolved() == SPACE_SNAPSHOT_MAX_UNRESOLVED);
+    int bound_calls = modern_capture_calls;
+    assert(veil());
+    space_navigation_snapshot_cancel();
+    expect_released();
+    assert(modern_capture_calls == bound_calls);
+    deliver_lost(lost + 1);
+    deliver_lost(lost);
+    assert(space_snapshot_capture_unresolved() == 0);
+    capture_lost = false;
+}
+
 int main(void)
 {
     @autoreleasepool
     {
+        expect_alpha_curve();
+        expect_veil(); // No capture: this runs on every system.
         if (@available(macOS 26.0, *)) { } else {
-            assert(!prepare()); // Older systems switch without the effect.
+            assert(!prepare()); // Older systems switch without the crossfade.
+            puts("snapshot: alpha curves and veil passed; the crossfade needs macOS 26");
             return 0;
         }
         CGContextRef ctx = bitmap();
         fixture_image = CGBitmapContextCreateImage(ctx);
         CGContextRelease(ctx);
         wrong_image = CGImageCreateWithImageInRect(fixture_image, CGRectMake(0, 0, 8, 8));
+        // The image keeps its capture's colour space and its full opacity, and
+        // the curve is the configured one at the moment it is created.
+        g_window_manager.navigation_fade_curve = SPACE_SNAPSHOT_CURVE_EASE_OUT;
+        assert(prepare());
+        g_window_manager.navigation_fade_curve = SPACE_SNAPSHOT_CURVE_SMOOTH;
+        float image_peak;
+        int image_curve;
+        snapshot_fields(&image_peak, &image_curve);
+        assert(image_peak == 1.0f && image_curve == SPACE_SNAPSHOT_CURVE_EASE_OUT);
+        assert(context_color_space_writes > 0);
+        space_navigation_snapshot_cancel();
+        expect_released();
+
         // The endpoint releases the overlay, with actual timer callbacks. The
         // fade lasts long enough for a tick to write alpha on a loaded runner:
         // a tick past the deadline only releases.
@@ -659,6 +929,8 @@ int main(void)
         expect_released();
         expect_reports(2);
 
+        expect_veil_retires_capture();
+
         // No capture starts while another is in flight: the step switches
         // without one and nothing reports.
         capture_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
@@ -680,7 +952,7 @@ int main(void)
         assert(modern_capture_calls > 0 && legacy_capture_calls == 0);
         CGImageRelease(wrong_image);
         CGImageRelease(fixture_image);
-        puts("snapshot: endpoint, cancellation, allocation failures, late and lost capture, asynchronous capture, colour space and watchdog passed");
+        puts("snapshot: alpha curves, veil, endpoint, cancellation, allocation failures, late and lost capture, asynchronous capture, colour space and watchdog passed");
     }
     return 0;
 }

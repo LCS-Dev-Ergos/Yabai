@@ -177,6 +177,16 @@ static bool space_navigation_snapshot_prepare(uint32_t display, uint64_t sid, fl
     if (click_during_snapshot) { timestamp += 100000000; seconds_since_click = .01; }
     return crossfade_success;
 }
+// The veil: shown before the switch like the prepared image, without capture.
+static bool space_navigation_veil_prepare(uint32_t display, uint64_t sid, float interval)
+{
+    (void) display; (void) sid; (void) interval;
+    ++veil_prepares;
+    assert(focus_calls == 0); // Veil the source before switching.
+    if (click_during_snapshot) { timestamp += 100000000; seconds_since_click = .01; }
+    return veil_success;
+}
+
 // The asynchronous capture: whether it starts, and what presenting it finds.
 static bool space_navigation_snapshot_capture(uint32_t display, uint64_t sid, float interval, int token)
 {

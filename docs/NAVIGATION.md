@@ -4,6 +4,7 @@ This fork adds one daemon request for keyboard and bar navigation:
 
 ```sh
 yabai -m space --navigate focus next crossfade 0.25
+yabai -m space --navigate focus next veil 0.25
 yabai -m space --navigate focus prev 0.95 0.1
 yabai -m space --navigate focus 3 crossfade 0.25
 yabai -m space --navigate move 3 0.95 0.1
@@ -11,8 +12,11 @@ yabai -m space --navigate move 3 0.95 0.1
 
 Arguments are the action (`focus` or `move`), a space selector, the effect and
 its duration in `[0,1]` seconds. The effect is `crossfade`, a
-[crossfade of the display](EFFECTS.md#desktop-crossfade), or the starting
+[crossfade of the display](EFFECTS.md#desktop-crossfade), `veil`, a
+[veil over the display](EFFECTS.md#desktop-veil), or the starting
 opacity in `(0,1]` of the destination's windows. A zero duration disables it.
+`yabai -m config navigation_fade_curve smooth|ease_out` sets how the crossfade
+and the veil fade out (see [effects](EFFECTS.md#fade-curve)).
 `next` and `prev` wrap to the first/last space, like the previous shell
 script. Other selectors follow the ordinary space selectors.
 `move` sends the focused window to the destination and follows it. It does
@@ -56,9 +60,10 @@ on brought its Desktop back into view. Navigation therefore runs as steps of one
 Desktop from a bounded queue, in the order requested:
 
 - A step runs when at least 100 ms have passed since the previous step
-  completed, including synchronous focus work. A crossfade also reserves its
-  duration from Dock's acknowledgement, so a blend always ends before the next
-  one starts. This time guard does not establish frame presentation.
+  completed, including synchronous focus work. A crossfade or veil also
+  reserves its duration from Dock's acknowledgement, so a blend always ends
+  before the next one starts. This time guard does not establish frame
+  presentation.
 - After a step that activated an application, the next one also waits until
   that application reports the window focused, or 150 ms have passed. A focus
   confirmation schedules the next step after its event handler finishes.
@@ -76,6 +81,11 @@ Desktop from a bounded queue, in the order requested:
   focus. Should opposite presses then empty the queue, the Desktop reached
   takes focus once 150 ms have passed without a request, without a switch; a
   click or another command in that time decides the focus instead.
+- A veil step captures nothing, so it never waits for the schedule: it shows the
+  veil, waits two display refreshes for it to reach the screen (about 33 ms at
+  60 Hz), switches and activates within one run, as a window fade does. It
+  follows the rules of a crossfade step otherwise: a burst's quick steps, a
+  visible or fullscreen destination and a fullscreen source show no veil.
 - A step with more queued behind it, and a step a held key repeats, blend in
   125 ms at most; the last of separate presses keeps the requested duration.
   The first step of a burst keeps it too: it starts before the next press is
@@ -211,7 +221,8 @@ exec "$yabai" -m space --navigate "$action" "$selector" "$effect" "$duration"
 Update the package and script together. The current `crossfade` renderer runs
 in the daemon and uses the ordinary payload Space-focus operation. It requires
 macOS 15.2+ and existing Screen Recording permission; unavailable capture falls
-back to an ordinary switch. The payload's own Space-alpha crossfade was removed
+back to an ordinary switch. The `veil` needs neither: it works wherever the
+Space-focus operation does. The payload's own Space-alpha crossfade was removed
 in `2.1.31-lcs.13` (see [effects](EFFECTS.md#space-alpha-crossfade-removed)).
 
 ## Verification boundaries
@@ -226,9 +237,12 @@ daemon fuzz target runs the request check. The upstream unity-test executable
 also checks numeric argument validation. `navigation_ingress_tests` uses actual
 socket admission, the token/selector parser, command and schedule with simulated
 host services; it covers numeric and mixed bursts, wrapping, duplicate targets,
-invalid input, rejected queues and cancellation. `navigation_captured_schedule_tests`
+invalid input, rejected queues and cancellation, and that `veil` reaches the
+step, is timed and merged like `crossfade`, and no other word is accepted. `navigation_captured_schedule_tests`
 connects the real asynchronous step and schedule to check clicks, superseded
-captures, late callbacks, destination and focus decisions. None establishes
+captures, late callbacks, destination and focus decisions; `navigation_tests`
+and the schedule tests also run the veil step and distinguish it from the
+crossfade when requests merge. None establishes
 visual quality, application focus behavior or live Dock behavior.
 
 On 2026-09-26, a local 16-switch comparison at 150 ms intervals measured the

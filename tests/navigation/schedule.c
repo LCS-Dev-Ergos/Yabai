@@ -64,7 +64,7 @@ static enum space_navigation_result space_navigation_execute(struct space_naviga
 
     now += execute_delay;
 
-    if (execute_success) space_navigation_schedule_switched(request->crossfade ? duration : 0.0f);
+    if (execute_success) space_navigation_schedule_switched(request->crossfade || request->veil ? duration : 0.0f);
 
     if (activate && activate_window) space_navigation_schedule_activated(activate_window);
     return execute_success ? SPACE_NAVIGATION_SWITCHED : SPACE_NAVIGATION_FAILED;
@@ -451,6 +451,35 @@ static void test_overflow(void)
     assert(!g_space_navigation_schedule.queue[0].jump);
 }
 
+// Requests merge only when their effect is the same: a veil and a crossfade
+// of one opacity and duration stay apart, and each keeps its own flag.
+static void test_effect_identity(void)
+{
+    reset();
+    struct space_navigation_request veil = relative(1, false);
+    veil.veil = true;
+    veil.alpha = 1.0f;
+    struct space_navigation_request fade = relative(1, true);
+    assert(veil.duration == fade.duration && veil.alpha == fade.alpha);
+    assert(!space_navigation_schedule_same_effect(&veil, &fade));
+    assert(space_navigation_schedule_same_effect(&veil, &veil));
+
+    // Hold the service so that the requests queue.
+    g_space_navigation_schedule.running = true;
+    assert(space_navigation_schedule_add(&veil, false));
+    assert(space_navigation_schedule_add(&veil, false));
+    assert(g_space_navigation_schedule.count == 1 && g_space_navigation_schedule.queue[0].steps == 2);
+    assert(g_space_navigation_schedule.queue[0].veil && !g_space_navigation_schedule.queue[0].crossfade);
+
+    assert(space_navigation_schedule_add(&fade, false));
+    assert(g_space_navigation_schedule.count == 2 && g_space_navigation_schedule.queue[1].steps == 1);
+    assert(g_space_navigation_schedule.queue[1].crossfade && !g_space_navigation_schedule.queue[1].veil);
+
+    assert(space_navigation_schedule_add(&veil, false));
+    assert(g_space_navigation_schedule.count == 3 && g_space_navigation_schedule.queue[2].veil);
+    g_space_navigation_schedule.running = false;
+}
+
 static void test_full_queue(void)
 {
     // A Desktop number takes the place of the last switch of a full queue:
@@ -834,12 +863,13 @@ int main(void)
     test_absolute();
     test_overflow();
     test_full_queue();
+    test_effect_identity();
     test_cancellation();
     test_captured_step();
     test_fast_burst();
     test_deferred_activation();
     test_settle();
 
-    puts("navigation schedule: rhythm, burst pace, activation wait, repeats, order, overflow, cancellation, captured-step, quick-burst, deferred-activation and settle checks passed");
+    puts("navigation schedule: rhythm, burst pace, activation wait, repeats, order, overflow, effect identity, cancellation, captured-step, quick-burst, deferred-activation and settle checks passed");
     return 0;
 }

@@ -198,8 +198,9 @@ int main(void)
 
     test_steps();
     test_captured_steps();
+    test_veil_steps();
 
-    puts("navigation: burst, restoration, custom opacity, display, move, crossfade and captured-step checks passed");
+    puts("navigation: burst, restoration, custom opacity, display, move, crossfade, veil and captured-step checks passed");
 
     return 0;
 }

@@ -36,7 +36,8 @@ struct space_navigation_request
     bool repeat;        // Queued by a held key.
     bool fast;          // Pressed within SPACE_NAVIGATION_FAST_NS of the press before.
     uint64_t sid;       // With neither steps nor sid: the Desktop navigation reached.
-    bool crossfade;
+    bool crossfade;     // The overlay effects exclude each other and the window fade.
+    bool veil;
     float alpha;
     float duration;
     uint64_t time;      // First ingress, or queue time for internal requests.

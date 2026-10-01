@@ -57,6 +57,7 @@
 #define COMMAND_CONFIG_EXTERNAL_BAR          "external_bar"
 #define COMMAND_CONFIG_SKIP_SPACE_ANIMATION  "skip_window_focus_animation"
 #define COMMAND_CONFIG_NAVIGATION_PACING     "space_navigation_pacing"
+#define COMMAND_CONFIG_NAVIGATION_FADE_CURVE "navigation_fade_curve"
 
 #define SELECTOR_CONFIG_SPACE                "--space"
 
