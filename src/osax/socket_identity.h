@@ -9,6 +9,8 @@
 #include <bsm/libbsm.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -154,6 +156,84 @@ static inline bool yabai_socket_peer_is_trusted(int fd, uid_t owner, SecRequirem
     if (code) CFRelease(code);
     CFRelease(attributes);
     return trusted;
+}
+
+// From <sys/codesign.h>, which the SDK leaves out.
+#define YABAI_CS_OPS_STATUS 0
+#define YABAI_CS_OPS_CDHASH 5
+#define YABAI_CS_VALID      0x00000001
+#define YABAI_CDHASH_SIZE   20
+extern int csops_audittoken(pid_t pid, unsigned int ops, void *useraddr, size_t usersize, audit_token_t *token);
+
+//
+// NOTE: Checking a peer against the requirement reads its code from disk and
+// evaluates its certificate chain, about 2.6 ms for each new process, and every
+// `yabai -m` is a new process. The kernel reports the hash of a process's code
+// directory in about a microsecond, and that hash covers its code pages,
+// identifier, entitlements and flags; only the signature around them could
+// differ. A peer whose hash already passed, and whose code the kernel still
+// holds valid, runs code identical to code we checked, so we trust it without
+// checking again. A cache serves one requirement and one thread.
+//
+#define YABAI_SOCKET_TRUSTED_CODE_COUNT 4
+
+struct yabai_socket_trusted_code
+{
+    SecRequirementRef requirement;
+    unsigned char cdhash[YABAI_SOCKET_TRUSTED_CODE_COUNT][YABAI_CDHASH_SIZE];
+    int count;
+    int next;
+    int checks;
+};
+
+// The hash of the peer's code directory, if the kernel holds its code valid.
+// The audit token names one process image: after an exec the kernel refuses it.
+static inline bool yabai_socket_peer_cdhash(audit_token_t *token, unsigned char cdhash[YABAI_CDHASH_SIZE])
+{
+    pid_t pid = audit_token_to_pid(*token);
+    uint32_t status = 0;
+
+    if (csops_audittoken(pid, YABAI_CS_OPS_STATUS, &status, sizeof(status), token) != 0) return false;
+    if (!(status & YABAI_CS_VALID)) return false;
+
+    return csops_audittoken(pid, YABAI_CS_OPS_CDHASH, cdhash, YABAI_CDHASH_SIZE, token) == 0;
+}
+
+// yabai_socket_peer_is_trusted, remembering the code that passed. `checks`
+// counts the full checks.
+static inline bool yabai_socket_peer_is_trusted_cached(int fd, uid_t owner, SecRequirementRef requirement,
+                                                       struct yabai_socket_trusted_code *trusted)
+{
+    if (trusted->requirement != requirement) {
+        *trusted = (struct yabai_socket_trusted_code) { .requirement = requirement };
+    }
+
+    audit_token_t token;
+    socklen_t size = sizeof(token);
+    unsigned char cdhash[YABAI_CDHASH_SIZE];
+    bool hashed = !YABAI_ALLOW_UNSIGNED_LOCAL && requirement &&
+                  getsockopt(fd, SOL_LOCAL, LOCAL_PEERTOKEN, &token, &size) == 0 && size == sizeof(token) &&
+                  yabai_socket_peer_cdhash(&token, cdhash);
+
+    if (hashed) {
+        uid_t peer = audit_token_to_euid(token);
+        if (peer != owner && peer != 0) return false;
+
+        for (int i = 0; i < trusted->count; ++i) {
+            if (memcmp(trusted->cdhash[i], cdhash, YABAI_CDHASH_SIZE) == 0) return true;
+        }
+    }
+
+    ++trusted->checks;
+    if (!yabai_socket_peer_is_trusted(fd, owner, requirement)) return false;
+
+    if (hashed) {
+        memcpy(trusted->cdhash[trusted->next], cdhash, YABAI_CDHASH_SIZE);
+        trusted->next = (trusted->next + 1) % YABAI_SOCKET_TRUSTED_CODE_COUNT;
+        if (trusted->count < YABAI_SOCKET_TRUSTED_CODE_COUNT) ++trusted->count;
+    }
+
+    return true;
 }
 
 #endif

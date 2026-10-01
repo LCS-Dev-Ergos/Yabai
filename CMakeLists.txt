@@ -191,6 +191,13 @@ add_test(NAME event_queue_tests COMMAND event_queue_tests)
 add_test(NAME yabai_msg_frameworks
     COMMAND sh -c "! otool -L \"$1\" | grep -q framework" sh $<TARGET_FILE:yabai-msg>)
 
+add_executable(socket_identity_tests tests/identity/peer.c)
+target_compile_options(socket_identity_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
+target_link_options(socket_identity_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
+target_link_libraries(socket_identity_tests PRIVATE "-framework CoreFoundation" "-framework Security" "-lbsm.0")
+add_test(NAME socket_identity_tests COMMAND socket_identity_tests)
+set_tests_properties(socket_identity_tests PROPERTIES TIMEOUT 30)
+
 add_executable(fade_tests tests/fade/timing.c)
 target_compile_options(fade_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
 target_link_options(fade_tests PRIVATE ${YABAI_SANITIZE_FLAGS})

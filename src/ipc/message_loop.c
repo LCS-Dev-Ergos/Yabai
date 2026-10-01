@@ -18,6 +18,7 @@ static struct {
     int pending;
 } g_message_loop;
 static SecRequirementRef g_message_loop_requirement;
+static struct yabai_socket_trusted_code g_message_loop_trusted;
 
 void handle_message(FILE *rsp, char *message)
 {
@@ -57,7 +58,7 @@ static void message_loop_refuse(int sockfd, const char *reason)
 // take has been refused, or joined a waiting navigation request.
 static bool message_loop_admit(int sockfd)
 {
-    if (!yabai_socket_peer_is_trusted(sockfd, getuid(), g_message_loop_requirement)) {
+    if (!yabai_socket_peer_is_trusted_cached(sockfd, getuid(), g_message_loop_requirement, &g_message_loop_trusted)) {
         message_loop_refuse(sockfd, FAILURE_MESSAGE "client refused: it is not signed like the running yabai\n");
         return false;
     }
