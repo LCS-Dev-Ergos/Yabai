@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [8.0.0-lcs.4] - 2026-10-01
 ### Added
 - `yabai-msg`, the client alone: `yabai-msg <message>` does what `yabai -m <message>` does, links no framework and starts in about 2 ms instead of 6. It is signed like `yabai` and ships beside it
 
@@ -25,6 +27,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The configuration file runs from its path as an argument instead of shell text, so a path with spaces or shell characters works, and it is started with `posix_spawn` instead of `fork` in the multithreaded daemon
 - Rule and signal patterns whose nested repetitions or runs of optional parts would expand far beyond their length are refused as too complex: `((a{255}){255}){255}` held the event loop for 2.3 s and took 1.8 GB, and 2000 `a?` took 16 s and 2.9 GB
 - The event loop wakes through a semaphore private to the process instead of a named one, which another local account could open first to take its wake-ups or keep yabai from starting, and a merged mouse move no longer wakes it a second time
+
+### Verification and limits
+- Debug, ASan/UBSan and TSan cover every fix, each commit builds and passes its tests alone, and the daemon message fuzzer now reaches the rule and signal handlers with their patterns. The signed daemon was not run live before release, `yabai-msg` has not yet talked to an installed daemon, and the scripting-addition payload is byte-identical to 8.0.0-lcs.3
 
 ## [8.0.0-lcs.3] - 2026-10-01
 ### Added
@@ -916,7 +921,10 @@ The *window_destroyed* signal is now triggered for windows that are implicitly d
 ### Added
 - First official release
 
-[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.1...HEAD
+[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.4...HEAD
+[8.0.0-lcs.4]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.3...v8.0.0-lcs.4
+[8.0.0-lcs.3]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.2...v8.0.0-lcs.3
+[8.0.0-lcs.2]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.1...v8.0.0-lcs.2
 [8.0.0-lcs.1]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v7.1.25-lcs.32...v8.0.0-lcs.1
 [7.1.25]: https://github.com/asmvik/yabai/compare/v7.1.24...v7.1.25
 [7.1.24]: https://github.com/asmvik/yabai/compare/v7.1.23...v7.1.24
