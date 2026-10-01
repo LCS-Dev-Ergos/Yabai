@@ -19,6 +19,14 @@ static void space_navigation_snapshot_captured(int token)
 }
 
 #include "../../src/effects/snapshot.h"
+
+// The curve the daemon takes from `config navigation_fade_curve`: smooth, or
+// -DSNAPSHOT_PROBE_CURVE=1 for ease-out, to compare them side by side.
+#ifndef SNAPSHOT_PROBE_CURVE
+#define SNAPSHOT_PROBE_CURVE SPACE_SNAPSHOT_CURVE_SMOOTH
+#endif
+static struct { int navigation_fade_curve; } g_window_manager = { SNAPSHOT_PROBE_CURVE };
+
 #include "../../src/effects/snapshot.m"
 
 int main(int argc, const char **argv)
@@ -48,6 +56,9 @@ int main(int argc, const char **argv)
                 }
             }
             uint64_t began = read_os_timer();
+            // Process launch and AppKit setup are paid once by the daemon, so
+            // the timing harness measures the transition from here.
+            fprintf(stderr, "snapshot work_begin_uptime_ms %.3f\n", clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1e6);
             bool prepared = space_navigation_snapshot_prepare(display, 1, interval);
             fprintf(stderr, "snapshot prepared=%d %.1f ms\n", prepared, (read_os_timer() - began) / 1e6);
             if (!prepared) exit(2); // The probe must exercise an actual blend.
