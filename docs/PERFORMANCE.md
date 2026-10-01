@@ -475,6 +475,18 @@ and lets presses queued during a step's capture take its activation over, so
 a held key's steps and a burst's first step no longer activate an application
 and wait for its focus. Raw evidence is in ignored `build/baseline/lcs29`.
 
+## Command start-up after lcs.3
+
+A trivial `yabai -m config debug_output` against the idle lcs.3 daemon took
+10.6 ms end to end. About 3.3 ms of it was loading frameworks the client never
+uses, and 2.6 ms the daemon's signature check of the new client process. The
+[IPC audit](reports/IPC-Audit_8.0.0-lcs3.md) removed both from the path of
+`yabai-msg`. On the same Mac, 200 interleaved runs started `yabai --version`
+in 6.1 ms (median) and `yabai-msg` in 2.1 ms, against 1.5 ms for
+`/usr/bin/true`. A new process whose code already passed the check is trusted
+in about 3 microseconds instead of milliseconds. The end-to-end time with an
+installed daemon remains to be measured.
+
 ## Remaining work
 
 The 40 ms same-application focus delay is kept for application compatibility

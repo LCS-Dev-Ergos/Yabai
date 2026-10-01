@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `yabai-msg`, the client alone: `yabai-msg <message>` does what `yabai -m <message>` does, links no framework and starts in about 2 ms instead of 6. It is signed like `yabai` and ships beside it
+
+### Changed
+- The daemon answers a request it cannot read, a client that fails its signature check, and a client arriving while 128 connections wait, with the reason; the client reported success with no output when the connection closed silently
+- The client reads the whole reply before printing it, so a slow reader of its output such as a pager no longer risks a reply cut off by the daemon's one-second bound, and a failure on any line of the reply makes it exit with status 1
+- The daemon checks a client's signature once per build: a new client process whose code-directory hash already passed, and whose code the kernel still holds valid, is trusted in microseconds instead of milliseconds
+- Rule and signal patterns compile without submatch tracking, which they never use and which multiplied the cost of optional parts
+- Signal actions answer for their own privacy permissions: they no longer inherit yabai's Accessibility and Screen Recording access, which any process of the user could borrow by adding a signal through the signed client
+- Decimal settings and `window --opacity` accept whole numbers such as `0` and `1`
+
+### Fixed
+- The daemon reads a request and writes its reply within one second each: a client that stalled after connecting, sent its request slowly or stopped reading a long reply held every event until it exited
+- `window_animation_duration` and `window_opacity_duration` refuse negative and non-finite values: such an animation duration left windows as frozen proxies whose animation never ended, and such an opacity duration made Dock drop every focus fade
+- `window --ratio`, `--move` and `--resize` refuse `nan` and `inf`; a NaN ratio passed the clamp and stayed in the tree. `window --grid` and the `grid` rule refuse zero rows or columns and negative values
+- Labels and scratchpad names are escaped in query, rule and signal JSON, as window titles are
+- A key given twice to `rule --add` or `signal --add` releases its first value and pattern, and an `app!=` or `title!=` exclusion no longer outlives a later `app=` or `title=`
+- The configuration file runs from its path as an argument instead of shell text, so a path with spaces or shell characters works, and it is started with `posix_spawn` instead of `fork` in the multithreaded daemon
+- Rule and signal patterns whose nested repetitions or runs of optional parts would expand far beyond their length are refused as too complex: `((a{255}){255}){255}` held the event loop for 2.3 s and took 1.8 GB, and 2000 `a?` took 16 s and 2.9 GB
+- The event loop wakes through a semaphore private to the process instead of a named one, which another local account could open first to take its wake-ups or keep yabai from starting, and a merged mouse move no longer wakes it a second time
 
 ## [8.0.0-lcs.3] - 2026-10-01
 ### Added

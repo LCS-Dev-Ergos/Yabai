@@ -27,7 +27,25 @@ editor's root `compile_commands.json` symlink.
   protocol, signal dispatch and storage bounds, scripting-addition request
   size and query string escaping. The signal tests launch
   harmless local shell actions and check socket lifetime, isolated event
-  variables and retained standard output/error. They do not run the daemon.
+  variables, retained standard output/error and that an action answers for
+  its own privacy permissions. They do not run the daemon.
+  The daemon-socket tests bound reading a request and writing its reply against
+  a client that sends nothing, trickles its request, hangs up or never reads,
+  check the reply that tells a client why its request was refused, including
+  the one past 128 waiting connections, and run requests through the message
+  handler. The client tests drive the code shared by `yabai -m` and `yabai-msg`
+  against a fake daemon: the packed request, output and failure lines, a 1 MB
+  reply, and a refusal that arrives while a long request is still being sent.
+  The pattern tests check the cost estimate of rule and signal patterns
+  against accepted and refused shapes, without compiling the refused ones, and
+  the refusal through `rule` and `signal`. The event-loop test checks that the
+  loop's semaphore is private and that a merged mouse move adds no wake-up. The value tests check that
+  decimal settings and `window --opacity` take whole numbers, that negative or
+  non-finite durations, ratios, positions and sizes and grids without rows or
+  columns are refused before anything changes, that labels and scratchpad
+  names are escaped in JSON, that a repeated rule or signal key releases what
+  it replaces (memory is measured only in a build without sanitizers), and that
+  the configuration file runs from a path with spaces and shell characters.
 - `navigation_tests` checks the fork's [space navigation](NAVIGATION.md)
   implementation with simulated OS calls, including rapid repeats, failure
   restoration, the starting Desktop of relative navigation, the raise for
@@ -58,6 +76,13 @@ editor's root `compile_commands.json` symlink.
 - `event_queue_tests` checks the event loop's queue: order when events wrap
   around the ring's end, growth, merged mouse moves, allocation failure and
   concurrent producers.
+- `socket_identity_tests` runs the daemon's peer check against real
+  processes: `nc` connected to a socket of the test passes `anchor apple` in
+  full once, and a second `nc` passes from the cache of trusted code; another
+  user, another requirement and the test itself, which fails the requirement,
+  are refused and never cached. It prints the time of a full and a cached
+  check.
+- `yabai_msg_frameworks` checks that `yabai-msg` links no framework.
 - `focus_tests` exercises production focus-event handling with simulated OS
   calls: reuse of pending observations, stale activations, invalid/hidden or
   minimized windows, and the normal AX fallback, including no focused window.
@@ -349,8 +374,10 @@ a fresh build directory when switching toolchains. Both targets use
 libFuzzer, ASan and UBSan:
 
 - `fuzz_daemon_message`: socket framing, the accept thread's navigation
-  request check, tokenization and value parsing; command handlers that
-  manipulate the running window manager are excluded.
+  request check, tokenization and value parsing, and the `rule` and `signal`
+  handlers with their patterns, which only parse and keep their entries.
+  Handlers that manipulate the running window manager are excluded, as are
+  rules naming a display or Space, which WindowServer resolves.
 - `fuzz_payload_message`: request framing and reachable handler parsing with
   SkyLight calls stubbed and the payload constructor disabled. Dock-dependent
   space handlers return early. Opacity parsing, including focus/batch requests,
