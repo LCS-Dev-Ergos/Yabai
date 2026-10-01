@@ -9,46 +9,120 @@
 //
 #define DAEMON_MESSAGE_MAX_LENGTH (64 * 1024)
 
-static char *daemon_message_read(int sockfd)
+//
+// NOTE: Everything we do here holds the event loop. A client sends its whole
+// request right after connecting and reads the reply until we close, so we
+// give reading the request and writing the reply one second each, in total
+// rather than per call. A client that stalls, trickles its request or stops
+// reading a long reply loses its request or the rest of its reply, instead of
+// holding every other event until it exits.
+//
+#define DAEMON_MESSAGE_TIMEOUT_MS 1000
+
+// A blocking send waits until the whole buffer is queued, MSG_DONTWAIT or not,
+// so the connection itself is made non-blocking; poll does the waiting.
+static void daemon_message_set_nonblocking(int sockfd)
 {
-    int bytes_read    = 0;
+    int flags = fcntl(sockfd, F_GETFL);
+    if (flags != -1) fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+}
+
+// Waits until the socket is ready for `events` or the deadline passes.
+static bool daemon_message_wait(int sockfd, short events, uint64_t deadline)
+{
+    for (;;) {
+        uint64_t now = read_os_timer();
+        if (now >= deadline) return false;
+
+        struct pollfd ready = { .fd = sockfd, .events = events };
+        int timeout = (int) ((deadline - now + 999999) / 1000000);
+        int result = poll(&ready, 1, timeout);
+
+        if (result > 0) return true;
+        if (result == -1 && errno != EINTR) return false;
+    }
+}
+
+static bool daemon_message_receive(int sockfd, void *bytes, int length, uint64_t deadline)
+{
+    int received = 0;
+
+    while (received < length) {
+        if (!daemon_message_wait(sockfd, POLLIN, deadline)) return false;
+
+        ssize_t count = recv(sockfd, (char *) bytes + received, length - received, 0);
+        if (count > 0) {
+            received += (int) count;
+        } else if (count == 0 || (errno != EAGAIN && errno != EINTR)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static char *daemon_message_read(int sockfd, int timeout_ms)
+{
+    uint64_t deadline = read_os_timer() + (uint64_t) timeout_ms * 1000000;
     int bytes_to_read = 0;
 
-    if (read(sockfd, &bytes_to_read, sizeof(int)) != sizeof(int)) return NULL;
+    daemon_message_set_nonblocking(sockfd);
+    if (!daemon_message_receive(sockfd, &bytes_to_read, sizeof(int), deadline)) return NULL;
     if (bytes_to_read <= 0 || bytes_to_read > DAEMON_MESSAGE_MAX_LENGTH) return NULL;
 
     char *message = ts_alloc_unaligned(bytes_to_read + 2);
+    if (!daemon_message_receive(sockfd, message, bytes_to_read, deadline)) return NULL;
 
-    do {
-        int cur_read = read(sockfd, message+bytes_read, bytes_to_read-bytes_read);
-        if (cur_read <= 0) break;
-
-        bytes_read += cur_read;
-    } while (bytes_read < bytes_to_read);
-
-    if (bytes_read != bytes_to_read) return NULL;
-
-    message[bytes_read] = '\0';
-    message[bytes_read+1] = '\0';
+    message[bytes_to_read] = '\0';
+    message[bytes_to_read+1] = '\0';
     return message;
 }
 
+// A client that has already gone fails the send without raising SIGPIPE,
+// even in a process that does not ignore it.
+static bool daemon_message_reply(int sockfd, const char *bytes, size_t length, int timeout_ms)
+{
+    uint64_t deadline = read_os_timer() + (uint64_t) timeout_ms * 1000000;
+    daemon_message_set_nonblocking(sockfd);
+
+    size_t sent = 0;
+    while (sent < length) {
+        if (!daemon_message_wait(sockfd, POLLOUT, deadline)) return false;
+
+        ssize_t count = send(sockfd, bytes + sent, length - sent, MSG_NOSIGNAL);
+        if (count > 0) {
+            sent += (size_t) count;
+        } else if (count == 0 || (errno != EAGAIN && errno != EINTR)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// The reply is built in memory and written once the command has run, so the
+// command never waits on the client.
 static EVENT_HANDLER(DAEMON_MESSAGE)
 {
     TIME_FUNCTION;
 
-    FILE *rsp = NULL;
     space_navigation_queue_claim(param1);
-    char *message = daemon_message_read(param1);
+    char *message = daemon_message_read(param1, DAEMON_MESSAGE_TIMEOUT_MS);
 
-    if (message && (rsp = fdopen(param1, "w"))) {
-        debug_message(__FUNCTION__, message);
-        handle_message(rsp, message);
+    if (message) {
+        char *response = NULL;
+        size_t response_size = 0;
+        FILE *rsp = open_memstream(&response, &response_size);
 
-        fflush(rsp);
-        fclose(rsp);
+        if (rsp) {
+            debug_message(__FUNCTION__, message);
+            handle_message(rsp, message);
+            fclose(rsp);
 
-        return;
+            daemon_message_reply(param1, response, response_size, DAEMON_MESSAGE_TIMEOUT_MS);
+        }
+
+        free(response);
     }
 
     socket_close(param1);
