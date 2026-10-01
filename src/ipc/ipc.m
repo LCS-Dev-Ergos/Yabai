@@ -2,6 +2,7 @@
 // The manifest retains this sequence for the test and fuzz harnesses.
 #include "../core_prelude.h"
 #include "message.c"
+#include "pattern.c"
 #include "commands/config.c"
 #include "commands/display.c"
 #include "commands/space.c"

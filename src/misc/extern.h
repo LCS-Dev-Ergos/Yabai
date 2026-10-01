@@ -3,6 +3,8 @@
 #ifndef EXTERN_H
 #define EXTERN_H
 
+#include <spawn.h>
+
 // The daemon's own SkyLight connection, opened in main.
 extern int g_connection;
 
@@ -122,5 +124,9 @@ extern const CFStringRef kAXFullscreenAttribute;
 extern int csr_get_active_config(uint32_t *config);
 #define CSR_ALLOW_UNRESTRICTED_FS 0x02
 #define CSR_ALLOW_TASK_FOR_PID    0x04
+
+// Responsibility of a spawned process for privacy (TCC) permissions, from
+// libquarantine. A disclaimed child answers for itself instead of for us.
+extern int responsibility_spawnattrs_setdisclaim(posix_spawnattr_t *attrs, int disclaim);
 
 #endif

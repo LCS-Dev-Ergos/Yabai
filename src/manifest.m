@@ -22,6 +22,7 @@
 #include "events/workspace.m"
 #include "windows/rule.c"
 #include "ipc/message.c"
+#include "ipc/pattern.c"
 #include "ipc/commands/config.c"
 
 #ifdef YABAI_TEST_COMMAND_STATE

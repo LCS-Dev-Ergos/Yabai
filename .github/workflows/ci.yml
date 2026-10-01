@@ -2,7 +2,7 @@
 # UBSan, runs the static analyzer and fuzzes both socket parsers.
 # Tags named v<version>-lcs.<n>
 # additionally produce a signed release tarball with yabai's archive layout
-# (archive/bin, archive/doc, archive/examples).
+# (archive/bin with yabai and yabai-msg, archive/doc, archive/examples).
 
 name: CI
 
@@ -61,13 +61,17 @@ jobs:
         run: |
           build/bin/yabai --version
           test "$(lipo -archs build/bin/yabai)" = "x86_64 arm64"
+          test "$(lipo -archs build/bin/yabai-msg)" = "x86_64 arm64"
           test "$(lipo -archs build/src/osax/payload)" = "x86_64 arm64e"
           if [ "$RELEASE" = "true" ]; then
             version="${GITHUB_REF_NAME#v}"
             test "$(build/bin/yabai --version)" = "yabai-v${version%-lcs.*}"
             grep -qx 'YABAI_ALLOW_UNSIGNED_LOCAL:BOOL=OFF' build/CMakeCache.txt
-            codesign --verify --strict --all-architectures build/bin/yabai
-            codesign -dvv build/bin/yabai 2>&1 | grep -qx "Authority=$SIGNING_IDENTITY"
+            for binary in build/bin/yabai build/bin/yabai-msg; do
+              codesign --verify --strict --all-architectures "$binary"
+              codesign -dvv "$binary" 2>&1 | grep -qx "Authority=$SIGNING_IDENTITY"
+              codesign -dv "$binary" 2>&1 | grep -qx 'Identifier=com.asmvik.yabai'
+            done
           fi
 
       - name: Test
@@ -80,7 +84,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           mkdir -p archive/bin
-          cp build/bin/yabai archive/bin/
+          cp build/bin/yabai build/bin/yabai-msg archive/bin/
           cp -R doc examples archive/
           tarball="yabai-$TAG.tar.gz"
           COPYFILE_DISABLE=1 tar -czf "$tarball" archive

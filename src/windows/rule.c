@@ -35,7 +35,7 @@ void rule_serialize(FILE *rsp, struct rule *rule, int index)
             "\t\"flags\":\"0x%08x\"\n"
             "}",
             index,
-            rule->label ? rule->label : "",
+            ts_json_text(rule->label),
             escaped_app ? escaped_app : app ? app : "",
             escaped_title ? escaped_title : title ? title : "",
             escaped_role ? escaped_role : role ? role : "",
@@ -52,7 +52,7 @@ void rule_serialize(FILE *rsp, struct rule *rule, int index)
             rule->effects.grid[0], rule->effects.grid[1],
             rule->effects.grid[2], rule->effects.grid[3],
             rule->effects.grid[4], rule->effects.grid[5],
-            rule->effects.scratchpad ? rule->effects.scratchpad : "",
+            ts_json_text(rule->effects.scratchpad),
             json_bool(rule_check_flag(rule, RULE_ONE_SHOT)),
             (uint32_t)(rule->effects.flags << 16) | (uint32_t)rule->flags);
 }

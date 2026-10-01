@@ -93,10 +93,27 @@ endif()
 target_compile_options(yabai PRIVATE ${YABAI_SANITIZE_FLAGS})
 target_link_options(yabai PRIVATE ${YABAI_SANITIZE_FLAGS})
 
+# The client on its own, see src/client/yabai_msg.c. It embeds yabai's
+# Info.plist, so it signs with yabai's identifier and the daemon accepts it.
+add_executable(yabai-msg ${SRC}/client/yabai_msg.c)
+set_target_properties(yabai-msg PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    OSX_ARCHITECTURES "${YABAI_ARCHITECTURES}"
+    C_STANDARD 11 C_EXTENSIONS OFF
+    LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/Info.plist)
+target_compile_options(yabai-msg PRIVATE
+    -std=c11 -Wall -Wextra -fvisibility=hidden ${YABAI_SANITIZE_FLAGS}
+    $<$<CONFIG:Debug>:-O0>)
+target_link_options(yabai-msg PRIVATE
+    LINKER:-sectcreate,__TEXT,__info_plist,${CMAKE_CURRENT_SOURCE_DIR}/assets/Info.plist
+    ${YABAI_SANITIZE_FLAGS})
+
 if(YABAI_CODESIGN_IDENTITY)
-    add_custom_command(TARGET yabai POST_BUILD
-        COMMAND codesign -fs ${YABAI_CODESIGN_IDENTITY} $<TARGET_FILE:yabai>
-        VERBATIM)
+    foreach(target yabai yabai-msg)
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND codesign -fs ${YABAI_CODESIGN_IDENTITY} $<TARGET_FILE:${target}>
+            VERBATIM)
+    endforeach()
 endif()
 
 # Unit tests of the core. tests.m includes the full manifest with -DTESTS
@@ -169,6 +186,17 @@ add_executable(event_queue_tests tests/event_loop/queue.c)
 target_compile_options(event_queue_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
 target_link_options(event_queue_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
 add_test(NAME event_queue_tests COMMAND event_queue_tests)
+
+# yabai-msg exists to start without the daemon's frameworks.
+add_test(NAME yabai_msg_frameworks
+    COMMAND sh -c "! otool -L \"$1\" | grep -q framework" sh $<TARGET_FILE:yabai-msg>)
+
+add_executable(socket_identity_tests tests/identity/peer.c)
+target_compile_options(socket_identity_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})
+target_link_options(socket_identity_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
+target_link_libraries(socket_identity_tests PRIVATE "-framework CoreFoundation" "-framework Security" "-lbsm.0")
+add_test(NAME socket_identity_tests COMMAND socket_identity_tests)
+set_tests_properties(socket_identity_tests PROPERTIES TIMEOUT 30)
 
 add_executable(fade_tests tests/fade/timing.c)
 target_compile_options(fade_tests PRIVATE -UNDEBUG ${YABAI_SANITIZE_FLAGS})

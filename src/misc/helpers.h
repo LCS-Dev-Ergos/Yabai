@@ -1,6 +1,9 @@
 #ifndef HELPERS_H
 #define HELPERS_H
 
+#include <crt_externs.h>
+#include <spawn.h>
+
 #define ANIMATION_EASING_TYPE_LIST \
     ANIMATION_EASING_TYPE_ENTRY(ease_in_sine) \
     ANIMATION_EASING_TYPE_ENTRY(ease_out_sine) \
@@ -313,6 +316,16 @@ static inline char *ts_string_escape(char *s)
     return result;
 }
 
+// The text of a JSON string value: escaped when it needs to be, as it is
+// otherwise, and empty for none. For labels and names a client chose.
+static inline char *ts_json_text(char *s)
+{
+    if (!s) return "";
+
+    char *escaped = ts_string_escape(s);
+    return escaped ? escaped : s;
+}
+
 static inline CFStringRef CFSTRINGNUM32(int32_t num)
 {
     char num_str[255] = {0};
@@ -471,13 +484,40 @@ static void exec_config_file(char *config_file, int config_file_size)
         return;
     }
 
-    int pid = fork();
-    if (pid == 0) {
-        char **exec = file_can_execute(config_file)
-                    ? (char*[]){ "/usr/bin/env", "sh", "-c", config_file, NULL}
-                    : (char*[]){ "/usr/bin/env", "sh", config_file, NULL};
-        exit(execvp(exec[0], exec));
-    } else if (pid == -1) {
+    // The path is an argument, never shell text, so spaces and shell
+    // characters in it stay part of the name. An executable file runs as sh's
+    // "$0", which honours its interpreter line and falls back to sh without
+    // one; any other file is a script for sh. Unlike a signal action, the
+    // configuration keeps our permissions: it is the user's own file, which
+    // we run once at start.
+    char *executable[] = { "/usr/bin/env", "sh", "-c", "\"$0\"", config_file, NULL };
+    char *script[] = { "/usr/bin/env", "sh", config_file, NULL };
+    char **exec = file_can_execute(config_file) ? executable : script;
+
+    posix_spawnattr_t attributes;
+    posix_spawn_file_actions_t actions;
+    int status = posix_spawnattr_init(&attributes);
+    if (!status) {
+        status = posix_spawn_file_actions_init(&actions);
+        if (status) posix_spawnattr_destroy(&attributes);
+    }
+
+    // We are multithreaded by now, so a fork could inherit a lock some other
+    // thread held; and the file gets our standard streams but none of our
+    // sockets.
+    if (!status) {
+        status = posix_spawnattr_setflags(&attributes, POSIX_SPAWN_CLOEXEC_DEFAULT);
+        for (int fd = STDIN_FILENO; !status && fd <= STDERR_FILENO; ++fd) {
+            if (fcntl(fd, F_GETFD) != -1) status = posix_spawn_file_actions_addinherit_np(&actions, fd);
+        }
+
+        if (!status) status = posix_spawn(NULL, exec[0], &actions, &attributes, exec, *_NSGetEnviron());
+
+        posix_spawn_file_actions_destroy(&actions);
+        posix_spawnattr_destroy(&attributes);
+    }
+
+    if (status) {
         warn("yabai: failed to load config file '%s'\n", config_file);
         notify("configuration", "failed to load file '%s'", config_file);
     }

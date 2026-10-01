@@ -21,6 +21,11 @@ static int event_signal_spawn(struct event_signal *es, char *command)
         }
     }
 
+    // Any process of the user can add a signal through our client, so an
+    // action must not run with our Accessibility and Screen Recording
+    // permissions: it answers for its own. We spawn nothing without that.
+    if (!status) status = responsibility_spawnattrs_setdisclaim(&attributes, 1);
+
     // Pass overrides to env without changing the daemon's environment.
     char *variables[4] = {0};
     char *exec[9] = { "/usr/bin/env" };

@@ -1,6 +1,34 @@
 // `yabai -m rule`: parsing, adding, applying and removing window rules.
 // Event loop.
 
+// A key given again replaces its value, as it always has. The text and the
+// compiled pattern it replaces are released here, and an exclusion follows the
+// last pair, so `app!=A app=B` matches B rather than everything but B.
+static void parse_rule_text(char **text, char *value)
+{
+    free(*text);
+    *text = string_copy(value);
+}
+
+static bool parse_rule_pattern(FILE *rsp, struct rule *rule, char **text, regex_t *regex, enum rule_flag valid,
+                               enum rule_flag exclude, char *key, char *value, bool exclusion)
+{
+    if (rule_check_flag(rule, valid)) regfree(regex);
+    rule_clear_flag(rule, valid);
+    parse_rule_text(text, value);
+
+    if (exclusion) {
+        rule_set_flag(rule, exclude);
+    } else {
+        rule_clear_flag(rule, exclude);
+    }
+
+    if (!pattern_compile(rsp, regex, key, value)) return false;
+
+    rule_set_flag(rule, valid);
+    return true;
+}
+
 static bool parse_rule(FILE *rsp, char **message, struct rule *rule, struct token token)
 {
     TIME_FUNCTION;
@@ -23,7 +51,7 @@ static bool parse_rule(FILE *rsp, char **message, struct rule *rule, struct toke
 
         if (string_equals(key, ARGUMENT_RULE_KEY_LABEL)) {
             if (exclusion) unsupported_exclusion = key;
-            rule->label = string_copy(value);
+            parse_rule_text(&rule->label, value);
         } else if (string_equals(key, ARGUMENT_RULE_KEY_SCRATCHPAD)) {
             if (exclusion) unsupported_exclusion = key;
 
@@ -36,7 +64,7 @@ static bool parse_rule(FILE *rsp, char **message, struct rule *rule, struct toke
             }
 
             if (valid) {
-                rule->effects.scratchpad = string_copy(value);
+                parse_rule_text(&rule->effects.scratchpad, value);
                 rule->effects.manage = RULE_PROP_OFF;
             } else {
                 daemon_fail(rsp, "invalid value '%s' for key '%s'\n", value, key);
@@ -44,42 +72,26 @@ static bool parse_rule(FILE *rsp, char **message, struct rule *rule, struct toke
             }
         } else if (string_equals(key, ARGUMENT_RULE_KEY_APP)) {
             has_filter = true;
-            rule->app = string_copy(value);
-            if (exclusion) rule_set_flag(rule, RULE_APP_EXCLUDE);
-            if (regcomp(&rule->app_regex, value, REG_EXTENDED) == 0) {
-                rule_set_flag(rule, RULE_APP_VALID);
-            } else {
-                daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
+            if (!parse_rule_pattern(rsp, rule, &rule->app, &rule->app_regex, RULE_APP_VALID, RULE_APP_EXCLUDE,
+                                    key, value, exclusion)) {
                 did_parse = false;
             }
         } else if (string_equals(key, ARGUMENT_RULE_KEY_TITLE)) {
             has_filter = true;
-            rule->title = string_copy(value);
-            if (exclusion) rule_set_flag(rule, RULE_TITLE_EXCLUDE);
-            if (regcomp(&rule->title_regex, value, REG_EXTENDED) == 0) {
-                rule_set_flag(rule, RULE_TITLE_VALID);
-            } else {
-                daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
+            if (!parse_rule_pattern(rsp, rule, &rule->title, &rule->title_regex, RULE_TITLE_VALID, RULE_TITLE_EXCLUDE,
+                                    key, value, exclusion)) {
                 did_parse = false;
             }
         } else if (string_equals(key, ARGUMENT_RULE_KEY_ROLE)) {
             has_filter = true;
-            rule->role = string_copy(value);
-            if (exclusion) rule_set_flag(rule, RULE_ROLE_EXCLUDE);
-            if (regcomp(&rule->role_regex, value, REG_EXTENDED) == 0) {
-                rule_set_flag(rule, RULE_ROLE_VALID);
-            } else {
-                daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
+            if (!parse_rule_pattern(rsp, rule, &rule->role, &rule->role_regex, RULE_ROLE_VALID, RULE_ROLE_EXCLUDE,
+                                    key, value, exclusion)) {
                 did_parse = false;
             }
         } else if (string_equals(key, ARGUMENT_RULE_KEY_SUBROLE)) {
             has_filter = true;
-            rule->subrole = string_copy(value);
-            if (exclusion) rule_set_flag(rule, RULE_SUBROLE_EXCLUDE);
-            if (regcomp(&rule->subrole_regex, value, REG_EXTENDED) == 0) {
-                rule_set_flag(rule, RULE_SUBROLE_VALID);
-            } else {
-                daemon_fail(rsp, "invalid regex pattern '%s' for key '%s'\n", value, key);
+            if (!parse_rule_pattern(rsp, rule, &rule->subrole, &rule->subrole_regex, RULE_SUBROLE_VALID, RULE_SUBROLE_EXCLUDE,
+                                    key, value, exclusion)) {
                 did_parse = false;
             }
         } else if (string_equals(key, ARGUMENT_RULE_KEY_DISPLAY)) {
@@ -113,10 +125,7 @@ static bool parse_rule(FILE *rsp, char **message, struct rule *rule, struct toke
         } else if (string_equals(key, ARGUMENT_RULE_KEY_GRID)) {
             if (exclusion) unsupported_exclusion = key;
 
-            if ((sscanf(value, ARGUMENT_RULE_VALUE_GRID,
-                        &rule->effects.grid[0], &rule->effects.grid[1],
-                        &rule->effects.grid[2], &rule->effects.grid[3],
-                        &rule->effects.grid[4], &rule->effects.grid[5]) != 6)) {
+            if (!parse_grid(value, rule->effects.grid)) {
                 daemon_fail(rsp, "invalid value '%s' for key '%s'\n", value, key);
                 did_parse = false;
             }

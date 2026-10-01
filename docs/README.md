@@ -60,3 +60,7 @@ Version 8.0.0-lcs.2:
 
 - [Effects GPU review](reports/Effects-GPU-Review_8.0.0-lcs2.md)
 - [Effects GPU decision](reports/Effects-GPU-Decision_8.0.0-lcs2.md)
+
+Version 8.0.0-lcs.3:
+
+- [IPC audit](reports/IPC-Audit_8.0.0-lcs3.md)

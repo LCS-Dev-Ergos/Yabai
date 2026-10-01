@@ -25,6 +25,8 @@ Synopsis
 
 *yabai* [*--load-sa*|*--uninstall-sa*|*--install-service*|*--uninstall-service*|*--start-service*|*--restart-service*|*--stop-service*|*--message*,*-m* 'msg'|*--config*,*-c* 'config_file'|*--verbose*,*-V*|*--version*,*-v*|*--help*,*-h*]
 
+*yabai-msg* 'msg'
+
 Description
 -----------
 
@@ -62,11 +64,14 @@ Options
     Stops a running instance of the service and unloads it.
 
 *--message*, *-m* '<msg>'::
-    Send message to a running instance of yabai.
+    Send message to a running instance of yabai. +
+    *yabai-msg* '<msg>' does the same and starts faster, as it loads none of the frameworks the window manager needs. +
+    It is signed like *yabai*; yabai refuses a client signed otherwise, and says so. +
+    Both exit with status 1 if yabai reports a failure or refuses the message.
 
 *--config*, *-c* '<config_file>'::
     Use the specified configuration file. +
-    Executes using `/usr/bin/env sh -c <config_file>` if the exec-bit is set. +
+    Executed as a program if the exec-bit is set, through `/usr/bin/env sh -c '"$0"' <config_file>`. +
     Interpreted using `/usr/bin/env sh <config_file>` if the exec-bit is unset.
 
 *--verbose*, *-V*::
@@ -84,6 +89,8 @@ Definitions
 [subs=+macros]
 ----
 REGEX       := https://www.gnu.org/software/findutils/manual/html_node/find_html/posix_002dextended-regular-expression-syntax.html[POSIX extended regular expression syntax]
+               A pattern whose nested repetitions or runs of optional parts would expand
+               far beyond its length is refused as too complex.
 
 LABEL       := arbitrary string/text used as an identifier
 
@@ -91,7 +98,7 @@ LAYER       := below | normal | above | auto
 
 BOOL_SEL    := on | off
 
-FLOAT_SEL   := 0 < <value> <= 1.0
+FLOAT_SEL   := 0 < <value> <= 1.0 (a decimal or a whole number)
 
 RULE_SEL    := <index> | LABEL
 
@@ -190,6 +197,7 @@ Global Settings
 
 *window_opacity_duration* ['<FLOAT_SEL>']::
     Duration of transition between active / normal opacity. +
+    Seconds, 0 or more; negative and non-finite values are refused. +
     System Integrity Protection must be partially disabled.
 
 *active_window_opacity* ['<FLOAT_SEL>']::
@@ -202,6 +210,7 @@ Global Settings
 
 *window_animation_duration* ['<FLOAT_SEL>']::
     Duration of window frame animation. +
+    Seconds, 0 or more; negative and non-finite values are refused. +
     If 0.0, the change in dimension is not animated. +
     Requires Screen Recording permissions. +
     System Integrity Protection must be partially disabled.
@@ -421,7 +430,8 @@ COMMAND
     If the current splitting mode matches the selected mode, the action will be undone.
 
 *--grid* '<rows>:<cols>:<start-x>:<start-y>:<width>:<height>'::
-    Set the frame of the selected window based on a self-defined grid.
+    Set the frame of the selected window based on a self-defined grid. +
+    A grid has at least one row and one column, and no value is negative.
 
 *--move* 'abs|rel:<dx>:<dy>'::
     If type is 'rel' the selected window is moved by 'dx' pixels horizontally and 'dy' pixels vertically. +
@@ -698,7 +708,8 @@ ARGUMENT
     Window should enter native macOS fullscreen mode.
 
 *grid='<rows>:<cols>:<start-x>:<start-y>:<width>:<height>'*::
-    Set window frame based on a self-defined grid.
+    Set window frame based on a self-defined grid. +
+    A grid has at least one row and one column, and no value is negative.
 
 *scratchpad='<LABEL>'*::
     Unique identifier used to identify a window scratchpad. +
@@ -751,7 +762,8 @@ COMMAND
 
 *--add event='<EVENT>' action='<ACTION>' [label='<LABEL>'] [app[!]='<REGEX>'] [title[!]='<REGEX>'] [active='yes|no']*::
     Add an optionally labelled signal to execute an action after processing an event of the given type. +
-    Some signals can be specified to trigger based on the application name and/or window title, and its active/focused state.
+    Some signals can be specified to trigger based on the application name and/or window title, and its active/focused state. +
+    The action runs with its own privacy permissions: it does not inherit the Accessibility or Screen Recording access granted to yabai.
 
 *--remove '<SIGNAL_SEL>'*::
     Remove an existing signal with the given index or label.

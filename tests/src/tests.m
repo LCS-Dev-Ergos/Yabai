@@ -106,11 +106,19 @@ typedef TEST_SIG(function);
 #include "view_layout.c"
 #include "window_rules.c"
 #include "command_domains.c"
+#include "command_values.c"
+#include "query_labels.c"
+#include "duplicate_keys.c"
+#include "pattern_cost.c"
+#include "config_file.c"
 #include "navigation_args.c"
 #include "signal_dispatch.c"
 #include "signal_environment.c"
 #include "opacity_policy.c"
 #include "string_escape.c"
+#include "daemon_message_io.c"
+#include "client_reply.c"
+#include "event_loop_wakeups.c"
 #include "sa_request.c"
 #include "resource_lifetime.c"
 #include "application_observation.c"
@@ -120,11 +128,18 @@ typedef TEST_SIG(function);
     TEST_ENTRY(application_observation)                        \
     TEST_ENTRY(opacity_policy)                                 \
     TEST_ENTRY(string_escape)                                  \
+    TEST_ENTRY(daemon_message_bounded_read)                    \
+    TEST_ENTRY(daemon_message_bounded_reply)                   \
+    TEST_ENTRY(daemon_message_round_trip)                      \
+    TEST_ENTRY(daemon_message_busy)                            \
+    TEST_ENTRY(client_request_and_reply)                       \
+    TEST_ENTRY(event_loop_wakeups)                             \
     TEST_ENTRY(signal_socket_lifetime)                         \
     TEST_ENTRY(signal_storage_bound)                           \
     TEST_ENTRY(sa_request_bounds)                              \
     TEST_ENTRY(signal_environment)                             \
     TEST_ENTRY(signal_standard_output)                         \
+    TEST_ENTRY(signal_responsibility)                          \
     TEST_ENTRY(navigation_numbers)                             \
     TEST_ENTRY(display_area_is_in_direction)                   \
     TEST_ENTRY(closest_display_in_direction)                  \
@@ -142,6 +157,14 @@ typedef TEST_SIG(function);
     TEST_ENTRY(command_domain_state_changes)                  \
     TEST_ENTRY(config_navigation_fade_curve)                  \
     TEST_ENTRY(config_navigation_veil_blur)                   \
+    TEST_ENTRY(config_decimal_values)                         \
+    TEST_ENTRY(window_value_bounds)                           \
+    TEST_ENTRY(rule_grid_bounds)                              \
+    TEST_ENTRY(query_label_escape)                            \
+    TEST_ENTRY(duplicate_rule_and_signal_keys)                \
+    TEST_ENTRY(pattern_cost_bounds)                           \
+    TEST_ENTRY(pattern_commands)                              \
+    TEST_ENTRY(config_file_path)                              \
     TEST_ENTRY(jankyborders_resource_lifetime)                \
     TEST_ENTRY(mouse_tap_resource_lifetime)
 

@@ -14,7 +14,8 @@ OSAX_SRC       = ./src/osax/payload_bin.c ./src/osax/loader_bin.c
 YABAI_SRC      = ./src/yabai_main.m ./src/navigation/navigation_effects.m ./src/sa/sa_unity.m ./src/displays/displays.m ./src/applications/applications.m ./src/spaces/layout_unity.m ./src/events/events.m ./src/ipc/ipc.m $(OSAX_SRC)
 OSAX_PATH      = ./src/osax
 INFO_PLIST     = $(ASSET_PATH)/Info.plist
-BINS           = $(BUILD_PATH)/yabai
+CLIENT_SRC     = ./src/client/yabai_msg.c
+BINS           = $(BUILD_PATH)/yabai $(BUILD_PATH)/yabai-msg
 
 .PHONY: all asan tsan install man icon archive publish sign clean-build clean
 
@@ -58,6 +59,7 @@ archive: man install sign icon
 
 sign:
 	codesign -fs "yabai-cert" $(BUILD_PATH)/yabai
+	codesign -fs "yabai-cert" $(BUILD_PATH)/yabai-msg
 
 clean-build:
 	rm -rf $(BUILD_PATH)
@@ -68,3 +70,7 @@ clean: clean-build
 $(BUILD_PATH)/yabai: $(YABAI_SRC)
 	mkdir -p $(BUILD_PATH)
 	xcrun clang $^ $(BUILD_FLAGS) $(CLI_FLAGS) $(SOCKET_FLAGS) $(FRAMEWORK_PATH) $(FRAMEWORK) -o $@
+
+$(BUILD_PATH)/yabai-msg: $(CLIENT_SRC) ./src/client/client.c
+	mkdir -p $(BUILD_PATH)
+	xcrun clang $(CLIENT_SRC) $(BUILD_FLAGS) $(CLI_FLAGS) -o $@

@@ -107,7 +107,7 @@ static void *event_loop_run(void *context)
         }
 
         [pool drain];
-        sem_wait(event_loop->semaphore);
+        dispatch_semaphore_wait(event_loop->semaphore, DISPATCH_TIME_FOREVER);
     }
 
     return NULL;
@@ -119,12 +119,15 @@ void event_loop_post(struct event_loop *event_loop, enum event_type type, void *
     uint32_t capacity;
 
     // Consecutive mouse moves keep only the latest; its handler releases the
-    // event it is given, and we release the one it replaced.
+    // event it is given, and we release the one it replaced. The move it
+    // replaced was still queued, so its wake-up is still due: one more would
+    // only wake the event loop to an empty queue.
     struct event event = { .type = type, .param1 = param1, .context = context };
     enum event_queue_result result = event_queue_push(&event_loop->queue, event, type == MOUSE_MOVED, &replaced, &capacity);
 
     if (result == EVENT_QUEUE_MERGED) {
         CFRelease(replaced.context);
+        return;
     } else if (result == EVENT_QUEUE_GREW) {
         warn("%s: the event loop is falling behind, its queue now holds %u events\n", __FUNCTION__, capacity);
     } else if (result == EVENT_QUEUE_FULL) {
@@ -132,16 +135,23 @@ void event_loop_post(struct event_loop *event_loop, enum event_type type, void *
         return;
     }
 
-    sem_post(event_loop->semaphore);
+    dispatch_semaphore_signal(event_loop->semaphore);
+}
+
+// The wake-ups go through a semaphore of this process alone. A named one
+// lives in a namespace every local account shares: a process that opened the
+// name first could take our wake-ups, or keep us from starting.
+static bool event_loop_init(struct event_loop *event_loop)
+{
+    if (!event_queue_init(&event_loop->queue, EVENT_QUEUE_CAPACITY)) return false;
+
+    event_loop->semaphore = dispatch_semaphore_create(0);
+    return event_loop->semaphore != NULL;
 }
 
 bool event_loop_begin(struct event_loop *event_loop)
 {
-    if (!event_queue_init(&event_loop->queue, EVENT_QUEUE_CAPACITY)) return false;
-
-    event_loop->semaphore = sem_open("yabai_event_loop_semaphore", O_CREAT, 0600, 0);
-    sem_unlink("yabai_event_loop_semaphore");
-    if (event_loop->semaphore == SEM_FAILED) return false;
+    if (!event_loop_init(event_loop)) return false;
 
     event_loop->is_running = true;
     pthread_create(&event_loop->thread, NULL, &event_loop_run, event_loop);

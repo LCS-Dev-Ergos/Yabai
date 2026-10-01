@@ -140,6 +140,46 @@ struct token_value token_to_value(struct token token)
     return value;
 }
 
+// A decimal argument: a decimal or a whole number, which token_to_value types
+// as an integer. strtof also reads nan and inf, which no setting can hold: a
+// NaN passes every range check written as comparisons.
+static bool token_value_to_finite_float(struct token_value value, float *result)
+{
+    if (value.type == TOKEN_TYPE_INT) {
+        *result = (float) value.int_value;
+        return true;
+    }
+
+    if (value.type == TOKEN_TYPE_FLOAT && isfinite(value.float_value)) {
+        *result = value.float_value;
+        return true;
+    }
+
+    return false;
+}
+
+// rows:cols:start-x:start-y:width:height, as window --grid and the grid rule
+// take it. A grid has at least one row and one column, and no part of it is
+// negative; the window manager fits a cell that reaches past the grid.
+static bool parse_grid(char *text, unsigned grid[6])
+{
+    int value[6];
+    if (sscanf(text, ARGUMENT_WINDOW_GRID, &value[0], &value[1], &value[2], &value[3], &value[4], &value[5]) != 6) {
+        return false;
+    }
+
+    if (value[0] < 1 || value[1] < 1) return false;
+    for (int i = 2; i < 6; ++i) {
+        if (value[i] < 0) return false;
+    }
+
+    for (int i = 0; i < 6; ++i) {
+        grid[i] = (unsigned) value[i];
+    }
+
+    return true;
+}
+
 void daemon_fail(FILE *rsp, char *fmt, ...)
 {
     if (!rsp) return;
@@ -151,7 +191,7 @@ void daemon_fail(FILE *rsp, char *fmt, ...)
     va_end(ap);
 }
 
-__unused static inline void daemon_deprecated(FILE *rsp, char *fmt, ...)
+__unused __attribute__((format(printf, 2, 3))) static inline void daemon_deprecated(FILE *rsp, char *fmt, ...)
 {
     if (!rsp) return;
 

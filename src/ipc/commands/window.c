@@ -172,10 +172,10 @@ static void handle_domain_window(FILE *rsp, struct token domain, char *message)
                 }
             }
         } else if (token_equals(command, COMMAND_WINDOW_GRID)) {
-            unsigned r, c, x, y, w, h;
+            unsigned grid[6];
             struct token value = get_token(&message);
-            if ((sscanf(value.text, ARGUMENT_WINDOW_GRID, &r, &c, &x, &y, &w, &h) == 6)) {
-                enum window_op_error result = window_manager_apply_grid(&g_space_manager, &g_window_manager, acting_window, r, c, x, y, w, h);
+            if (parse_grid(value.text, grid)) {
+                enum window_op_error result = window_manager_apply_grid(&g_space_manager, &g_window_manager, acting_window, grid[0], grid[1], grid[2], grid[3], grid[4], grid[5]);
                 if (result == WINDOW_OP_ERROR_INVALID_SRC_VIEW) {
                     daemon_fail(rsp, "cannot apply grid layout to a managed window.\n");
                 }
@@ -186,7 +186,7 @@ static void handle_domain_window(FILE *rsp, struct token domain, char *message)
             float x, y;
             char type[MAXLEN];
             struct token value = get_token(&message);
-            if ((sscanf(value.text, ARGUMENT_WINDOW_MOVE, type, &x, &y) == 3)) {
+            if ((sscanf(value.text, ARGUMENT_WINDOW_MOVE, type, &x, &y) == 3) && isfinite(x) && isfinite(y)) {
                 enum window_op_error result = window_manager_move_window_relative(&g_window_manager, acting_window, parse_value_type(type), x, y);
                 if (result == WINDOW_OP_ERROR_INVALID_SRC_VIEW) {
                     daemon_fail(rsp, "cannot move a managed window.\n");
@@ -198,7 +198,7 @@ static void handle_domain_window(FILE *rsp, struct token domain, char *message)
             float w, h;
             char handle[MAXLEN];
             struct token value = get_token(&message);
-            if ((sscanf(value.text, ARGUMENT_WINDOW_RESIZE, handle, &w, &h) == 3)) {
+            if ((sscanf(value.text, ARGUMENT_WINDOW_RESIZE, handle, &w, &h) == 3) && isfinite(w) && isfinite(h)) {
                 enum window_op_error result = window_manager_resize_window_relative(&g_window_manager, acting_window, parse_resize_handle(handle), w, h, true);
                 if (result == WINDOW_OP_ERROR_INVALID_SRC_NODE) {
                     daemon_fail(rsp, "cannot locate bsp node for the managed window.\n");
@@ -211,10 +211,11 @@ static void handle_domain_window(FILE *rsp, struct token domain, char *message)
                 daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
             }
         } else if (token_equals(command, COMMAND_WINDOW_RATIO)) {
+            // A NaN ratio passes the clamp and would stay in the tree.
             float r;
             char type[MAXLEN];
             struct token value = get_token(&message);
-            if ((sscanf(value.text, ARGUMENT_WINDOW_RATIO, type, &r) == 2)) {
+            if ((sscanf(value.text, ARGUMENT_WINDOW_RATIO, type, &r) == 2) && isfinite(r)) {
                 enum window_op_error result = window_manager_adjust_window_ratio(&g_window_manager, acting_window, parse_value_type(type), r);
                 if (result == WINDOW_OP_ERROR_INVALID_SRC_VIEW) {
                     daemon_fail(rsp, "cannot adjust ratio of a non-managed window.\n");
@@ -320,9 +321,10 @@ static void handle_domain_window(FILE *rsp, struct token domain, char *message)
                 return;
             }
             struct token_value value = token_to_value(get_token(&message));
-            if (value.type == TOKEN_TYPE_FLOAT && in_range_ii(value.float_value, 0.0f, 1.0f)) {
-                if (window_manager_set_opacity(&g_window_manager, acting_window, value.float_value)) {
-                    acting_window->opacity = value.float_value;
+            float opacity;
+            if (token_value_to_finite_float(value, &opacity) && in_range_ii(opacity, 0.0f, 1.0f)) {
+                if (window_manager_set_opacity(&g_window_manager, acting_window, opacity)) {
+                    acting_window->opacity = opacity;
                 } else {
                     daemon_fail(rsp, "could not change opacity of window with id '%d' due to an error with the scripting-addition.\n", acting_window->id);
                 }

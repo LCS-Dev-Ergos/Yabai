@@ -12,9 +12,9 @@ the fork's own features are in [navigation](NAVIGATION.md),
 | Process | Code | Role |
 | --- | --- | --- |
 | `yabai` daemon | `src/yabai_main.m` and the area units below | Window manager: observes applications, windows, Spaces and displays, tiles, answers commands, runs signals. |
-| `yabai -m` client | `src/yabai.c` (`client_send_message`) | Sends one command over the daemon socket and prints the reply. `skhd` and `space.sh` start one per key press. |
+| `yabai -m` client, `yabai-msg` | `src/client/client.c`, shared by `src/yabai.c` and `src/client/yabai_msg.c` | Sends one command over the daemon socket and prints the reply once all of it has arrived. `skhd` and `space.sh` start one per key press. `yabai-msg` is the same client alone: it links only libSystem and starts in about 2 ms instead of 6. |
 | Dock payload | `src/osax/payload.m` and fork handlers | Injected into Dock by `yabai --load-sa` (root, `src/osax/loader.m`). Runs Dock-private operations: Space focus, create, move; window order, level, opacity and fades. |
-| Signal actions | `src/events/event_signal*.c` | Shell commands the daemon starts with `posix_spawn` when a subscribed event occurs. |
+| Signal actions | `src/events/event_signal*.c` | Shell commands the daemon starts with `posix_spawn` when a subscribed event occurs. Each answers for its own privacy (TCC) permissions instead of inheriting the daemon's Accessibility and Screen Recording. |
 
 The two sockets:
 
@@ -25,6 +25,19 @@ The two sockets:
   this daemon's designated code-signing requirement before parsing. A
   message is a 4-byte length and NUL-separated tokens (`src/ipc/message_loop.c`,
   parsed by `src/ipc/message.c`). The daemon answers on the same connection.
+  The event loop reads the request and then writes the reply built in memory,
+  within one second each (`src/events/handlers/messages.c`), so a client that
+  stalls loses its request or the rest of its reply instead of holding every
+  event. A request it cannot read, a peer that fails the requirement, and a
+  client arriving while 128 connections wait for the event loop are answered
+  with the reason instead of a silent close. The accept thread remembers the
+  code-directory hashes that passed the requirement, so a new client process
+  of the same build costs a kernel query instead of a signature check
+  (`src/osax/socket_identity.h`). The signed client is an ordinary command any
+  process of the user can run, so the requirement keeps other programs off
+  the socket but is no boundary between processes of the same user. Rule and
+  signal patterns whose automaton would cost more than a literal as long as a
+  request are refused before `regcomp` runs (`src/ipc/pattern.c`).
 - **Payload socket** `~/Library/Caches/yabai/payload.sock` in Dock. The payload
   applies the same directory and audit-token checks. It validates peers
   against a requirement saved by the root installer in its bundle. Each request opens its own connection
@@ -137,10 +150,11 @@ try the lock, so Dock's main thread never waits for the worker.
 ## Events
 
 Producers post with `event_loop_post`, which copies the event into a ring
-under a mutex (`event_queue.c`) and wakes the consumer with a semaphore. A full
-ring doubles, with a warning in the log, so an event loop that falls behind
-costs memory rather than events. A mouse move replaces the move queued right
-before it.
+under a mutex (`event_queue.c`) and wakes the consumer with a dispatch
+semaphore private to the process. A full ring doubles, with a warning in the
+log, so an event loop that falls behind costs memory rather than events. A
+mouse move replaces the move queued right before it and adds no wake-up of its
+own.
 The 43 event types (`src/events/event_loop.h`) come from:
 
 | Producer | Events |
@@ -301,6 +315,7 @@ Diagnostics: signposts in subsystem `com.lcs.yabai`, categories
 | 6 | TCC | Grants of a bare binary follow its path; every store path asked again and ran without crossfades until restart. | Fixed in Dotfiles `9a8fb78`; the grants survived the update to lcs.28 |
 | 7 | Upstream animations and navigation | The CVDisplayLink thread and the event loop both send Dock requests. The payload handles each full request serially, and proxy swaps target window IDs while navigation targets a Space ID. Visible ordering during an overlap remains unverified. | Unverified visual result |
 | 8 | Unity build | Hidden coupling through include order and file-static globals, so a module's inputs and threads are not visible where it is used. Navigation and effects now declare their interfaces, threads and state in headers and compile before the core; the core's files still call each other's file-static functions by include order. | Maintainability; reduced |
+| 9 | Daemon socket commands | The event loop read requests and wrote replies with blocking calls and no bound, so one stalled client held every event; signal actions inherited the daemon's TCC grants; negative or non-finite durations and ratios were accepted and could leave an animation running forever; a nested or optional-heavy pattern held the event loop for seconds in `regcomp`; refused requests closed silently and the client reported success. See the [IPC audit](reports/IPC-Audit_8.0.0-lcs3.md). | Fixed after lcs.3 |
 
 ### First Space visits after restart
 

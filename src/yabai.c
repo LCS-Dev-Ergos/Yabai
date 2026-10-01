@@ -53,74 +53,7 @@ int g_connection;
 bool g_verbose;
 pid_t g_pid;
 
-static int client_send_message(int argc, char **argv)
-{
-    if (argc <= 1) {
-        error("yabai-msg: no arguments given! abort..\n");
-    }
-
-    int message_length = argc;
-    int argl[argc];
-
-    for (int i = 1; i < argc; ++i) {
-        argl[i] = strlen(argv[i]);
-        message_length += argl[i];
-    }
-
-    char *message = malloc(sizeof(int)+message_length);
-    char *temp = sizeof(int)+message;
-
-    memcpy(message, &message_length, sizeof(int));
-    for (int i = 1; i < argc; ++i) {
-        memcpy(temp, argv[i], argl[i]);
-        temp += argl[i];
-        *temp++ = '\0';
-    }
-    *temp++ = '\0';
-
-    int sockfd;
-    char socket_file[MAXLEN];
-    if (!yabai_socket_path(getuid(), YABAI_SOCKET_DAEMON, socket_file, sizeof(socket_file), false)) {
-        error("yabai-msg: private socket directory is unavailable..\n");
-    }
-
-    if (!socket_open(&sockfd)) {
-        error("yabai-msg: failed to open socket..\n");
-    }
-
-    if (!socket_connect(sockfd, socket_file)) {
-        error("yabai-msg: failed to connect to socket..\n");
-    }
-
-    if (send(sockfd, message, sizeof(int)+message_length, 0) == -1) {
-        error("yabai-msg: failed to send data..\n");
-    }
-
-    shutdown(sockfd, SHUT_WR);
-    free(message);
-
-    int result = EXIT_SUCCESS;
-    FILE *output = stdout;
-    int bytes_read = 0;
-    char rsp[BUFSIZ];
-
-    while ((bytes_read = read(sockfd, rsp, sizeof(rsp)-1)) > 0) {
-        rsp[bytes_read] = '\0';
-
-        if (rsp[0] == FAILURE_MESSAGE[0]) {
-            result = EXIT_FAILURE;
-            output = stderr;
-            fprintf(output, "%s", rsp + 1);
-            fflush(output);
-        } else {
-            fprintf(output, "%s", rsp);
-            fflush(output);
-        }
-    }
-
-    socket_close(sockfd);
-    return result;
-}
+#include "client/client.c"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
