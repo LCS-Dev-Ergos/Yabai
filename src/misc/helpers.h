@@ -313,6 +313,16 @@ static inline char *ts_string_escape(char *s)
     return result;
 }
 
+// The text of a JSON string value: escaped when it needs to be, as it is
+// otherwise, and empty for none. For labels and names a client chose.
+static inline char *ts_json_text(char *s)
+{
+    if (!s) return "";
+
+    char *escaped = ts_string_escape(s);
+    return escaped ? escaped : s;
+}
+
 static inline CFStringRef CFSTRINGNUM32(int32_t num)
 {
     char num_str[255] = {0};

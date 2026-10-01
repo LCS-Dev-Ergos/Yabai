@@ -88,7 +88,7 @@ void window_serialize(FILE *rsp, struct window *window, uint64_t flags)
     if (flags & WINDOW_PROPERTY_SCRATCHPAD) {
         if (did_output) fprintf(rsp, ",\n");
 
-        fprintf(rsp, "\t\"scratchpad\":\"%s\"", window->scratchpad ? window->scratchpad : "");
+        fprintf(rsp, "\t\"scratchpad\":\"%s\"", ts_json_text(window->scratchpad));
         did_output = true;
     }
 

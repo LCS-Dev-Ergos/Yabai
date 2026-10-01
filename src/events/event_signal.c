@@ -411,7 +411,7 @@ static void event_signal_serialize(FILE *rsp, struct signal *signal, enum signal
             "\t\"action\":\"%s\"\n"
             "}",
             index,
-            signal->label ? signal->label : "",
+            ts_json_text(signal->label),
             escaped_app ? escaped_app : app ? app : "",
             escaped_title ? escaped_title : title ? title : "",
             json_optional_bool(signal->active),
