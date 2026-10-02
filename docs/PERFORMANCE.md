@@ -487,6 +487,19 @@ in 6.1 ms (median) and `yabai-msg` in 2.1 ms, against 1.5 ms for
 in about 3 microseconds instead of milliseconds. The end-to-end time with an
 installed daemon remains to be measured.
 
+## Payload requests after lcs.4
+
+Every scripting-addition request is a new connection to Dock, and the daemon
+waits until the payload has answered or closed it. Before reading a request,
+the payload checked the daemon's signature in full: a median of 0.45 and
+0.52 ms in two runs of 200 checks (p90 0.54 and 0.80 ms, up to 12 ms) against
+the running lcs.4 daemon and its installed requirement. The Space focus of every navigation step, the
+opacity batches of a fade and every mouse move of a modifier drag paid it on
+the daemon's side. The [scripting-addition
+audit](reports/OSAX-Audit_8.0.0-lcs4.md) gives the payload the daemon's cache
+of trusted code, whose kernel query takes about a microsecond. The gain on a
+live request needs the new payload in Dock and remains to be measured.
+
 ## Remaining work
 
 The 40 ms same-application focus delay is kept for application compatibility

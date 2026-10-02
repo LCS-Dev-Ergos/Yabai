@@ -44,6 +44,15 @@
 
 static char *message_end;
 
+// The daemon stops waiting for a reply after a second and closes its end. A
+// reply after that must fail without raising SIGPIPE, which Dock neither
+// ignores nor catches. SO_NOSIGPIPE cannot be set on a connection whose peer
+// has already closed, so every reply passes MSG_NOSIGNAL instead.
+static void payload_reply(int sockfd, const void *bytes, size_t length)
+{
+    send(sockfd, bytes, length, MSG_NOSIGNAL);
+}
+
 extern int SLSMainConnectionID(void);
 extern CGError SLSGetConnectionPSN(int cid, ProcessSerialNumber *psn);
 extern CGError SLSGetWindowAlpha(int cid, uint32_t wid, float *alpha);
@@ -227,9 +236,24 @@ static void init_instances()
     NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo] operatingSystemVersion];
     if (!verify_os_version(os_version)) return;
 
-    uint64_t baseaddr = static_base_address() + image_slide();
+    uint64_t slide = image_slide();
+    uint64_t baseaddr = static_base_address() + slide;
 
-    uint64_t dock_spaces_addr = hex_find_seq(baseaddr + get_dock_spaces_offset(os_version), get_dock_spaces_pattern(os_version));
+    //
+    // NOTE: Every lookup matches code. Past the end of Dock's code a search would
+    // read stubs, strings and data, where a match is no instruction, so it stops
+    // there.
+    //
+
+    const struct section_64 *text = getsectbyname("__TEXT", "__text");
+    if (!text) {
+        NSLog(@"[yabai-sa] could not locate the code section of Dock.app!");
+        return;
+    }
+
+    uint64_t text_end = text->addr + slide + text->size;
+
+    uint64_t dock_spaces_addr = hex_find_seq(baseaddr + get_dock_spaces_offset(os_version), text_end, get_dock_spaces_pattern(os_version));
     if (dock_spaces_addr == 0) {
         dock_spaces = nil;
         NSLog(@"[yabai-sa] could not locate pointer to dock.spaces! spaces functionality will not work!");
@@ -245,7 +269,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t dppm_addr = hex_find_seq(baseaddr + get_dppm_offset(os_version), get_dppm_pattern(os_version));
+    uint64_t dppm_addr = hex_find_seq(baseaddr + get_dppm_offset(os_version), text_end, get_dppm_pattern(os_version));
     if (dppm_addr == 0) {
         dp_desktop_picture_manager = nil;
         if (!macOSGoldenGate) NSLog(@"[yabai-sa] could not locate pointer to dppm! moving spaces will not work!");
@@ -281,7 +305,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t add_space_addr = hex_find_seq(baseaddr + get_add_space_offset(os_version), get_add_space_pattern(os_version));
+    uint64_t add_space_addr = hex_find_seq(baseaddr + get_add_space_offset(os_version), text_end, get_add_space_pattern(os_version));
     if (add_space_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to addSpace function..");
         add_space_fp = 0;
@@ -294,7 +318,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t remove_space_addr = hex_find_seq(baseaddr + get_remove_space_offset(os_version), get_remove_space_pattern(os_version));
+    uint64_t remove_space_addr = hex_find_seq(baseaddr + get_remove_space_offset(os_version), text_end, get_remove_space_pattern(os_version));
     if (remove_space_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to removeSpace function..");
         remove_space_fp = 0;
@@ -307,7 +331,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t move_space_addr = hex_find_seq(baseaddr + get_move_space_offset(os_version), get_move_space_pattern(os_version));
+    uint64_t move_space_addr = hex_find_seq(baseaddr + get_move_space_offset(os_version), text_end, get_move_space_pattern(os_version));
     if (move_space_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to moveSpace function..");
         move_space_fp = 0;
@@ -329,7 +353,7 @@ static void init_instances()
         }
     }
 
-    uint64_t set_front_window_addr = hex_find_seq(baseaddr + get_set_front_window_offset(os_version), get_set_front_window_pattern(os_version));
+    uint64_t set_front_window_addr = hex_find_seq(baseaddr + get_set_front_window_offset(os_version), text_end, get_set_front_window_pattern(os_version));
     if (set_front_window_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to setFrontWindow function..");
         set_front_window_fp = 0;
@@ -342,7 +366,7 @@ static void init_instances()
 #endif
     }
 
-    animation_time_addr = hex_find_seq(baseaddr + get_fix_animation_offset(os_version), get_fix_animation_pattern(os_version));
+    animation_time_addr = hex_find_seq(baseaddr + get_fix_animation_offset(os_version), text_end, get_fix_animation_pattern(os_version));
     if (animation_time_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to animation-time..");
     } else {
@@ -716,11 +740,12 @@ static void do_window_scale(char *message)
     if (!wid) return;
 
     CGRect frame = {};
-    SLSGetWindowBounds(SLSMainConnectionID(), wid, &frame);
+    if (SLSGetWindowBounds(SLSMainConnectionID(), wid, &frame) != 0) return;
     CGAffineTransform original_transform = CGAffineTransformMakeTranslation(-frame.origin.x, -frame.origin.y);
 
+    // Without the current transform we cannot tell whether to scale or restore.
     CGAffineTransform current_transform;
-    SLSGetWindowTransform(SLSMainConnectionID(), wid, &current_transform);
+    if (SLSGetWindowTransform(SLSMainConnectionID(), wid, &current_transform) != 0) return;
 
     if (CGAffineTransformEqualToTransform(current_transform, original_transform)) {
         float dx, dy, dw, dh;
@@ -736,9 +761,14 @@ static void do_window_scale(char *message)
 
         if (!isfinite(dx) || !isfinite(dy) || !(dw >= 4.0f && dw <= 65536.0f)) return;
         if (!(frame.size.width > 0 && frame.size.height > 0)) return;
+        if (!isfinite(frame.size.width) || !isfinite(frame.size.height)) return;
 
-        int target_width  = dw / 4;
-        int target_height = target_width / (frame.size.width/frame.size.height);
+        // A window much wider than high would scale to no height, by an
+        // infinite factor; one much higher than wide, past what an int holds.
+        int target_width = dw / 4;
+        double height = target_width / (frame.size.width/frame.size.height);
+        if (!(height >= 1.0 && height <= 65536.0)) return;
+        int target_height = height;
 
         float x_scale = frame.size.width/target_width;
         float y_scale = frame.size.height/target_height;
@@ -1008,7 +1038,7 @@ static void do_handshake(int sockfd)
     bytes[version_length] = '\0';
     bytes[bytes_length] = '\n';
 
-    send(sockfd, bytes, bytes_length+1, 0);
+    payload_reply(sockfd, bytes, bytes_length+1);
 }
 
 static void handle_message(int sockfd, char *message)
@@ -1082,17 +1112,43 @@ static void handle_message(int sockfd, char *message)
     }
 }
 
+//
+// NOTE: A daemon gives up on a request after a second, so a peer has as long
+// to send all of it. Each read waits only for the time left: one that stops
+// sending, stopped in a debugger for instance, or sends a byte at a time,
+// cannot hold the only thread that serves the daemon.
+//
+
+#define PAYLOAD_READ_TIMEOUT_NS 1000000000ULL
+
+// One read that waits until `deadline` at the latest; -1 once it has passed,
+// or when the peer has gone and the wait cannot be set.
+static ssize_t payload_read_until(int sockfd, void *bytes, size_t length, uint64_t deadline)
+{
+    uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+    if (now >= deadline) return -1;
+
+    // A zero timeout would wait forever.
+    uint64_t left = deadline - now;
+    struct timeval timeout = { .tv_sec = left / 1000000000ULL, .tv_usec = (left % 1000000000ULL) / 1000 };
+    if (!timeout.tv_sec && !timeout.tv_usec) timeout.tv_usec = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) return -1;
+
+    return read(sockfd, bytes, length);
+}
+
 static inline bool read_message(int sockfd, char *message)
 {
+    uint64_t deadline = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) + PAYLOAD_READ_TIMEOUT_NS;
     int bytes_read    = 0;
     int bytes_to_read = 0;
 
-    if (read(sockfd, &bytes_to_read, sizeof(int16_t)) == sizeof(int16_t)) {
+    if (payload_read_until(sockfd, &bytes_to_read, sizeof(int16_t), deadline) == sizeof(int16_t)) {
         if (bytes_to_read >= SA_SOCKET_BUFF_LEN) return false;
         if (bytes_to_read <= 0)                  return false;
 
         do {
-            int cur_read = read(sockfd, message+bytes_read, bytes_to_read-bytes_read);
+            int cur_read = payload_read_until(sockfd, message+bytes_read, bytes_to_read-bytes_read, deadline);
             if (cur_read <= 0) break;
 
             bytes_read += cur_read;
@@ -1107,19 +1163,30 @@ static inline bool read_message(int sockfd, char *message)
     return false;
 }
 
+//
+// NOTE: Every request is a new connection from the same daemon, which waits
+// while we check it: the full signature check costs about half a millisecond,
+// the check of code we already trust a kernel query. Only the connection
+// thread uses the cache.
+//
+
+static struct yabai_socket_trusted_code daemon_trusted_code;
+
+// False for a peer we do not serve, or one that has already gone.
+static bool payload_connection_admit(int sockfd)
+{
+    return yabai_socket_peer_is_trusted_cached(sockfd, getuid(), daemon_requirement, &daemon_trusted_code);
+}
+
 static void *handle_connection(void *unused)
 {
     for (;;) {
         int sockfd = accept(daemon_sockfd, NULL, 0);
         if (sockfd == -1) continue;
-        if (!yabai_socket_peer_is_trusted(sockfd, getuid(), daemon_requirement)) {
+        if (!payload_connection_admit(sockfd)) {
             close(sockfd);
             continue;
         }
-
-        // A reply to a daemon that stopped waiting must not raise SIGPIPE in Dock.
-        int on = 1;
-        setsockopt(sockfd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
 
         //
         // NOTE: Handlers create autoreleased objects (array literals, SkyLight

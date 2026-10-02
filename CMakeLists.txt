@@ -205,6 +205,17 @@ target_link_libraries(fade_tests PRIVATE "-framework CoreFoundation" "-framework
 add_test(NAME fade_tests COMMAND fade_tests)
 set_tests_properties(fade_tests PROPERTIES TIMEOUT 15)
 
+# The payload's request handling, compiled outside Dock with SkyLight stubbed.
+add_executable(payload_tests tests/payload/requests.m)
+target_include_directories(payload_tests PRIVATE ${SRC}/osax)
+target_compile_definitions(payload_tests PRIVATE YABAI_ALLOW_UNSIGNED_LOCAL=1)
+target_compile_options(payload_tests PRIVATE -UNDEBUG -fno-objc-arc -Wno-deprecated-declarations ${YABAI_SANITIZE_FLAGS})
+target_link_options(payload_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
+target_link_libraries(payload_tests PRIVATE
+    "-framework AppKit" "-framework QuartzCore" "-framework Carbon" "-framework CoreGraphics" "-framework Security" "-lbsm.0")
+add_test(NAME payload_tests COMMAND payload_tests)
+set_tests_properties(payload_tests PROPERTIES TIMEOUT 15)
+
 # libFuzzer targets for the two socket protocols, see docs/TESTING.md. They need
 # a clang that ships libFuzzer, which Apple's does not. Each also runs as a
 # short CTest test, writing new inputs to the build directory.

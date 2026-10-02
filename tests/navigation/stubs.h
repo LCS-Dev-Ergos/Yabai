@@ -268,6 +268,11 @@ static bool space_navigation_reduce_motion(void)
     return reduce_motion;
 }
 
+static bool space_navigation_memory_pressure(void)
+{
+    return memory_pressure;
+}
+
 static bool scripting_addition_set_opacity_batch(uint32_t display, uint8_t phase, float alpha, float duration,
                                                 float interval, struct sa_window_opacity *windows, uint32_t count)
 {

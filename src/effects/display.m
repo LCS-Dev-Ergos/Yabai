@@ -19,3 +19,12 @@ static bool space_navigation_reduce_transparency(void)
 {
     return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceTransparency];
 }
+
+// The level the kernel reports to processes: 1 normal, 2 warning, 4 critical.
+// An unreadable level counts as no pressure.
+static bool space_navigation_memory_pressure(void)
+{
+    int level = 0;
+    size_t size = sizeof(level);
+    return sysctlbyname("kern.memorystatus_vm_pressure_level", &level, &size, NULL, 0) == 0 && level > 1;
+}
