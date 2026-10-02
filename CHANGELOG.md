@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [8.0.0-lcs.5] - 2026-10-02
 ### Changed
 - The Dock payload checks the daemon's signature once per build instead of on every request, a check of about half a millisecond that the daemon waited for on each Space focus, opacity batch and mouse move of a modifier drag
 - The payload version is `2.1.31-lcs.16`: `sudo yabai --load-sa` installs it and restarts Dock; the command reports success only after a later run validates the payload handshake
@@ -20,6 +22,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The loader exits with an error when its remote thread never reaches the sentinel, and releases its task and thread rights and remote stack after termination
 - `--load-sa` run by root without sudo, as nix-darwin's boot daemon does, validates the payload in the Dock of the user who owns the console, and fails until someone has logged in
 - The root installer checks binary preparation failures, uses absolute tools without a shell, checks root ownership and protected modes across the installed bundle, and serializes install and uninstall operations
+
+### Verification and limits
+- Debug, ASan/UBSan, TSan/UBSan and Release cover every fix, the loader runs against Mach mocks, and the payload fuzzer covers the new request handling. The new payload has not run in Dock before release: the first `sudo yabai --load-sa` installs it, restarts Dock and exits non-zero, and the run after Dock's restart loads and validates it. The crossfade rule under memory pressure has not run installed
 
 ## [8.0.0-lcs.4] - 2026-10-01
 ### Added
@@ -936,7 +941,8 @@ The *window_destroyed* signal is now triggered for windows that are implicitly d
 ### Added
 - First official release
 
-[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.4...HEAD
+[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.5...HEAD
+[8.0.0-lcs.5]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.4...v8.0.0-lcs.5
 [8.0.0-lcs.4]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.3...v8.0.0-lcs.4
 [8.0.0-lcs.3]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.2...v8.0.0-lcs.3
 [8.0.0-lcs.2]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.1...v8.0.0-lcs.2
