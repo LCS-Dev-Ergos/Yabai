@@ -234,31 +234,71 @@ cleanup:
     return 2;
 }
 
-static bool scripting_addition_request_handshake(char *version, uint32_t *attrib)
+//
+// NOTE: The handshake reply is the payload's version, a NUL and its attribute
+// bits. Whatever listens on the payload socket writes it and `--load-sa` reads
+// it as root, so we read it only within the bytes that arrived, and give up on
+// a listener whose whole reply has not come in a few seconds, however it
+// trickles in; a payload that has just loaded answers once it has looked up
+// Dock's internals.
+//
+
+#define SA_HANDSHAKE_TIMEOUT_NS 5000000000ULL
+
+static bool scripting_addition_parse_handshake(const char *reply, size_t length, char *version, size_t version_size, uint32_t *attrib)
+{
+    const char *zero = memchr(reply, '\0', length);
+    if (!zero) return false;
+
+    size_t version_length = zero - reply;
+    if (version_length >= version_size) return false;
+    if (length - version_length - 1 < sizeof(uint32_t)) return false;
+
+    memcpy(version, reply, version_length + 1);
+    memcpy(attrib, zero + 1, sizeof(uint32_t));
+    return true;
+}
+
+static bool scripting_addition_request_handshake(char *version, size_t version_size, uint32_t *attrib, uint64_t timeout_ns)
 {
     int sockfd;
     bool result = false;
-    char rsp[BUFSIZ] = {0};
-    char bytes[SA_SOCKET_BUFF_LEN] = { 0x01, 0x00, SA_OPCODE_HANDSHAKE };
+    char rsp[BUFSIZ];
+    char bytes[] = { 0x01, 0x00, SA_OPCODE_HANDSHAKE };
+    uint64_t deadline = read_os_timer() + timeout_ns;
 
     if (socket_open(&sockfd)) {
-        if (socket_connect(sockfd, g_sa_socket_file)) {
-            if (send(sockfd, bytes, 3, 0) != -1) {
-                int length = recv(sockfd, rsp, sizeof(rsp)-1, 0);
-                if (length <= 0) goto out;
+        // The payload closes the connection after its reply. Each read waits
+        // only for the time left; a zero timeout would wait forever.
+        if (socket_connect(sockfd, g_sa_socket_file) && send(sockfd, bytes, sizeof(bytes), MSG_NOSIGNAL) == sizeof(bytes)) {
+            size_t length = 0;
+            for (;;) {
+                uint64_t now = read_os_timer();
+                if (now >= deadline) {
+                    length = 0;
+                    break;
+                }
 
-                char *zero = rsp;
-                while (*zero != '\0') ++zero;
+                uint64_t left = deadline - now;
+                struct timeval timeout = { .tv_sec = left / 1000000000ULL, .tv_usec = (left % 1000000000ULL) / 1000 };
+                if (!timeout.tv_sec && !timeout.tv_usec) timeout.tv_usec = 1;
+                setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-                assert(*zero == '\0');
-                memcpy(version, rsp, zero - rsp + 1);
-                memcpy(attrib, zero+1, sizeof(uint32_t));
-
-                result = true;
+                ssize_t count = recv(sockfd, rsp + length, sizeof(rsp) - length, 0);
+                if (count > 0) {
+                    length += count;
+                    if (length < sizeof(rsp)) continue;
+                } else if (count == -1 && errno == EINTR) {
+                    continue;
+                } else if (count == -1) {
+                    length = 0;
+                }
+                break;
             }
+
+            result = scripting_addition_parse_handshake(rsp, length, version, version_size, attrib);
         }
 
-out:
         socket_close(sockfd);
     }
 
@@ -285,7 +325,7 @@ static int scripting_addition_perform_validation(void)
     char version[SA_SOCKET_BUFF_LEN] = {0};
     bool is_latest_version_installed = scripting_addition_check() == 0;
 
-    if (!scripting_addition_request_handshake(version, &attrib)) {
+    if (!scripting_addition_request_handshake(version, sizeof(version), &attrib, SA_HANDSHAKE_TIMEOUT_NS)) {
         notify("scripting-addition", "connection failed!");
         return 1;
     }
