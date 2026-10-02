@@ -193,6 +193,14 @@ behind others, and those a held key repeats, blend in 125 ms at most (see
 [navigation](NAVIGATION.md#pacing)). With pacing disabled, interruption
 discards the previous image; seamless retargeting in that mode is not promised. Reduce Motion retains this nonspatial
 blend. Fullscreen Desktops and already-visible destinations switch without it.
+So does every step while macOS reports memory pressure (warning or critical,
+`kern.memorystatus_vm_pressure_level`): under pressure WindowServer once put
+the overlay on screen about 110 ms after it was ordered, after Dock had
+switched, so the destination showed before the outgoing image returned and
+faded. The capture and the overlay's copy take 81 MB each on a 6016 × 3384
+display. The veil captures nothing and is kept. The white seen in the same
+conditions came from a browser's window on the destination, with or without
+the crossfade (see the [flash report](reports/Navigation-Flash_8.0.0-lcs4.md)).
 No blur is applied.
 
 ### Fade curve

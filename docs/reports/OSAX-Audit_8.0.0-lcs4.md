@@ -7,8 +7,12 @@ reach them), the pattern search that locates Dock's internals
 (`src/osax/pattern.h`, `tools/osax/pattern_check.m`), the payload's peer check
 (`src/osax/socket_identity.h`), and the daemon's request senders and handshake
 (`src/sa/sa.m`, `src/sa/sa_opacity.c`). The loader and the root-run install
-and load path are reviewed separately. Host-specific records are kept outside
-the repository.
+and load path were reviewed separately
+([review](Loader-Payload-Review_8.0.0-lcs4.md),
+[corrections](Loader-Payload-Corrections_8.0.0-lcs4.md)); those corrections
+also replaced the request deadline and tightened the scale and proxy-swap
+checks described below. Host-specific records are kept outside the
+repository.
 
 ## Map
 
@@ -35,7 +39,7 @@ of the same user. The daemon does not check who listens on the payload socket
 | 3 | Low, robustness | The payload read requests with no timeout. A peer that connected and stopped sending, a daemon stopped in a debugger for instance, held the payload's only connection thread; each later request then cost the daemon its full one-second wait. | Fixed |
 | 4 | Low, robustness | `--load-sa`, which runs as root, read the handshake reply with one `recv`, looked for its NUL beyond the bytes received, and read the attribute bits after it unchecked: a reply of 1023 bytes without a NUL read four bytes past the buffer (ASan: stack-buffer-overflow, read of size 4). It also waited forever for a listener that accepted and never answered. The reply comes from whatever listens on the payload socket, normally the payload. | Fixed |
 | 5 | Low, robustness | The pattern search did not stop at the end of Dock's code. On macOS 27.2, four of the five lookups search windows that run past the end of `__TEXT,__text` (`0x226adc` and `0x2172c8` in the two slices) into stubs, strings and other read-only data, up to `0x2886a0`. A miss or an early false match there would hand a non-instruction to a call or a patch. `pattern_check` reports such a match as `FAIL`; the payload used it. Every current lookup matches inside the section. | Fixed |
-| 6 | Low, robustness | `window --toggle pip` scaled the window to a quarter of the display width and computed its height in whole points: a window more than about 400 times wider than high (on a 1600-point display) got a height of 0 and an infinite scale. A failed read of the window's transform left it uninitialized, and that garbage chose between scaling and restoring. | Fixed |
+| 6 | Low, robustness | `window --toggle pip` scaled the window to a quarter of the display width and computed its height in whole points: a window more than about 400 times wider than high (on a 1600-point display) got a height of 0 and an infinite scale, and bounds that are not finite overflowed the conversion to `int` (UBSan: `inf is outside the range of representable values of type 'int'`). A failed read of the window's transform left it uninitialized, and that garbage chose between scaling and restoring. | Fixed |
 
 ### Open hypotheses
 
@@ -50,12 +54,11 @@ of the same user. The daemon does not check who listens on the payload socket
   through `object_setInstanceVariable`. If the runtime also retains for that
   ivar, every focus keeps one reference on a Space that lives on anyway; a
   destroyed Space would then never be freed. Unverified and bounded.
-- *The listener is not authenticated.* A process of the user can bind the
-  payload socket while no payload listens, then read the daemon's requests or
-  answer `--load-sa`'s handshake (which can make it reinstall the payload and
-  restart Dock). That process could stop or restart Dock directly, so this
-  stays within the documented model; checking Dock's signature at the
-  handshake would close it.
+- *The daemon does not authenticate the listener.* A process of the user can
+  bind the payload socket while no payload listens and read the daemon's
+  requests. That process could stop or restart Dock directly, so this stays
+  within the documented model. `--load-sa` now accepts its handshake only
+  from the Apple-signed Dock (change 4).
 - *`SA_OPCODE_WINDOW_FOCUS`.* Its handler asks for Dock's own process serial
   number instead of the window owner's and reads an uninitialized connection.
   The daemon never sends it (the caller is compiled out), and the lookup it
@@ -83,11 +86,16 @@ of the same user. The daemon does not check who listens on the payload socket
    from the IPC audit: a daemon whose code-directory hash already passed, and
    whose code the kernel still holds valid, is trusted after a kernel query.
    The UID check still runs on every connection.
-3. **Read timeout.** `payload_connection_admit` checks the peer and gives each
-   read of its request one second (`SO_RCVTIMEO`), as long as the daemon
-   waits. A connection whose peer has already gone is dropped there.
-4. **Handshake.** `--load-sa` sends with `MSG_NOSIGNAL`, reads until the
-   payload closes the connection or five seconds pass, and
+3. **Read deadline.** `read_message` gives the whole request, header
+   included, one second, as long as the daemon waits. Each wait (`poll`, in
+   `socket_deadline.h`, shared with the handshake) lasts only for the time
+   left, so a peer that sends a byte at a time cannot stretch it, and a header
+   that arrives in two pieces is still read. Without a deadline for the whole
+   request, one trickled in a byte every 300 ms was accepted after 2.4 s.
+4. **Handshake.** `--load-sa` accepts the listener only when it is the running
+   Dock, signed by Apple (`anchor apple and identifier "com.apple.dock"`),
+   sends with `MSG_NOSIGNAL`, reads until the payload closes the connection,
+   giving the whole reply five seconds, and
    `scripting_addition_parse_handshake` accepts only a reply with a NUL and
    four bytes after it, and a version that fits the caller's buffer.
 5. **Bounded pattern search.** `hex_find_seq` takes an end and returns only a
@@ -95,9 +103,13 @@ of the same user. The daemon does not check who listens on the payload socket
    end of `__TEXT,__text`; `pattern_check` passes the end of each slice's
    section, and its output on macOS 27.2 is unchanged for both slices.
 6. **Window scale.** The handler returns when the window's bounds or
-   transform cannot be read, or when the scaled height would be under one
-   point.
-7. **Payload version** `2.1.31-lcs.15`.
+   transform cannot be read, when the bounds are not finite, when the scaled
+   height, computed in floating point, would be under one point or beyond what
+   an `int` holds, or when the scale or the transform would not be finite.
+7. **Proxy swaps.** Both handlers check the whole list, a one-word entry for a
+   skipped window and two words otherwise, before they create a transaction,
+   so a malformed request commits nothing.
+8. **Payload version** `2.1.31-lcs.16`, with the loader corrections.
 
 ## Performance
 
@@ -118,26 +130,27 @@ end-to-end gain needs the new payload in Dock and has not been measured.
 The reply, window-scale and handshake fixes began with tests that failed on
 the base: the payload raised `SIGPIPE` on both replies, set a transform for
 the wide window, and the base's handshake parsing read past its buffer under
-ASan. The read-timeout and pattern-bound tests were written with the
-interfaces they needed.
+ASan. A first version bounded each read rather than the whole message, and
+guarded only a zero height; tests of a trickled request and reply, of
+infinite bounds and of a very tall window failed on it (UBSan reported the
+overflowing conversion) and pass now. The read-deadline and pattern-bound
+tests were written with the interfaces they needed.
 
-- Debug CTest: 16/16, unit runner 43/43.
-- ASan/UBSan and TSan/UBSan: 16/16 each. Release: 16/16.
+- Debug CTest: 16/16, unit runner 43/43; with the loader corrections merged,
+  17/17 and 44/44.
+- ASan/UBSan, TSan/UBSan and Release: 16/16 each, 17/17 after the merge.
 - Analyzer: no findings for the payload and loader, no new ones for the
   daemon. Area headers: 27/27.
 - `pattern_check` against the local Dock: the same output as before the
   change, both slices.
-- Fuzzing: the payload target for 120 s (20 million inputs, 414 MB peak under
+- Fuzzing: the payload target for 120 s (18 million inputs, 452 MB peak under
   ASan) and the daemon target for 30 s, with no failure.
 
 Limits:
 
 - The new payload has not run in Dock. Installing it needs root and restarts
   Dock: `sudo yabai --load-sa` with a build of this change reinstalls it,
-  since the version differs. The cache, the read timeout and the replies run
+  since the version differs. The cache, the read deadline and the replies run
   in test processes through the production functions; the cache itself is
   covered by `socket_identity_tests`.
-- The read timeout bounds each read, not the whole request: a trusted peer
-  that sends a byte at a time can hold the thread longer. Only the daemon and
-  root pass the peer check.
 - The open hypotheses above remain.

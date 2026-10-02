@@ -8,16 +8,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 - The Dock payload checks the daemon's signature once per build instead of on every request, a check of about half a millisecond that the daemon waited for on each Space focus, opacity batch and mouse move of a modifier drag
 - The payload version is `2.1.31-lcs.16`: `sudo yabai --load-sa` installs it and restarts Dock; the command reports success only after a later run validates the payload handshake
+- The crossfade is left out while macOS reports memory pressure: WindowServer could then show its overlay after Dock had switched, so the destination appeared, the outgoing image came back and faded. The veil is kept
 
 ### Fixed
 - A reply from the Dock payload to a daemon that had stopped waiting could terminate Dock with `SIGPIPE`
-- The Dock payload gives the complete request, including a fragmented header, one second, so a peer sending a slow trickle cannot hold its only request thread
+- The Dock payload gives the complete request, including a fragmented header, one second, so a request that stops arriving or trickles in no longer holds the only thread that serves the daemon
 - The Dock payload's lookups match only inside Dock's code; a search that ran past its end could take stubs, strings or data for a function
-- `window --toggle pip` no longer gives a window far wider than high an infinite scale, and does nothing when the window's bounds or transform cannot be read
-- `--load-sa` reads the handshake reply only within what arrived and gives the complete reply five seconds; it accepts replies only from the Apple-signed Dock process
+- `window --toggle pip` no longer gives a window far wider than high an infinite scale, refuses scales that are not finite or representable, and does nothing when the window's bounds or transform cannot be read
+- The payload validates every proxy swap entry before beginning a WindowServer transaction, so a malformed request no longer commits part of one
+- `--load-sa` reads the handshake reply only within what arrived, gives the complete reply five seconds and accepts it only from the Apple-signed Dock process: a reply without a NUL made it read past its buffer, and a payload that never answered held it forever
 - The loader exits with an error when its remote thread never reaches the sentinel, and releases its task and thread rights and remote stack after termination
 - The root installer checks binary preparation failures, uses absolute tools without a shell, checks root ownership and protected modes across the installed bundle, and serializes install and uninstall operations
-- The payload refuses non-finite or unrepresentable window scales and validates every proxy swap entry before beginning a WindowServer transaction
 
 ## [8.0.0-lcs.4] - 2026-10-01
 ### Added

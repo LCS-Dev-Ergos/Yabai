@@ -42,9 +42,11 @@ Every request is a new connection from the same daemon, which waits while the
 payload checks it. The payload remembers the code-directory hashes of peers
 that passed, as the daemon does for its clients, so a request costs a kernel
 query instead of a signature check of about half a millisecond. The complete
-framed request has one second to arrive, as long as the daemon waits for an
-answer, so a peer that sends slowly cannot hold the one thread that serves
-requests.
+framed request, header included, has one second to arrive, as long as the
+daemon waits for an answer, so a peer that stops sending, or sends a byte at
+a time, cannot hold the one thread that serves requests. A daemon that stopped
+waiting before its connection was accepted fails the peer check, so its
+request is not read.
 Replies, the handshake and the status byte of an opacity batch, are sent with
 `MSG_NOSIGNAL`: a daemon that stopped waiting has closed its end, and Dock
 neither ignores nor catches `SIGPIPE`.

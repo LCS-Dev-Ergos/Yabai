@@ -172,10 +172,20 @@ static bool space_navigation_clicked_since(uint64_t time)
 // Reduce Motion, whose own Desktop transition is a crossfade. They need a
 // hidden destination and ordinary Desktops on both sides, and a duration: a
 // fast request has none.
+//
+// NOTE: Under memory pressure WindowServer can put the crossfade's window on
+// screen after Dock has switched. We wait one refresh after ordering it; once
+// it came about 110 ms later, so the destination showed, then the outgoing
+// image, then the fade. No call tells us when the window is on screen, and on
+// a 6016 x 3384 display the capture and the window's copy take 81 MB each,
+// exactly when memory is short. So the crossfade is left out while macOS
+// reports pressure, and the switch is Dock's alone. The veil captures nothing
+// and keeps its effect.
 static bool space_navigation_overlays(uint64_t current, struct space_navigation_step *step)
 {
     return (step->crossfade || step->veil) && step->duration > 0.0f && !space_navigation_space_visible(step->sid)
-        && !space_navigation_space_fullscreen(step->sid) && !space_navigation_space_fullscreen(current);
+        && !space_navigation_space_fullscreen(step->sid) && !space_navigation_space_fullscreen(current)
+        && !(step->crossfade && space_navigation_memory_pressure());
 }
 
 // What a step decides before Dock switches: the destination's display, the
