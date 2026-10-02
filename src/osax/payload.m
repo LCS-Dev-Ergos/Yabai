@@ -1091,17 +1091,43 @@ static void handle_message(int sockfd, char *message)
     }
 }
 
+//
+// NOTE: A daemon gives up on a request after a second, so a peer has as long
+// to send all of it. Each read waits only for the time left: one that stops
+// sending, stopped in a debugger for instance, or sends a byte at a time,
+// cannot hold the only thread that serves the daemon.
+//
+
+#define PAYLOAD_READ_TIMEOUT_NS 1000000000ULL
+
+// One read that waits until `deadline` at the latest; -1 once it has passed,
+// or when the peer has gone and the wait cannot be set.
+static ssize_t payload_read_until(int sockfd, void *bytes, size_t length, uint64_t deadline)
+{
+    uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+    if (now >= deadline) return -1;
+
+    // A zero timeout would wait forever.
+    uint64_t left = deadline - now;
+    struct timeval timeout = { .tv_sec = left / 1000000000ULL, .tv_usec = (left % 1000000000ULL) / 1000 };
+    if (!timeout.tv_sec && !timeout.tv_usec) timeout.tv_usec = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) return -1;
+
+    return read(sockfd, bytes, length);
+}
+
 static inline bool read_message(int sockfd, char *message)
 {
+    uint64_t deadline = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) + PAYLOAD_READ_TIMEOUT_NS;
     int bytes_read    = 0;
     int bytes_to_read = 0;
 
-    if (read(sockfd, &bytes_to_read, sizeof(int16_t)) == sizeof(int16_t)) {
+    if (payload_read_until(sockfd, &bytes_to_read, sizeof(int16_t), deadline) == sizeof(int16_t)) {
         if (bytes_to_read >= SA_SOCKET_BUFF_LEN) return false;
         if (bytes_to_read <= 0)                  return false;
 
         do {
-            int cur_read = read(sockfd, message+bytes_read, bytes_to_read-bytes_read);
+            int cur_read = payload_read_until(sockfd, message+bytes_read, bytes_to_read-bytes_read, deadline);
             if (cur_read <= 0) break;
 
             bytes_read += cur_read;

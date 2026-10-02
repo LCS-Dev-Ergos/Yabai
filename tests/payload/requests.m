@@ -1,7 +1,7 @@
 //
 // The payload's request handling outside Dock: replies to a daemon that has
-// gone. payload.m is compiled in with its constructor disabled and SkyLight
-// stubbed (skylight.h).
+// gone and the bound on reading a request. payload.m is compiled in with its
+// constructor disabled and SkyLight stubbed (skylight.h).
 //
 
 #import <Foundation/Foundation.h>
@@ -44,6 +44,13 @@ static void request_send(int sockfd)
     int16_t length = (int16_t) (request_end - request);
     assert(write(sockfd, &length, sizeof(length)) == sizeof(length));
     assert(write(sockfd, request, length) == length);
+}
+
+static double seconds(void)
+{
+    struct timespec time;
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    return time.tv_sec + time.tv_nsec / 1e9;
 }
 
 static volatile sig_atomic_t broken_pipes;
@@ -100,10 +107,88 @@ static void test_reply_to_closed_daemon(void)
     assert(broken_pipes == 0);
 }
 
+// A daemon that connects and stops sending, stopped in a debugger for
+// instance, gives up the payload's only thread after the read deadline.
+static void test_stalled_request(void)
+{
+    int fds[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+    assert(payload_connection_admit(fds[1]));
+
+    int16_t length = 8;
+    assert(write(fds[0], &length, sizeof(length)) == sizeof(length));
+    assert(write(fds[0], "ab", 2) == 2);
+
+    char message[SA_SOCKET_BUFF_LEN];
+    double start = seconds();
+    assert(!read_message(fds[1], message));
+    double elapsed = seconds() - start;
+    assert(elapsed >= 0.9 && elapsed < 3.0);
+
+    close(fds[0]);
+    close(fds[1]);
+
+    // Once the sender has gone the request is not read, so a request the
+    // daemon gave up on is never applied late.
+    request_begin(SA_OPCODE_HANDSHAKE);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+    request_send(fds[0]);
+    close(fds[0]);
+    assert(!read_message(fds[1], message));
+    close(fds[1]);
+}
+
+struct trickle
+{
+    int sockfd;
+    int count;
+    useconds_t interval;
+};
+
+// Sends a request of `count` bytes one byte at a time.
+static void *trickle_send(void *context)
+{
+    struct trickle *trickle = context;
+    int16_t length = (int16_t) trickle->count;
+    send(trickle->sockfd, &length, sizeof(length), MSG_NOSIGNAL);
+
+    for (int i = 0; i < trickle->count; ++i) {
+        usleep(trickle->interval);
+        if (send(trickle->sockfd, "a", 1, MSG_NOSIGNAL) != 1) break;
+    }
+
+    return NULL;
+}
+
+// The timeout bounds the whole request, not each read: a byte every 300 ms
+// would satisfy every read and hold the thread for 2.4 s.
+static void test_trickled_request(void)
+{
+    int fds[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+
+    struct trickle trickle = { .sockfd = fds[0], .count = 8, .interval = 300000 };
+    pthread_t sender;
+    assert(pthread_create(&sender, NULL, trickle_send, &trickle) == 0);
+
+    char message[SA_SOCKET_BUFF_LEN];
+    double start = seconds();
+    bool read = read_message(fds[1], message);
+    double elapsed = seconds() - start;
+    close(fds[1]);
+    pthread_join(sender, NULL);
+    close(fds[0]);
+
+    assert(!read);
+    assert(elapsed >= 0.9 && elapsed < 1.6);
+}
+
 int main(void)
 {
     test_reply_to_closed_daemon();
+    test_stalled_request();
+    test_trickled_request();
 
-    puts("payload: replies passed");
+    puts("payload: replies and read deadline passed");
     return 0;
 }
