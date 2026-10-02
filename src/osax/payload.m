@@ -740,11 +740,12 @@ static void do_window_scale(char *message)
     if (!wid) return;
 
     CGRect frame = {};
-    SLSGetWindowBounds(SLSMainConnectionID(), wid, &frame);
+    if (SLSGetWindowBounds(SLSMainConnectionID(), wid, &frame) != 0) return;
     CGAffineTransform original_transform = CGAffineTransformMakeTranslation(-frame.origin.x, -frame.origin.y);
 
+    // Without the current transform we cannot tell whether to scale or restore.
     CGAffineTransform current_transform;
-    SLSGetWindowTransform(SLSMainConnectionID(), wid, &current_transform);
+    if (SLSGetWindowTransform(SLSMainConnectionID(), wid, &current_transform) != 0) return;
 
     if (CGAffineTransformEqualToTransform(current_transform, original_transform)) {
         float dx, dy, dw, dh;
@@ -760,9 +761,14 @@ static void do_window_scale(char *message)
 
         if (!isfinite(dx) || !isfinite(dy) || !(dw >= 4.0f && dw <= 65536.0f)) return;
         if (!(frame.size.width > 0 && frame.size.height > 0)) return;
+        if (!isfinite(frame.size.width) || !isfinite(frame.size.height)) return;
 
-        int target_width  = dw / 4;
-        int target_height = target_width / (frame.size.width/frame.size.height);
+        // A window much wider than high would scale to no height, by an
+        // infinite factor; one much higher than wide, past what an int holds.
+        int target_width = dw / 4;
+        double height = target_width / (frame.size.width/frame.size.height);
+        if (!(height >= 1.0 && height <= 65536.0)) return;
+        int target_height = height;
 
         float x_scale = frame.size.width/target_width;
         float y_scale = frame.size.height/target_height;

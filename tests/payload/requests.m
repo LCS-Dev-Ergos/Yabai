@@ -1,8 +1,8 @@
 //
 // The payload's request handling outside Dock: replies to a daemon that has
-// gone, the bound on reading a request and the pattern search's bound.
-// payload.m is compiled in with its constructor disabled and SkyLight stubbed
-// (skylight.h).
+// gone, the bound on reading a request, the pattern search's bound and the
+// window scale handler. payload.m is compiled in with its constructor
+// disabled and SkyLight stubbed (skylight.h).
 //
 
 #import <Foundation/Foundation.h>
@@ -38,6 +38,15 @@ static char *request_end;
 
 #define request_begin(op) (request_end = request, *request_end++ = (char) (op))
 #define request_pack(v) (memcpy(request_end, &(v), sizeof(v)), request_end += sizeof(v))
+
+// Hands the request to the handlers as read_message would.
+static void request_handle(void)
+{
+    message_end = request_end;
+    @autoreleasepool {
+        handle_message(-1, request);
+    }
+}
 
 // Sends the request framed as the daemon does.
 static void request_send(int sockfd)
@@ -208,13 +217,56 @@ static void test_pattern_search_bounds(void)
     munmap(pages, 2 * page);
 }
 
+static void request_window_scale(uint32_t wid, float x, float y, float w, float h)
+{
+    request_begin(SA_OPCODE_WINDOW_SCALE);
+    request_pack(wid);
+    request_pack(x);
+    request_pack(y);
+    request_pack(w);
+    request_pack(h);
+    request_handle();
+}
+
+// The scale handler shrinks a window to a quarter of the display width and
+// never hands WindowServer a transform that is not finite.
+static void test_window_scale(void)
+{
+    stub_window_transform_sets = 0;
+    request_window_scale(1, 0.0f, 0.0f, 1600.0f, 900.0f);
+    assert(stub_window_transform_sets == 1);
+    assert(isfinite(stub_window_transform_set.a) && isfinite(stub_window_transform_set.d));
+
+    // At 400 points wide, this window would be no point high.
+    stub_window_bounds = CGRectMake(0, 0, 8000, 10);
+    stub_window_transform_sets = 0;
+    request_window_scale(1, 0.0f, 0.0f, 1600.0f, 900.0f);
+    assert(stub_window_transform_sets == 0);
+
+    // Bounds that are not finite, or a window so much higher than wide that
+    // its scaled height would not fit an int, set nothing either.
+    stub_window_bounds = CGRectMake(0, 0, 800, INFINITY);
+    request_window_scale(1, 0.0f, 0.0f, 1600.0f, 900.0f);
+    stub_window_bounds = CGRectMake(0, 0, 1, 1e12);
+    request_window_scale(1, 0.0f, 0.0f, 1600.0f, 900.0f);
+    assert(stub_window_transform_sets == 0);
+
+    // Without the current transform we cannot tell scaling from restoring.
+    stub_window_bounds = CGRectMake(0, 0, 800, 600);
+    stub_window_transform_error = kCGErrorFailure;
+    request_window_scale(1, 0.0f, 0.0f, 1600.0f, 900.0f);
+    assert(stub_window_transform_sets == 0);
+    stub_window_transform_error = 0;
+}
+
 int main(void)
 {
     test_reply_to_closed_daemon();
     test_stalled_request();
     test_trickled_request();
     test_pattern_search_bounds();
+    test_window_scale();
 
-    puts("payload: replies, read deadline and pattern bounds passed");
+    puts("payload: replies, read deadline, pattern bounds and window scale passed");
     return 0;
 }
