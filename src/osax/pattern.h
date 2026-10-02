@@ -11,17 +11,21 @@
 // A pattern is a string of two-character hex tokens separated by one space.
 // A token whose first character is '?' matches any byte, so "?8" is a full
 // wildcard just like "??". The search starts at baddr and returns the first
-// match that starts less than PATTERN_SEARCH_WINDOW bytes after it, or 0.
+// match that starts less than PATTERN_SEARCH_WINDOW bytes after it and ends
+// at or before end, or 0. It reads no byte at or past end.
 //
 
 #define PATTERN_SEARCH_WINDOW 0x1286a0
 
-static uint64_t hex_find_seq(uint64_t baddr, const char *c_pattern)
+static uint64_t hex_find_seq(uint64_t baddr, uint64_t end, const char *c_pattern)
 {
     if (!baddr || !c_pattern) return 0;
 
     uint64_t addr = baddr;
     uint64_t pattern_length = (strlen(c_pattern) + 1) / 3;
+    if (!pattern_length || baddr >= end || end - baddr < pattern_length) return 0;
+
+    uint64_t last = end - pattern_length;
     char buffer_a[pattern_length];
     char buffer_b[pattern_length];
     memset(buffer_a, 0, sizeof(buffer_a));
@@ -46,7 +50,7 @@ loop:
     for (uint64_t counter = 0; counter < pattern_length; ++counter) {
         if ((buffer_b[counter] == 0) && (((char *)addr)[counter] != buffer_a[counter])) {
             addr = (uint64_t)((char *)addr + 1);
-            if (addr - baddr < PATTERN_SEARCH_WINDOW) {
+            if (addr - baddr < PATTERN_SEARCH_WINDOW && addr <= last) {
                 goto loop;
             } else {
                 return 0;

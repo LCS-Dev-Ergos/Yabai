@@ -119,7 +119,8 @@ static bool check_lookup(struct slice *slice, struct lookup *lookup, NSOperating
     }
 
     uint64_t start = (uint64_t) slice->base + lookup->offset(os_version);
-    uint64_t addr = hex_find_seq(start, pattern);
+    uint64_t end = (uint64_t) slice->base + slice->text_end;
+    uint64_t addr = hex_find_seq(start, end, pattern);
     if (!addr) {
         printf("  %-17s MISS (search from %#llx)\n", lookup->name, lookup->offset(os_version));
         return false;
@@ -127,7 +128,7 @@ static bool check_lookup(struct slice *slice, struct lookup *lookup, NSOperating
 
     uint64_t offset = addr - (uint64_t) slice->base;
     int matches = 0;
-    for (uint64_t next = addr; next; next = hex_find_seq(next + 1, pattern)) {
+    for (uint64_t next = addr; next; next = hex_find_seq(next + 1, end, pattern)) {
         if (next - start >= PATTERN_SEARCH_WINDOW) break;
         ++matches;
     }
@@ -156,7 +157,8 @@ static bool check_lookup(struct slice *slice, struct lookup *lookup, NSOperating
 static void list_matches(struct slice *slice, uint64_t offset, const char *pattern)
 {
     uint64_t base = (uint64_t) slice->base;
-    uint64_t first = hex_find_seq(base + offset, pattern);
+    uint64_t end = base + slice->text_end;
+    uint64_t first = hex_find_seq(base + offset, end, pattern);
     printf("  payload lookup from %#llx: %s", offset, first ? "" : "MISS\n");
     if (first) printf("%#llx\n", first - base);
 
@@ -164,7 +166,7 @@ static void list_matches(struct slice *slice, uint64_t offset, const char *patte
     int count = 0;
     uint64_t cursor = base + slice->text_start;
     while (cursor < base + slice->text_end) {
-        uint64_t addr = hex_find_seq(cursor, pattern);
+        uint64_t addr = hex_find_seq(cursor, end, pattern);
         if (!addr) {
             cursor += PATTERN_SEARCH_WINDOW;
             continue;

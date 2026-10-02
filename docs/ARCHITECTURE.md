@@ -40,7 +40,11 @@ The two sockets:
   request are refused before `regcomp` runs (`src/ipc/pattern.c`).
 - **Payload socket** `~/Library/Caches/yabai/payload.sock` in Dock. The payload
   applies the same directory and audit-token checks. It validates peers
-  against a requirement saved by the root installer in its bundle. Each request opens its own connection
+  against a requirement saved by the root installer in its bundle, and
+  remembers the code-directory hashes that passed, so the daemon's requests
+  after the first cost a kernel query instead of a signature check. Each read
+  of a request may wait one second, and replies cannot raise `SIGPIPE` in
+  Dock. Each request opens its own connection
   (`scripting_addition_send_bytes`), builds its message in a stack buffer of
   `SA_SOCKET_BUFF_LEN` (4 KiB), the payload's message size, refusing one that
   does not fit, and waits up to one second for Dock to close the connection
@@ -316,6 +320,7 @@ Diagnostics: signposts in subsystem `com.lcs.yabai`, categories
 | 7 | Upstream animations and navigation | The CVDisplayLink thread and the event loop both send Dock requests. The payload handles each full request serially, and proxy swaps target window IDs while navigation targets a Space ID. Visible ordering during an overlap remains unverified. | Unverified visual result |
 | 8 | Unity build | Hidden coupling through include order and file-static globals, so a module's inputs and threads are not visible where it is used. Navigation and effects now declare their interfaces, threads and state in headers and compile before the core; the core's files still call each other's file-static functions by include order. | Maintainability; reduced |
 | 9 | Daemon socket commands | The event loop read requests and wrote replies with blocking calls and no bound, so one stalled client held every event; signal actions inherited the daemon's TCC grants; negative or non-finite durations and ratios were accepted and could leave an animation running forever; a nested or optional-heavy pattern held the event loop for seconds in `regcomp`; refused requests closed silently and the client reported success. See the [IPC audit](reports/IPC-Audit_8.0.0-lcs3.md). | Fixed after lcs.3 |
+| 10 | Dock payload | A reply to a daemon that had stopped waiting could terminate Dock with `SIGPIPE`; every request paid a full signature check that the daemon waited for; a request that stopped arriving held the payload's only thread; lookups could match past the end of Dock's code; `window --toggle pip` on a very wide window set an infinite scale; `--load-sa` read the handshake reply past what arrived and without a timeout. See the [scripting-addition audit](reports/OSAX-Audit_8.0.0-lcs4.md). | Fixed after lcs.4 |
 
 ### First Space visits after restart
 

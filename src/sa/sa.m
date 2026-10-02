@@ -1,6 +1,14 @@
 #include "sa.h"
 #include "../osax/socket_path.h"
 #include "../osax/socket_identity.h"
+#include "../osax/socket_deadline.h"
+#include <errno.h>
+#include <limits.h>
+#include <spawn.h>
+#include <sys/file.h>
+#include <sys/wait.h>
+
+extern char **environ;
 
 
 static char osax_base_dir[MAXLEN];
@@ -111,26 +119,33 @@ static bool scripting_addition_write_file(char *buffer, unsigned int size, char 
 
     size_t bytes = fwrite(buffer, size, 1, handle);
     bool result = bytes == 1;
-    fclose(handle);
+    if (fclose(handle) != 0) result = false;
 
     return result;
 }
 
-static void scripting_addition_prepare_binaries(void)
+static bool scripting_addition_run_command(const char *path, char *const argv[])
 {
-    char cmd[MAXLEN];
+    pid_t pid;
+    if (posix_spawn(&pid, path, NULL, NULL, argv, environ) != 0) return false;
 
-    snprintf(cmd, sizeof(cmd), "%s %s", "chmod +x", osax_bin_loader);
-    system(cmd);
+    int status;
+    pid_t waited;
+    do {
+        waited = waitpid(pid, &status, 0);
+    } while (waited == -1 && errno == EINTR);
+    return waited == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
 
-    snprintf(cmd, sizeof(cmd), "%s %s %s", "codesign -f -s -", osax_bin_loader, "2>/dev/null");
-    system(cmd);
+static bool scripting_addition_prepare_binaries(const char *codesign_path)
+{
+    if (chmod(osax_bin_loader, 0755) != 0 || chmod(osax_bin_payload, 0755) != 0) return false;
 
-    snprintf(cmd, sizeof(cmd), "%s %s", "chmod +x", osax_bin_payload);
-    system(cmd);
+    char *loader_sign[] = { (char *) codesign_path, "-f", "-s", "-", osax_bin_loader, NULL };
+    if (!scripting_addition_run_command(loader_sign[0], loader_sign)) return false;
 
-    snprintf(cmd, sizeof(cmd), "%s %s %s", "codesign -f -s -", osax_bin_payload, "2>/dev/null");
-    system(cmd);
+    char *payload_sign[] = { (char *) codesign_path, "-f", "-s", "-", osax_bin_payload, NULL };
+    return scripting_addition_run_command(payload_sign[0], payload_sign);
 }
 
 static void scripting_addition_restart_dock(void)
@@ -139,15 +154,26 @@ static void scripting_addition_restart_dock(void)
     [dock makeObjectsPerformSelector:@selector(terminate)];
 }
 
+static bool scripting_addition_parse_sudo_uid(const char *value, uid_t *uid)
+{
+    if (!value || !*value) return false;
+    for (const char *cursor = value; *cursor; ++cursor) {
+        if (*cursor < '0' || *cursor > '9') return false;
+    }
+    errno = 0;
+    char *end;
+    unsigned long parsed = strtoul(value, &end, 10);
+    if (errno != 0 || *end != '\0' || (uid_t) parsed != parsed) return false;
+    *uid = (uid_t) parsed;
+    return true;
+}
+
 static bool scripting_addition_set_socket_path(void)
 {
-    const char *sudo_uid = getenv("SUDO_UID");
-
     uid_t uid = getuid();
     assert(uid == 0);
 
-    if (sudo_uid == NULL)                  return false;
-    if (sscanf(sudo_uid, "%u", &uid) != 1) return false;
+    if (!scripting_addition_parse_sudo_uid(getenv("SUDO_UID"), &uid)) return false;
 
     return yabai_socket_path(uid, YABAI_SOCKET_PAYLOAD,
                              g_sa_socket_file, sizeof(g_sa_socket_file), false);
@@ -164,12 +190,61 @@ static bool scripting_addition_is_installed(void)
     return true;
 }
 
+static bool scripting_addition_path_is_safe(const char *path, bool directory, bool executable)
+{
+    struct stat info;
+    if (lstat(path, &info) != 0 || info.st_uid != 0 || (info.st_mode & 022) != 0) return false;
+    if (directory) return S_ISDIR(info.st_mode);
+    return S_ISREG(info.st_mode) && (!executable || (info.st_mode & S_IXUSR) != 0);
+}
+
+static bool scripting_addition_parent_is_safe(void)
+{
+    return scripting_addition_path_is_safe("/Library", true, false) &&
+           scripting_addition_path_is_safe("/Library/ScriptingAdditions", true, false);
+}
+
+static int scripting_addition_lock(void)
+{
+    if (!scripting_addition_parent_is_safe()) return -1;
+    int fd = open("/Library/ScriptingAdditions/.yabai-install.lock",
+                  O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (fd == -1) return -1;
+
+    struct stat info;
+    if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_uid != 0 ||
+        (info.st_mode & 022) != 0 || flock(fd, LOCK_EX) != 0) {
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+static bool scripting_addition_bundle_is_safe(void)
+{
+    const char *dirs[] = {
+        osax_base_dir, osax_contents_dir, osax_contents_macos_dir, osax_contents_res_dir,
+        osax_payload_dir, osax_payload_contents_dir, osax_payload_contents_macos_dir
+    };
+    const char *files[] = { osax_info_plist, osax_payload_plist };
+
+    if (!scripting_addition_parent_is_safe()) return false;
+    for (size_t i = 0; i < sizeof(dirs) / sizeof(dirs[0]); ++i) {
+        if (!scripting_addition_path_is_safe(dirs[i], true, false)) return false;
+    }
+    for (size_t i = 0; i < sizeof(files) / sizeof(files[0]); ++i) {
+        if (!scripting_addition_path_is_safe(files[i], false, false)) return false;
+    }
+    return scripting_addition_path_is_safe(osax_bin_loader, false, true) &&
+           scripting_addition_path_is_safe(osax_bin_payload, false, true);
+}
+
 static int scripting_addition_check(void)
 {
     bool result = 0;
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
-    if (scripting_addition_is_installed()) {
+    if (scripting_addition_is_installed() && scripting_addition_bundle_is_safe()) {
         NSString *payload_path = [NSString stringWithUTF8String:osax_payload_dir];
         NSBundle *payload_bundle = [NSBundle bundleWithPath:payload_path];
         NSString *ns_version = [payload_bundle objectForInfoDictionaryKey:@"CFBundleVersion"];
@@ -186,16 +261,17 @@ static int scripting_addition_check(void)
 
 static bool scripting_addition_remove(void)
 {
-    char cmd[MAXLEN];
-    snprintf(cmd, sizeof(cmd), "%s %s %s", "rm -rf", osax_base_dir, "2>/dev/null");
-
-    int code = system(cmd);
-    return code == 0;
+    char *argv[] = { "/bin/rm", "-rf", osax_base_dir, NULL };
+    return scripting_addition_run_command(argv[0], argv);
 }
 
 static int scripting_addition_install(void)
 {
     umask(S_IWGRP | S_IWOTH);
+    if (!scripting_addition_parent_is_safe()) {
+        warn("yabai: scripting-addition parent directory is not root-owned and protected!\n");
+        return 1;
+    }
 
     if ((scripting_addition_is_installed()) && (!scripting_addition_remove())) {
         return 1;
@@ -225,7 +301,10 @@ static int scripting_addition_install(void)
         goto cleanup;
     }
 
-    scripting_addition_prepare_binaries();
+    if (!scripting_addition_prepare_binaries("/usr/bin/codesign")) {
+        warn("yabai: could not set executable permissions or sign the scripting-addition binaries!\n");
+        goto cleanup;
+    }
     scripting_addition_restart_dock();
     return 0;
 
@@ -234,31 +313,86 @@ cleanup:
     return 2;
 }
 
-static bool scripting_addition_request_handshake(char *version, uint32_t *attrib)
+//
+// NOTE: The handshake reply is the payload's version, a NUL and its attribute
+// bits. Whatever listens on the payload socket writes it and `--load-sa` reads
+// it as root, so we read it only within the bytes that arrived, and give up on
+// a listener that has not answered in a few seconds; a payload that has just
+// loaded answers once it has looked up Dock's internals.
+//
+
+#define SA_HANDSHAKE_TIMEOUT_SECONDS 5
+
+static bool scripting_addition_parse_handshake(const char *reply, size_t length, char *version, size_t version_size, uint32_t *attrib)
+{
+    const char *zero = memchr(reply, '\0', length);
+    if (!zero) return false;
+
+    size_t version_length = zero - reply;
+    if (version_length >= version_size) return false;
+    if (length - version_length - 1 < sizeof(uint32_t)) return false;
+
+    memcpy(version, reply, version_length + 1);
+    memcpy(attrib, zero + 1, sizeof(uint32_t));
+    return true;
+}
+
+static bool scripting_addition_is_dock_peer(int sockfd)
+{
+    audit_token_t token;
+    socklen_t size = sizeof(token);
+    if (getsockopt(sockfd, SOL_LOCAL, LOCAL_PEERTOKEN, &token, &size) != 0 || size != sizeof(token)) return false;
+
+    NSArray *dock = [NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.apple.dock"];
+    if (dock.count != 1 || ![dock[0] isFinishedLaunching] ||
+        audit_token_to_pid(token) != [dock[0] processIdentifier]) return false;
+
+    uid_t login_uid;
+    if (!scripting_addition_parse_sudo_uid(getenv("SUDO_UID"), &login_uid) ||
+        audit_token_to_euid(token) != login_uid) return false;
+
+    // The socket pathname belongs to the login user. Only Dock's Apple-signed
+    // process may supply a successful root-side validation handshake.
+    SecRequirementRef requirement = NULL;
+    if (SecRequirementCreateWithString(CFSTR("anchor apple and identifier \"com.apple.dock\""),
+                                       kSecCSDefaultFlags, &requirement) != errSecSuccess) return false;
+    bool trusted = yabai_socket_peer_is_trusted(sockfd, login_uid, requirement);
+    CFRelease(requirement);
+    return trusted;
+}
+
+static bool scripting_addition_read_handshake(int sockfd, char *version, size_t version_size,
+                                               uint32_t *attrib, unsigned timeout_seconds)
+{
+    char reply[BUFSIZ];
+    uint64_t deadline;
+    if (!yabai_socket_deadline_after_seconds(timeout_seconds, &deadline)) return false;
+
+    size_t length = 0;
+    while (length < sizeof(reply)) {
+        ssize_t count = yabai_socket_recv_before_deadline(sockfd, reply + length,
+                                                          sizeof(reply) - length, deadline);
+        if (count < 0) return false;
+        if (count == 0) return scripting_addition_parse_handshake(reply, length, version, version_size, attrib);
+        length += (size_t) count;
+    }
+    return false;
+}
+
+static bool scripting_addition_request_handshake(char *version, size_t version_size, uint32_t *attrib)
 {
     int sockfd;
     bool result = false;
-    char rsp[BUFSIZ] = {0};
-    char bytes[SA_SOCKET_BUFF_LEN] = { 0x01, 0x00, SA_OPCODE_HANDSHAKE };
+    char bytes[] = { 0x01, 0x00, SA_OPCODE_HANDSHAKE };
 
     if (socket_open(&sockfd)) {
-        if (socket_connect(sockfd, g_sa_socket_file)) {
-            if (send(sockfd, bytes, 3, 0) != -1) {
-                int length = recv(sockfd, rsp, sizeof(rsp)-1, 0);
-                if (length <= 0) goto out;
-
-                char *zero = rsp;
-                while (*zero != '\0') ++zero;
-
-                assert(*zero == '\0');
-                memcpy(version, rsp, zero - rsp + 1);
-                memcpy(attrib, zero+1, sizeof(uint32_t));
-
-                result = true;
-            }
+        // The payload closes the connection after its reply.
+        if (socket_connect(sockfd, g_sa_socket_file) && scripting_addition_is_dock_peer(sockfd) &&
+            send(sockfd, bytes, sizeof(bytes), MSG_NOSIGNAL) == sizeof(bytes)) {
+            result = scripting_addition_read_handshake(sockfd, version, version_size, attrib,
+                                                        SA_HANDSHAKE_TIMEOUT_SECONDS);
         }
 
-out:
         socket_close(sockfd);
     }
 
@@ -285,7 +419,7 @@ static int scripting_addition_perform_validation(void)
     char version[SA_SOCKET_BUFF_LEN] = {0};
     bool is_latest_version_installed = scripting_addition_check() == 0;
 
-    if (!scripting_addition_request_handshake(version, &attrib)) {
+    if (!scripting_addition_request_handshake(version, sizeof(version), &attrib)) {
         notify("scripting-addition", "connection failed!");
         return 1;
     }
@@ -303,12 +437,14 @@ static int scripting_addition_perform_validation(void)
 
     if (!is_latest_version_installed) {
         notify("scripting-addition", "payload is outdated, updating..");
-        return scripting_addition_install();
+        if (scripting_addition_install() != 0) return 1;
+        notify("scripting-addition", "installed; retry --load-sa after Dock restarts");
+        return 1;
     }
 
     notify("scripting-addition", "payload is outdated, restarting Dock.app..");
     scripting_addition_restart_dock();
-    return 0;
+    return 1;
 }
 
 bool scripting_addition_is_sip_friendly(void)
@@ -374,14 +510,17 @@ int scripting_addition_uninstall(void)
         return 1;
     }
 
-    if (!scripting_addition_is_installed()) return  0;
-    if (!scripting_addition_remove())       return -1;
-    return 0;
+    int lockfd = scripting_addition_lock();
+    if (lockfd == -1) return 1;
+    int result = !scripting_addition_is_installed() || scripting_addition_remove() ? 0 : 1;
+    close(lockfd);
+    return result;
 }
 
 int scripting_addition_load(void)
 {
     int result = 0;
+    int lockfd = -1;
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
     if (!is_root()) {
@@ -398,8 +537,27 @@ int scripting_addition_load(void)
         goto out;
     }
 
+    if (!scripting_addition_set_socket_path()) {
+        warn("yabai: could not determine the scripting-addition socket path from SUDO_UID!\n");
+        notify("scripting-addition", "could not determine socket path from SUDO_UID!");
+        result = 1;
+        goto out;
+    }
+
+    lockfd = scripting_addition_lock();
+    if (lockfd == -1) {
+        warn("yabai: could not lock the scripting-addition installation!\n");
+        notify("scripting-addition", "could not lock the installation!");
+        result = 1;
+        goto out;
+    }
+
     if (scripting_addition_check() != 0) {
         result = scripting_addition_install();
+        if (result == 0) {
+            notify("scripting-addition", "installed; retry --load-sa after Dock restarts");
+            result = 1;
+        }
         goto out;
     }
 
@@ -419,11 +577,10 @@ int scripting_addition_load(void)
         goto out;
     }
 
-    if (scripting_addition_set_socket_path()) {
-        result = scripting_addition_perform_validation();
-    }
+    result = scripting_addition_perform_validation();
 
 out:
+    if (lockfd != -1) close(lockfd);
     [pool drain];
     return result;
 }

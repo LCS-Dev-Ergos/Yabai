@@ -25,7 +25,9 @@ editor's root `compile_commands.json` symlink.
   `build/debug/tests/yabai_tests <test-name>`; the regular CTest run selects
   every case. These tests also cover navigation arguments, opacity-policy
   protocol, signal dispatch and storage bounds, scripting-addition request
-  size and query string escaping. The signal tests launch
+  size, the payload handshake parser, refusal of an unauthenticated local
+  listener, an overall handshake deadline, a failing install signer and
+  malformed `SUDO_UID`, and query string escaping. The signal tests launch
   harmless local shell actions and check socket lifetime, isolated event
   variables, retained standard output/error and that an action answers for
   its own privacy permissions. They do not run the daemon.
@@ -89,6 +91,15 @@ editor's root `compile_commands.json` symlink.
 - `fade_tests` checks the production [opacity engine](EFFECTS.md) with simulated
   SkyLight calls, including timing, focus ownership, shared navigation epochs,
   display cadence/cancellation, failure restoration and concurrent requests.
+- `payload_tests` compiles the payload with SkyLight stubbed and checks what
+  a request can do to it: a reply to a daemon that has already closed raises
+  no `SIGPIPE`, a slow request and a fragmented header obey the one-second
+  whole-request deadline, the pattern search reads nothing past its bound,
+  the window scale handler refuses non-finite and unrepresentable bounds,
+  and a truncated proxy swap never begins a transaction.
+- `loader_tests` runs the production loader against mocked Mach operations.
+  It covers a missing sentinel, success, an early write failure and arm64
+  thread-conversion cleanup without opening a Dock task port.
 - `osax_patterns` checks the payload's lookups against the local Dock binary
   on Apple Silicon when `YABAI_BUILD_TOOLS=ON` (the default). It inspects the
   binary without loading a payload; see [Scripting addition](OSAX.md).
@@ -102,7 +113,8 @@ ctest --preset sanitize
 ```
 
 The sanitizer presets do not instrument the payload or loader injected into
-Dock. The standalone fade test is instrumented; run its race check with
+Dock. The standalone fade and payload tests, which compile its sources, are
+instrumented; run the fade test's race check with
 `cmake --build --preset thread-sanitize --target fade_tests` and
 `ctest --preset thread-sanitize -R fade_tests` after configuring that preset.
 Passing these checks does not verify live space or window operations.
@@ -161,7 +173,10 @@ An unsigned local daemon/payload pair can be compiled explicitly with
 `make UNSIGNED_LOCAL=1`. The default build rejects unsigned socket peers.
 Never use the local option for a release; it applies to both socket servers.
 When `--load-sa` installs a different payload version, it restarts Dock.
-Run `--load-sa` again after Dock returns to inject and validate that payload.
+That first invocation exits nonzero because it has not validated a running
+payload. Run `--load-sa` again after Dock returns to inject and validate it;
+zero means the signed Dock process answered with the expected payload version
+and required attributes.
 Restore the installed signed payload and daemon after a local smoke.
 
 ```sh
@@ -379,7 +394,8 @@ libFuzzer, ASan and UBSan:
   Handlers that manipulate the running window manager are excluded, as are
   rules naming a display or Space, which WindowServer resolves.
 - `fuzz_payload_message`: request framing and reachable handler parsing with
-  SkyLight calls stubbed and the payload constructor disabled. Dock-dependent
+  SkyLight calls stubbed (`tests/payload/skylight.h`, shared with
+  `payload_tests`) and the payload constructor disabled. Dock-dependent
   space handlers return early. Opacity parsing, including focus/batch requests,
   runs with worker/main-queue scheduling disabled and pending fades freed after
   each input. Real threaded/display-link behavior belongs to the fade tests.

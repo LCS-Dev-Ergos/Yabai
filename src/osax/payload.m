@@ -21,6 +21,8 @@
 #include <dlfcn.h>
 
 #include <pthread.h>
+#include <limits.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -28,6 +30,7 @@
 #include "common.h"
 #include "socket_path.h"
 #include "socket_identity.h"
+#include "socket_deadline.h"
 #include "pattern.h"
 
 #ifdef __x86_64__
@@ -43,6 +46,15 @@
 #define unpack_capacity(size) ((message_end - message) / (int)(size))
 
 static char *message_end;
+
+// The daemon stops waiting for a reply after a second and closes its end. A
+// reply after that must fail without raising SIGPIPE, which Dock neither
+// ignores nor catches. SO_NOSIGPIPE cannot be set on a connection whose peer
+// has already closed, so every reply passes MSG_NOSIGNAL instead.
+static void payload_reply(int sockfd, const void *bytes, size_t length)
+{
+    send(sockfd, bytes, length, MSG_NOSIGNAL);
+}
 
 extern int SLSMainConnectionID(void);
 extern CGError SLSGetConnectionPSN(int cid, ProcessSerialNumber *psn);
@@ -227,9 +239,24 @@ static void init_instances()
     NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo] operatingSystemVersion];
     if (!verify_os_version(os_version)) return;
 
-    uint64_t baseaddr = static_base_address() + image_slide();
+    uint64_t slide = image_slide();
+    uint64_t baseaddr = static_base_address() + slide;
 
-    uint64_t dock_spaces_addr = hex_find_seq(baseaddr + get_dock_spaces_offset(os_version), get_dock_spaces_pattern(os_version));
+    //
+    // NOTE: Every lookup matches code. Past the end of Dock's code a search would
+    // read stubs, strings and data, where a match is no instruction, so it stops
+    // there.
+    //
+
+    const struct section_64 *text = getsectbyname("__TEXT", "__text");
+    if (!text) {
+        NSLog(@"[yabai-sa] could not locate the code section of Dock.app!");
+        return;
+    }
+
+    uint64_t text_end = text->addr + slide + text->size;
+
+    uint64_t dock_spaces_addr = hex_find_seq(baseaddr + get_dock_spaces_offset(os_version), text_end, get_dock_spaces_pattern(os_version));
     if (dock_spaces_addr == 0) {
         dock_spaces = nil;
         NSLog(@"[yabai-sa] could not locate pointer to dock.spaces! spaces functionality will not work!");
@@ -245,7 +272,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t dppm_addr = hex_find_seq(baseaddr + get_dppm_offset(os_version), get_dppm_pattern(os_version));
+    uint64_t dppm_addr = hex_find_seq(baseaddr + get_dppm_offset(os_version), text_end, get_dppm_pattern(os_version));
     if (dppm_addr == 0) {
         dp_desktop_picture_manager = nil;
         if (!macOSGoldenGate) NSLog(@"[yabai-sa] could not locate pointer to dppm! moving spaces will not work!");
@@ -281,7 +308,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t add_space_addr = hex_find_seq(baseaddr + get_add_space_offset(os_version), get_add_space_pattern(os_version));
+    uint64_t add_space_addr = hex_find_seq(baseaddr + get_add_space_offset(os_version), text_end, get_add_space_pattern(os_version));
     if (add_space_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to addSpace function..");
         add_space_fp = 0;
@@ -294,7 +321,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t remove_space_addr = hex_find_seq(baseaddr + get_remove_space_offset(os_version), get_remove_space_pattern(os_version));
+    uint64_t remove_space_addr = hex_find_seq(baseaddr + get_remove_space_offset(os_version), text_end, get_remove_space_pattern(os_version));
     if (remove_space_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to removeSpace function..");
         remove_space_fp = 0;
@@ -307,7 +334,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t move_space_addr = hex_find_seq(baseaddr + get_move_space_offset(os_version), get_move_space_pattern(os_version));
+    uint64_t move_space_addr = hex_find_seq(baseaddr + get_move_space_offset(os_version), text_end, get_move_space_pattern(os_version));
     if (move_space_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to moveSpace function..");
         move_space_fp = 0;
@@ -329,7 +356,7 @@ static void init_instances()
         }
     }
 
-    uint64_t set_front_window_addr = hex_find_seq(baseaddr + get_set_front_window_offset(os_version), get_set_front_window_pattern(os_version));
+    uint64_t set_front_window_addr = hex_find_seq(baseaddr + get_set_front_window_offset(os_version), text_end, get_set_front_window_pattern(os_version));
     if (set_front_window_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to setFrontWindow function..");
         set_front_window_fp = 0;
@@ -342,7 +369,7 @@ static void init_instances()
 #endif
     }
 
-    animation_time_addr = hex_find_seq(baseaddr + get_fix_animation_offset(os_version), get_fix_animation_pattern(os_version));
+    animation_time_addr = hex_find_seq(baseaddr + get_fix_animation_offset(os_version), text_end, get_fix_animation_pattern(os_version));
     if (animation_time_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to animation-time..");
     } else {
@@ -716,11 +743,15 @@ static void do_window_scale(char *message)
     if (!wid) return;
 
     CGRect frame = {};
-    SLSGetWindowBounds(SLSMainConnectionID(), wid, &frame);
+    if (SLSGetWindowBounds(SLSMainConnectionID(), wid, &frame) != 0) return;
+    if (!isfinite(frame.origin.x) || !isfinite(frame.origin.y) ||
+        !isfinite(frame.size.width) || !isfinite(frame.size.height) ||
+        !(frame.size.width > 0.0 && frame.size.height > 0.0)) return;
     CGAffineTransform original_transform = CGAffineTransformMakeTranslation(-frame.origin.x, -frame.origin.y);
 
+    // Without the current transform we cannot tell whether to scale or restore.
     CGAffineTransform current_transform;
-    SLSGetWindowTransform(SLSMainConnectionID(), wid, &current_transform);
+    if (SLSGetWindowTransform(SLSMainConnectionID(), wid, &current_transform) != 0) return;
 
     if (CGAffineTransformEqualToTransform(current_transform, original_transform)) {
         float dx, dy, dw, dh;
@@ -734,20 +765,28 @@ static void do_window_scale(char *message)
         // values that cannot describe a display and windows without an area.
         //
 
-        if (!isfinite(dx) || !isfinite(dy) || !(dw >= 4.0f && dw <= 65536.0f)) return;
-        if (!(frame.size.width > 0 && frame.size.height > 0)) return;
+        if (!isfinite(dx) || !isfinite(dy) || !isfinite(dh) ||
+            !(dw >= 4.0f && dw <= 65536.0f)) return;
 
-        int target_width  = dw / 4;
-        int target_height = target_width / (frame.size.width/frame.size.height);
+        int target_width = dw / 4;
+        double height = (double) target_width * frame.size.height / frame.size.width;
+        // Check the floating result before converting it to an integer.
+        if (!isfinite(height) || height < 1.0 || height > INT_MAX) return;
+        int target_height = (int) height;
 
-        float x_scale = frame.size.width/target_width;
-        float y_scale = frame.size.height/target_height;
+        CGFloat x_scale = frame.size.width / target_width;
+        CGFloat y_scale = frame.size.height / target_height;
+        if (!isfinite(x_scale) || !isfinite(y_scale) ||
+            !(x_scale > 0.0 && y_scale > 0.0)) return;
 
-        CGFloat transformed_x = -(dx+dw) + (frame.size.width * (1/x_scale));
+        CGFloat transformed_x = -(dx + dw) + (frame.size.width / x_scale);
         CGFloat transformed_y = -dy;
 
-        CGAffineTransform scale = CGAffineTransformConcat(CGAffineTransformIdentity, CGAffineTransformMakeScale(x_scale, y_scale));
+        CGAffineTransform scale = CGAffineTransformMakeScale(x_scale, y_scale);
         CGAffineTransform transform = CGAffineTransformTranslate(scale, transformed_x, transformed_y);
+        if (!isfinite(transform.a) || !isfinite(transform.b) ||
+            !isfinite(transform.c) || !isfinite(transform.d) ||
+            !isfinite(transform.tx) || !isfinite(transform.ty)) return;
         SLSSetWindowTransform(SLSMainConnectionID(), wid, transform);
     } else {
         SLSSetWindowTransform(SLSMainConnectionID(), wid, original_transform);
@@ -862,11 +901,29 @@ static void do_window_shadow(char *message)
     }
 }
 
+// A zero window ID is a one-word sentinel; every other entry needs a proxy ID.
+// Validate the entire request before making any WindowServer transaction.
+static bool proxy_swap_request_complete(const char *cursor, int count)
+{
+    for (int i = 0; i < count; ++i) {
+        if (cursor > message_end || (size_t) (message_end - cursor) < sizeof(uint32_t)) return false;
+        uint32_t wid;
+        memcpy(&wid, cursor, sizeof(wid));
+        cursor += sizeof(wid);
+        if (wid) {
+            if (cursor > message_end || (size_t) (message_end - cursor) < sizeof(uint32_t)) return false;
+            cursor += sizeof(uint32_t);
+        }
+    }
+    return true;
+}
+
 static void do_window_swap_proxy_in(char *message)
 {
     int count = 0;
     unpack(count);
-    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t))) return;
+    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t)) ||
+        !proxy_swap_request_complete(message, count)) return;
 
     CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
     for (int i = 0; i < count; ++i) {
@@ -888,7 +945,8 @@ static void do_window_swap_proxy_out(char *message)
 {
     int count = 0;
     unpack(count);
-    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t))) return;
+    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t)) ||
+        !proxy_swap_request_complete(message, count)) return;
 
     CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
     for (int i = 0; i < count; ++i) {
@@ -1008,7 +1066,7 @@ static void do_handshake(int sockfd)
     bytes[version_length] = '\0';
     bytes[bytes_length] = '\n';
 
-    send(sockfd, bytes, bytes_length+1, 0);
+    payload_reply(sockfd, bytes, bytes_length+1);
 }
 
 static void handle_message(int sockfd, char *message)
@@ -1082,29 +1140,34 @@ static void handle_message(int sockfd, char *message)
     }
 }
 
+// The complete framed request, including its header, has one deadline.
+#define PAYLOAD_READ_TIMEOUT_SECONDS 1
+
 static inline bool read_message(int sockfd, char *message)
 {
-    int bytes_read    = 0;
-    int bytes_to_read = 0;
+    uint64_t deadline;
+    int16_t bytes_to_read;
+    if (!yabai_socket_deadline_after_seconds(PAYLOAD_READ_TIMEOUT_SECONDS, &deadline)) return false;
+    if (!yabai_socket_read_exact_before_deadline(sockfd, &bytes_to_read, sizeof(bytes_to_read), deadline)) return false;
+    if (bytes_to_read <= 0 || bytes_to_read >= SA_SOCKET_BUFF_LEN) return false;
+    if (!yabai_socket_read_exact_before_deadline(sockfd, message, bytes_to_read, deadline)) return false;
+    message_end = message + bytes_to_read;
+    return true;
+}
 
-    if (read(sockfd, &bytes_to_read, sizeof(int16_t)) == sizeof(int16_t)) {
-        if (bytes_to_read >= SA_SOCKET_BUFF_LEN) return false;
-        if (bytes_to_read <= 0)                  return false;
+//
+// NOTE: Every request is a new connection from the same daemon, which waits
+// while we check it: the full signature check costs about half a millisecond,
+// the check of code we already trust a kernel query. Only the connection
+// thread uses the cache.
+//
 
-        do {
-            int cur_read = read(sockfd, message+bytes_read, bytes_to_read-bytes_read);
-            if (cur_read <= 0) break;
+static struct yabai_socket_trusted_code daemon_trusted_code;
 
-            bytes_read += cur_read;
-        } while (bytes_read < bytes_to_read);
-
-        if (bytes_read != bytes_to_read) return false;
-
-        message_end = message + bytes_read;
-        return true;
-    }
-
-    return false;
+// False for a peer we do not serve, or one that has already gone.
+static bool payload_connection_admit(int sockfd)
+{
+    return yabai_socket_peer_is_trusted_cached(sockfd, getuid(), daemon_requirement, &daemon_trusted_code);
 }
 
 static void *handle_connection(void *unused)
@@ -1112,14 +1175,10 @@ static void *handle_connection(void *unused)
     for (;;) {
         int sockfd = accept(daemon_sockfd, NULL, 0);
         if (sockfd == -1) continue;
-        if (!yabai_socket_peer_is_trusted(sockfd, getuid(), daemon_requirement)) {
+        if (!payload_connection_admit(sockfd)) {
             close(sockfd);
             continue;
         }
-
-        // A reply to a daemon that stopped waiting must not raise SIGPIPE in Dock.
-        int on = 1;
-        setsockopt(sockfd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
 
         //
         // NOTE: Handlers create autoreleased objects (array literals, SkyLight

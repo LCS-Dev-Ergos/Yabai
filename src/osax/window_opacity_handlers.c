@@ -40,5 +40,5 @@ static void do_window_opacity_batch(int sockfd, char *message)
 
     bool success = window_fade_batch(display, phase, alpha, duration, interval, windows, count);
     char result = success ? 'k' : 'e';
-    send(sockfd, &result, 1, 0);
+    payload_reply(sockfd, &result, 1);
 }
