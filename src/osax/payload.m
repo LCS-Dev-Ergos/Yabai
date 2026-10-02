@@ -1116,12 +1116,27 @@ static inline bool read_message(int sockfd, char *message)
     return false;
 }
 
+//
+// NOTE: Every request is a new connection from the same daemon, which waits
+// while we check it: the full signature check costs about half a millisecond,
+// the check of code we already trust a kernel query. Only the connection
+// thread uses the cache.
+//
+
+static struct yabai_socket_trusted_code daemon_trusted_code;
+
+// False for a peer we do not serve, or one that has already gone.
+static bool payload_connection_admit(int sockfd)
+{
+    return yabai_socket_peer_is_trusted_cached(sockfd, getuid(), daemon_requirement, &daemon_trusted_code);
+}
+
 static void *handle_connection(void *unused)
 {
     for (;;) {
         int sockfd = accept(daemon_sockfd, NULL, 0);
         if (sockfd == -1) continue;
-        if (!yabai_socket_peer_is_trusted(sockfd, getuid(), daemon_requirement)) {
+        if (!payload_connection_admit(sockfd)) {
             close(sockfd);
             continue;
         }
