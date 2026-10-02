@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 - The Dock payload checks the daemon's signature once per build instead of on every request, a check of about half a millisecond that the daemon waited for on each Space focus, opacity batch and mouse move of a modifier drag
 - The payload version is `2.1.31-lcs.15`: `sudo yabai --load-sa` installs it and restarts Dock
+- The crossfade is left out while macOS reports memory pressure: WindowServer could then show its overlay after Dock had switched, so the destination appeared, the outgoing image came back and faded. The veil is kept
 
 ### Fixed
 - A reply from the Dock payload to a daemon that had stopped waiting could terminate Dock with `SIGPIPE`
