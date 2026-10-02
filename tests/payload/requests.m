@@ -1,7 +1,8 @@
 //
 // The payload's request handling outside Dock: replies to a daemon that has
-// gone and the bound on reading a request. payload.m is compiled in with its
-// constructor disabled and SkyLight stubbed (skylight.h).
+// gone, the bound on reading a request and the pattern search's bound.
+// payload.m is compiled in with its constructor disabled and SkyLight stubbed
+// (skylight.h).
 //
 
 #import <Foundation/Foundation.h>
@@ -183,12 +184,37 @@ static void test_trickled_request(void)
     assert(elapsed >= 0.9 && elapsed < 1.6);
 }
 
+// A lookup matches only within the bytes it may read: a match that would run
+// past the end of Dock's code is no match, and no byte past it is read.
+static void test_pattern_search_bounds(void)
+{
+    size_t page = (size_t) sysconf(_SC_PAGESIZE);
+    uint8_t *pages = mmap(NULL, 2 * page, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+    assert(pages != MAP_FAILED);
+    assert(mprotect(pages + page, page, PROT_NONE) == 0);
+
+    uint8_t *end = pages + page;
+    end[-3] = 0xAA;
+    end[-2] = 0xBB;
+    end[-1] = 0xCC;
+
+    uint64_t start = (uint64_t) pages;
+    assert(hex_find_seq(start, (uint64_t) end, "AA BB CC DD") == 0);
+    assert(hex_find_seq(start, (uint64_t) end, "AA BB CC") == (uint64_t) (end - 3));
+    assert(hex_find_seq(start, (uint64_t) end, "?? BB CC") == (uint64_t) (end - 3));
+    assert(hex_find_seq((uint64_t) end, (uint64_t) end, "AA") == 0);
+    assert(hex_find_seq(start, start + 2, "00 00 00") == 0);
+
+    munmap(pages, 2 * page);
+}
+
 int main(void)
 {
     test_reply_to_closed_daemon();
     test_stalled_request();
     test_trickled_request();
+    test_pattern_search_bounds();
 
-    puts("payload: replies and read deadline passed");
+    puts("payload: replies, read deadline and pattern bounds passed");
     return 0;
 }

@@ -236,9 +236,24 @@ static void init_instances()
     NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo] operatingSystemVersion];
     if (!verify_os_version(os_version)) return;
 
-    uint64_t baseaddr = static_base_address() + image_slide();
+    uint64_t slide = image_slide();
+    uint64_t baseaddr = static_base_address() + slide;
 
-    uint64_t dock_spaces_addr = hex_find_seq(baseaddr + get_dock_spaces_offset(os_version), get_dock_spaces_pattern(os_version));
+    //
+    // NOTE: Every lookup matches code. Past the end of Dock's code a search would
+    // read stubs, strings and data, where a match is no instruction, so it stops
+    // there.
+    //
+
+    const struct section_64 *text = getsectbyname("__TEXT", "__text");
+    if (!text) {
+        NSLog(@"[yabai-sa] could not locate the code section of Dock.app!");
+        return;
+    }
+
+    uint64_t text_end = text->addr + slide + text->size;
+
+    uint64_t dock_spaces_addr = hex_find_seq(baseaddr + get_dock_spaces_offset(os_version), text_end, get_dock_spaces_pattern(os_version));
     if (dock_spaces_addr == 0) {
         dock_spaces = nil;
         NSLog(@"[yabai-sa] could not locate pointer to dock.spaces! spaces functionality will not work!");
@@ -254,7 +269,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t dppm_addr = hex_find_seq(baseaddr + get_dppm_offset(os_version), get_dppm_pattern(os_version));
+    uint64_t dppm_addr = hex_find_seq(baseaddr + get_dppm_offset(os_version), text_end, get_dppm_pattern(os_version));
     if (dppm_addr == 0) {
         dp_desktop_picture_manager = nil;
         if (!macOSGoldenGate) NSLog(@"[yabai-sa] could not locate pointer to dppm! moving spaces will not work!");
@@ -290,7 +305,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t add_space_addr = hex_find_seq(baseaddr + get_add_space_offset(os_version), get_add_space_pattern(os_version));
+    uint64_t add_space_addr = hex_find_seq(baseaddr + get_add_space_offset(os_version), text_end, get_add_space_pattern(os_version));
     if (add_space_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to addSpace function..");
         add_space_fp = 0;
@@ -303,7 +318,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t remove_space_addr = hex_find_seq(baseaddr + get_remove_space_offset(os_version), get_remove_space_pattern(os_version));
+    uint64_t remove_space_addr = hex_find_seq(baseaddr + get_remove_space_offset(os_version), text_end, get_remove_space_pattern(os_version));
     if (remove_space_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to removeSpace function..");
         remove_space_fp = 0;
@@ -316,7 +331,7 @@ static void init_instances()
 #endif
     }
 
-    uint64_t move_space_addr = hex_find_seq(baseaddr + get_move_space_offset(os_version), get_move_space_pattern(os_version));
+    uint64_t move_space_addr = hex_find_seq(baseaddr + get_move_space_offset(os_version), text_end, get_move_space_pattern(os_version));
     if (move_space_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to moveSpace function..");
         move_space_fp = 0;
@@ -338,7 +353,7 @@ static void init_instances()
         }
     }
 
-    uint64_t set_front_window_addr = hex_find_seq(baseaddr + get_set_front_window_offset(os_version), get_set_front_window_pattern(os_version));
+    uint64_t set_front_window_addr = hex_find_seq(baseaddr + get_set_front_window_offset(os_version), text_end, get_set_front_window_pattern(os_version));
     if (set_front_window_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to setFrontWindow function..");
         set_front_window_fp = 0;
@@ -351,7 +366,7 @@ static void init_instances()
 #endif
     }
 
-    animation_time_addr = hex_find_seq(baseaddr + get_fix_animation_offset(os_version), get_fix_animation_pattern(os_version));
+    animation_time_addr = hex_find_seq(baseaddr + get_fix_animation_offset(os_version), text_end, get_fix_animation_pattern(os_version));
     if (animation_time_addr == 0x0) {
         NSLog(@"[yabai-sa] failed to get pointer to animation-time..");
     } else {
