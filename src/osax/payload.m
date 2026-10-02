@@ -44,6 +44,15 @@
 
 static char *message_end;
 
+// The daemon stops waiting for a reply after a second and closes its end. A
+// reply after that must fail without raising SIGPIPE, which Dock neither
+// ignores nor catches. SO_NOSIGPIPE cannot be set on a connection whose peer
+// has already closed, so every reply passes MSG_NOSIGNAL instead.
+static void payload_reply(int sockfd, const void *bytes, size_t length)
+{
+    send(sockfd, bytes, length, MSG_NOSIGNAL);
+}
+
 extern int SLSMainConnectionID(void);
 extern CGError SLSGetConnectionPSN(int cid, ProcessSerialNumber *psn);
 extern CGError SLSGetWindowAlpha(int cid, uint32_t wid, float *alpha);
@@ -1008,7 +1017,7 @@ static void do_handshake(int sockfd)
     bytes[version_length] = '\0';
     bytes[bytes_length] = '\n';
 
-    send(sockfd, bytes, bytes_length+1, 0);
+    payload_reply(sockfd, bytes, bytes_length+1);
 }
 
 static void handle_message(int sockfd, char *message)
@@ -1116,10 +1125,6 @@ static void *handle_connection(void *unused)
             close(sockfd);
             continue;
         }
-
-        // A reply to a daemon that stopped waiting must not raise SIGPIPE in Dock.
-        int on = 1;
-        setsockopt(sockfd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
 
         //
         // NOTE: Handlers create autoreleased objects (array literals, SkyLight
