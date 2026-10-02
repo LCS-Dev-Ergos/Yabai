@@ -18,6 +18,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The payload validates every proxy swap entry before beginning a WindowServer transaction, so a malformed request no longer commits part of one
 - `--load-sa` reads the handshake reply only within what arrived, gives the complete reply five seconds and accepts it only from the Apple-signed Dock process: a reply without a NUL made it read past its buffer, and a payload that never answered held it forever
 - The loader exits with an error when its remote thread never reaches the sentinel, and releases its task and thread rights and remote stack after termination
+- `--load-sa` run by root without sudo, as nix-darwin's boot daemon does, validates the payload in the Dock of the user who owns the console, and fails until someone has logged in
 - The root installer checks binary preparation failures, uses absolute tools without a shell, checks root ownership and protected modes across the installed bundle, and serializes install and uninstall operations
 
 ## [8.0.0-lcs.4] - 2026-10-01

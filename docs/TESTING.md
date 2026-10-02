@@ -27,7 +27,8 @@ editor's root `compile_commands.json` symlink.
   protocol, signal dispatch and storage bounds, scripting-addition request
   size, the payload handshake parser, refusal of an unauthenticated local
   listener, an overall handshake deadline, a failing install signer and
-  malformed `SUDO_UID`, and query string escaping. The signal tests launch
+  malformed `SUDO_UID` or the console user without one, and query string
+  escaping. The signal tests launch
   harmless local shell actions and check socket lifetime, isolated event
   variables, retained standard output/error and that an action answers for
   its own privacy permissions. They do not run the daemon.

@@ -168,12 +168,31 @@ static bool scripting_addition_parse_sudo_uid(const char *value, uid_t *uid)
     return true;
 }
 
+//
+// NOTE: The payload runs in the Dock of the user who logged in. sudo names that
+// user in SUDO_UID; nix-darwin's boot daemon runs --load-sa as root without
+// sudo, and launchd starts it again until it exits 0, so then the user is the
+// one who owns the console. Before anyone logs in, loginwindow's console
+// belongs to root: there is no user yet, and the daemon tries again later.
+//
+static bool scripting_addition_login_uid(uid_t *uid)
+{
+    const char *sudo_uid = getenv("SUDO_UID");
+    if (sudo_uid) return scripting_addition_parse_sudo_uid(sudo_uid, uid) && *uid != 0;
+
+    struct stat console;
+    if (stat("/dev/console", &console) != 0 || console.st_uid == 0) return false;
+
+    *uid = console.st_uid;
+    return true;
+}
+
 static bool scripting_addition_set_socket_path(void)
 {
     uid_t uid = getuid();
     assert(uid == 0);
 
-    if (!scripting_addition_parse_sudo_uid(getenv("SUDO_UID"), &uid)) return false;
+    if (!scripting_addition_login_uid(&uid)) return false;
 
     return yabai_socket_path(uid, YABAI_SOCKET_PAYLOAD,
                              g_sa_socket_file, sizeof(g_sa_socket_file), false);
@@ -348,8 +367,7 @@ static bool scripting_addition_is_dock_peer(int sockfd)
         audit_token_to_pid(token) != [dock[0] processIdentifier]) return false;
 
     uid_t login_uid;
-    if (!scripting_addition_parse_sudo_uid(getenv("SUDO_UID"), &login_uid) ||
-        audit_token_to_euid(token) != login_uid) return false;
+    if (!scripting_addition_login_uid(&login_uid) || audit_token_to_euid(token) != login_uid) return false;
 
     // The socket pathname belongs to the login user. Only Dock's Apple-signed
     // process may supply a successful root-side validation handshake.
@@ -538,8 +556,8 @@ int scripting_addition_load(void)
     }
 
     if (!scripting_addition_set_socket_path()) {
-        warn("yabai: could not determine the scripting-addition socket path from SUDO_UID!\n");
-        notify("scripting-addition", "could not determine socket path from SUDO_UID!");
+        warn("yabai: could not determine the logged-in user whose Dock gets the scripting-addition!\n");
+        notify("scripting-addition", "could not determine the logged-in user!");
         result = 1;
         goto out;
     }
