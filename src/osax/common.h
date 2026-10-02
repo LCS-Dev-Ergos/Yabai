@@ -3,7 +3,7 @@
 
 #define SA_SOCKET_BUFF_LEN 0x1000
 
-#define OSAX_VERSION                "2.1.31-lcs.14"
+#define OSAX_VERSION                "2.1.31-lcs.15"
 
 #define SA_OPACITY_BATCH_MAX 400
 
