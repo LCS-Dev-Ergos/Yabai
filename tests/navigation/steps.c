@@ -151,6 +151,13 @@ static void test_captured_steps(void)
     assert(capture_calls == 1 && focus_calls == 1 && snapshot_starts == 0 && window_focus_calls == 1);
     assert(completed_calls == 0);
 
+    // Under memory pressure nothing is captured: the step switches at once.
+    reset();
+    memory_pressure = true;
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_SWITCHED);
+    assert(capture_calls == 0 && focus_calls == 1 && snapshot_starts == 0 && window_focus_calls == 1);
+    assert(completed_calls == 0 && !space_navigation_flight.active);
+
     // Steps without a capture run to their end at once.
     reset();
     assert(begin_step(2, false, true) == SPACE_NAVIGATION_SWITCHED);
@@ -225,6 +232,14 @@ static void test_steps(void)
     reduce_motion = true;
     assert(run_step(2, true, true));
     assert(snapshot_prepares == 1 && snapshot_starts == 1 && focus_calls == 1);
+
+    // Under memory pressure the step switches without a crossfade, and
+    // activates as usual.
+    reset();
+    memory_pressure = true;
+    assert(run_step(2, true, true));
+    assert(snapshot_prepares == 0 && snapshot_starts == 0 && focus_calls == 1 && switched_duration == 0.0f);
+    assert(window_focus_calls == 1 && activated_id == 1);
 
     // An intermediate step switches with its effect, but activates nothing
     // and does not ask WindowServer about a raise.
@@ -370,6 +385,13 @@ static void test_veil_steps(void)
     // Reduce Motion keeps the veil, as it keeps the crossfade.
     reset();
     reduce_motion = true;
+    step = veil_step(2, true, .2f);
+    assert(space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 1 && snapshot_starts == 1 && focus_calls == 1);
+
+    // Memory pressure leaves the veil: it captures nothing.
+    reset();
+    memory_pressure = true;
     step = veil_step(2, true, .2f);
     assert(space_navigation_run_step(active_space, &step));
     assert(veil_prepares == 1 && snapshot_starts == 1 && focus_calls == 1);

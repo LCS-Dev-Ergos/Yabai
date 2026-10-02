@@ -69,6 +69,7 @@ static uint32_t activated_id;
 static int opacity_fail_at;
 static bool expect_fade_started;
 static bool reduce_motion;
+static bool memory_pressure;
 static int batch_calls;
 static int window_list_queries, focus_cancels;
 static bool defer_activation;
@@ -163,6 +164,7 @@ static void reset(void)
     opacity_fail_at = 0;
     expect_fade_started = false;
     reduce_motion = false;
+    memory_pressure = false;
     batch_calls = 0;
     window_list_queries = focus_cancels = 0;
     switches_at_query = -1;
