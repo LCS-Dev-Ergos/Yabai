@@ -24,6 +24,10 @@ runs the loader and validates the handshake. Installation or a requested Dock
 restart returns a nonzero status because the new payload has not yet answered.
 Run `sudo yabai --load-sa` again after Dock returns; only a verified handshake
 returns zero. The usual yabairc runs it from a `dock_did_restart` signal.
+The payload goes to the Dock of the user `SUDO_UID` names. Run by root
+without sudo, as nix-darwin's boot daemon does, `--load-sa` takes the user
+who owns the console instead; before anyone logs in there is none, and it
+fails until there is. That daemon is started again until it returns zero.
 
 ## Protocol
 
