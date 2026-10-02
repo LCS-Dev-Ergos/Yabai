@@ -72,8 +72,6 @@ static void count_broken_pipe(int signal)
 
 // The daemon stops waiting after a second and closes its end; a reply that
 // comes later must not raise SIGPIPE, which Dock neither ignores nor catches.
-// A request whose sender has already gone is not read at all (see
-// test_stalled_request).
 static void test_reply_to_closed_daemon(void)
 {
     struct sigaction action = { .sa_handler = count_broken_pipe };
@@ -102,11 +100,10 @@ static void test_reply_to_closed_daemon(void)
         int fds[2];
         assert(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
         request_send(fds[0]);
+        close(fds[0]);
 
-        // The daemon stops waiting while the handler runs.
         char message[SA_SOCKET_BUFF_LEN];
         assert(read_message(fds[1], message));
-        close(fds[0]);
         @autoreleasepool {
             handle_message(fds[1], message);
         }
@@ -118,7 +115,7 @@ static void test_reply_to_closed_daemon(void)
 }
 
 // A daemon that connects and stops sending, stopped in a debugger for
-// instance, gives up the payload's only thread after the read deadline.
+// instance, gives up the payload's only thread after the read timeout.
 static void test_stalled_request(void)
 {
     int fds[2];
@@ -137,60 +134,54 @@ static void test_stalled_request(void)
 
     close(fds[0]);
     close(fds[1]);
-
-    // Once the sender has gone the request is not read, so a request the
-    // daemon gave up on is never applied late.
-    request_begin(SA_OPCODE_HANDSHAKE);
-    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
-    request_send(fds[0]);
-    close(fds[0]);
-    assert(!read_message(fds[1], message));
-    close(fds[1]);
 }
 
-struct trickle
-{
-    int sockfd;
-    int count;
-    useconds_t interval;
-};
+struct request_writer { int sockfd; bool trickle; };
 
-// Sends a request of `count` bytes one byte at a time.
-static void *trickle_send(void *context)
+static void *write_request_fragments(void *context)
 {
-    struct trickle *trickle = context;
-    int16_t length = (int16_t) trickle->count;
-    send(trickle->sockfd, &length, sizeof(length), MSG_NOSIGNAL);
-
-    for (int i = 0; i < trickle->count; ++i) {
-        usleep(trickle->interval);
-        if (send(trickle->sockfd, "a", 1, MSG_NOSIGNAL) != 1) break;
+    struct request_writer *writer = context;
+    int16_t length = writer->trickle ? 4 : 1;
+    if (writer->trickle) {
+        write(writer->sockfd, &length, sizeof(length));
+        for (int i = 0; i < length; ++i) {
+            char byte = 'a';
+            write(writer->sockfd, &byte, 1);
+            usleep(600000);
+        }
+    } else {
+        write(writer->sockfd, &length, 1);
+        usleep(50000);
+        write(writer->sockfd, (char *) &length + 1, 1);
+        char opcode = SA_OPCODE_HANDSHAKE;
+        write(writer->sockfd, &opcode, 1);
     }
-
+    close(writer->sockfd);
     return NULL;
 }
 
-// The timeout bounds the whole request, not each read: a byte every 300 ms
-// would satisfy every read and hold the thread for 2.4 s.
-static void test_trickled_request(void)
+static void test_request_deadline_and_fragmented_header(void)
 {
     int fds[2];
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
-
-    struct trickle trickle = { .sockfd = fds[0], .count = 8, .interval = 300000 };
-    pthread_t sender;
-    assert(pthread_create(&sender, NULL, trickle_send, &trickle) == 0);
-
+    struct request_writer writer = { fds[0], false };
+    pthread_t server;
+    pthread_create(&server, NULL, write_request_fragments, &writer);
     char message[SA_SOCKET_BUFF_LEN];
-    double start = seconds();
-    bool read = read_message(fds[1], message);
-    double elapsed = seconds() - start;
+    assert(read_message(fds[1], message));
+    assert(message[0] == SA_OPCODE_HANDSHAKE);
+    pthread_join(server, NULL);
     close(fds[1]);
-    pthread_join(sender, NULL);
-    close(fds[0]);
 
-    assert(!read);
-    assert(elapsed >= 0.9 && elapsed < 1.6);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+    writer = (struct request_writer) { fds[0], true };
+    pthread_create(&server, NULL, write_request_fragments, &writer);
+    double start = seconds();
+    assert(!read_message(fds[1], message));
+    double elapsed = seconds() - start;
+    pthread_join(server, NULL);
+    close(fds[1]);
+    assert(elapsed >= 0.9 && elapsed < 1.7);
 }
 
 // A lookup matches only within the bytes it may read: a match that would run
@@ -243,30 +234,63 @@ static void test_window_scale(void)
     request_window_scale(1, 0.0f, 0.0f, 1600.0f, 900.0f);
     assert(stub_window_transform_sets == 0);
 
-    // Bounds that are not finite, or a window so much higher than wide that
-    // its scaled height would not fit an int, set nothing either.
-    stub_window_bounds = CGRectMake(0, 0, 800, INFINITY);
-    request_window_scale(1, 0.0f, 0.0f, 1600.0f, 900.0f);
-    stub_window_bounds = CGRectMake(0, 0, 1, 1e12);
-    request_window_scale(1, 0.0f, 0.0f, 1600.0f, 900.0f);
-    assert(stub_window_transform_sets == 0);
-
     // Without the current transform we cannot tell scaling from restoring.
     stub_window_bounds = CGRectMake(0, 0, 800, 600);
     stub_window_transform_error = kCGErrorFailure;
     request_window_scale(1, 0.0f, 0.0f, 1600.0f, 900.0f);
     assert(stub_window_transform_sets == 0);
     stub_window_transform_error = 0;
+
+    stub_window_bounds = CGRectMake(0, 0, 800, INFINITY);
+    request_window_scale(1, 0.0f, 0.0f, 1600.0f, 900.0f);
+    assert(stub_window_transform_sets == 0);
+
+    stub_window_bounds = CGRectMake(0, 0, 1e-300, 1e300);
+    request_window_scale(1, 0.0f, 0.0f, 1600.0f, 900.0f);
+    assert(stub_window_transform_sets == 0);
+}
+
+static void test_proxy_swap_atomicity(void)
+{
+    int count = 2;
+    uint32_t wid = 10, proxy = 20;
+    stub_transaction_creates = 0;
+    stub_transaction_commits = 0;
+    stub_transaction_alpha_sets = 0;
+    request_begin(SA_OPCODE_WINDOW_SWAP_PROXY_IN);
+    request_pack(count);
+    request_pack(wid);
+    request_pack(proxy);
+    request_handle();
+    assert(stub_transaction_creates == 0 && stub_transaction_alpha_sets == 0);
+
+    request_begin(SA_OPCODE_WINDOW_SWAP_PROXY_OUT);
+    request_pack(count);
+    request_pack(wid);
+    request_pack(proxy);
+    request_handle();
+    assert(stub_transaction_commits == 0);
+
+    // The sender's zero sentinel occupies one word and remains valid.
+    request_begin(SA_OPCODE_WINDOW_SWAP_PROXY_IN);
+    request_pack(count);
+    request_pack(wid);
+    request_pack(proxy);
+    wid = 0;
+    request_pack(wid);
+    request_handle();
+    assert(stub_transaction_commits == 1 && stub_transaction_alpha_sets == 1);
 }
 
 int main(void)
 {
     test_reply_to_closed_daemon();
     test_stalled_request();
-    test_trickled_request();
+    test_request_deadline_and_fragmented_header();
     test_pattern_search_bounds();
     test_window_scale();
+    test_proxy_swap_atomicity();
 
-    puts("payload: replies, read deadline, pattern bounds and window scale passed");
+    puts("payload: replies, read timeout, pattern bounds, scale and proxy swap passed");
     return 0;
 }

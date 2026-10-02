@@ -8,6 +8,9 @@ static CGRect stub_window_bounds = { { 0, 0 }, { 800, 600 } };
 static CGError stub_window_transform_error;
 static int stub_window_transform_sets;
 static CGAffineTransform stub_window_transform_set;
+static int stub_transaction_creates;
+static int stub_transaction_commits;
+static int stub_transaction_alpha_sets;
 
 int SLSMainConnectionID(void) { return 0; }
 CGError SLSGetConnectionPSN(int cid, ProcessSerialNumber *psn) { *psn = (ProcessSerialNumber) {0}; return 0; }
@@ -40,10 +43,10 @@ CGError SLSMoveManagedSpaceToDisplayIndex(int cid, uint64_t sid, CFStringRef dis
 void SLSMoveWindowsToManagedSpace(int cid, CFArrayRef window_list, uint64_t sid) {}
 void SLSShowSpaces(int cid, CFArrayRef space_list) {}
 void SLSHideSpaces(int cid, CFArrayRef space_list) {}
-CFTypeRef SLSTransactionCreate(int cid) { return CFArrayCreate(NULL, NULL, 0, &kCFTypeArrayCallBacks); }
-CGError SLSTransactionCommit(CFTypeRef transaction, int synchronous) { return 0; }
+CFTypeRef SLSTransactionCreate(int cid) { ++stub_transaction_creates; return CFArrayCreate(NULL, NULL, 0, &kCFTypeArrayCallBacks); }
+CGError SLSTransactionCommit(CFTypeRef transaction, int synchronous) { ++stub_transaction_commits; return 0; }
 CGError SLSTransactionOrderWindowGroup(CFTypeRef transaction, uint32_t wid, int order, uint32_t rel_wid) { return 0; }
-CGError SLSTransactionSetWindowSystemAlpha(CFTypeRef transaction, uint32_t wid, float alpha) { return 0; }
+CGError SLSTransactionSetWindowSystemAlpha(CFTypeRef transaction, uint32_t wid, float alpha) { ++stub_transaction_alpha_sets; return 0; }
 CGError SLSTransactionSetSpaceAlpha(CFTypeRef transaction, uint64_t sid, float alpha) { return 0; }
 CGError SLSTransactionSetSpaceAbsoluteLevel(CFTypeRef transaction, uint64_t sid, int level) { return 0; }
 CGError SLSTransactionShowSpace(CFTypeRef transaction, uint64_t sid) { return 0; }

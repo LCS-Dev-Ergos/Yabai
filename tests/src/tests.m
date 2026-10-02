@@ -121,6 +121,7 @@ typedef TEST_SIG(function);
 #include "event_loop_wakeups.c"
 #include "sa_request.c"
 #include "sa_handshake.c"
+#include "sa_install.c"
 #include "resource_lifetime.c"
 #include "application_observation.c"
 
@@ -139,6 +140,7 @@ typedef TEST_SIG(function);
     TEST_ENTRY(signal_storage_bound)                           \
     TEST_ENTRY(sa_request_bounds)                              \
     TEST_ENTRY(sa_handshake_reply)                             \
+    TEST_ENTRY(sa_install_inputs)                              \
     TEST_ENTRY(signal_environment)                             \
     TEST_ENTRY(signal_standard_output)                         \
     TEST_ENTRY(signal_responsibility)                          \

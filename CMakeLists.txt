@@ -216,6 +216,15 @@ target_link_libraries(payload_tests PRIVATE
 add_test(NAME payload_tests COMMAND payload_tests)
 set_tests_properties(payload_tests PROPERTIES TIMEOUT 15)
 
+# Run the real loader against Mach mocks; it never attaches to Dock.
+if(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
+    add_executable(loader_tests tests/loader/loader.m)
+    target_compile_options(loader_tests PRIVATE -UNDEBUG -fno-objc-arc ${YABAI_SANITIZE_FLAGS})
+    target_link_options(loader_tests PRIVATE ${YABAI_SANITIZE_FLAGS})
+    target_link_libraries(loader_tests PRIVATE "-framework Cocoa")
+    add_test(NAME loader_tests COMMAND loader_tests)
+endif()
+
 # libFuzzer targets for the two socket protocols, see docs/TESTING.md. They need
 # a clang that ships libFuzzer, which Apple's does not. Each also runs as a
 # short CTest test, writing new inputs to the build directory.

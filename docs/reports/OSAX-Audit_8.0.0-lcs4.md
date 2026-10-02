@@ -7,8 +7,12 @@ reach them), the pattern search that locates Dock's internals
 (`src/osax/pattern.h`, `tools/osax/pattern_check.m`), the payload's peer check
 (`src/osax/socket_identity.h`), and the daemon's request senders and handshake
 (`src/sa/sa.m`, `src/sa/sa_opacity.c`). The loader and the root-run install
-and load path are reviewed separately. Host-specific records are kept outside
-the repository.
+and load path were reviewed separately
+([review](Loader-Payload-Review_8.0.0-lcs4.md),
+[corrections](Loader-Payload-Corrections_8.0.0-lcs4.md)); those corrections
+also replaced the request deadline and tightened the scale and proxy-swap
+checks described below. Host-specific records are kept outside the
+repository.
 
 ## Map
 
@@ -50,12 +54,11 @@ of the same user. The daemon does not check who listens on the payload socket
   through `object_setInstanceVariable`. If the runtime also retains for that
   ivar, every focus keeps one reference on a Space that lives on anyway; a
   destroyed Space would then never be freed. Unverified and bounded.
-- *The listener is not authenticated.* A process of the user can bind the
-  payload socket while no payload listens, then read the daemon's requests or
-  answer `--load-sa`'s handshake (which can make it reinstall the payload and
-  restart Dock). That process could stop or restart Dock directly, so this
-  stays within the documented model; checking Dock's signature at the
-  handshake would close it.
+- *The daemon does not authenticate the listener.* A process of the user can
+  bind the payload socket while no payload listens and read the daemon's
+  requests. That process could stop or restart Dock directly, so this stays
+  within the documented model. `--load-sa` now accepts its handshake only
+  from the Apple-signed Dock (change 4).
 - *`SA_OPCODE_WINDOW_FOCUS`.* Its handler asks for Dock's own process serial
   number instead of the window owner's and reads an uninitialized connection.
   The daemon never sends it (the caller is compiled out), and the lookup it
@@ -83,14 +86,16 @@ of the same user. The daemon does not check who listens on the payload socket
    from the IPC audit: a daemon whose code-directory hash already passed, and
    whose code the kernel still holds valid, is trusted after a kernel query.
    The UID check still runs on every connection.
-3. **Read deadline.** `read_message` gives the whole request one second, as
-   long as the daemon waits: each read waits only for the time left
-   (`SO_RCVTIMEO`), so a peer that sends a byte at a time cannot stretch it.
-   Without the deadline, a request trickled in a byte every 300 ms was
-   accepted after 2.4 s. A connection whose sender has already gone cannot
-   take the timeout and is not read.
-4. **Handshake.** `--load-sa` sends with `MSG_NOSIGNAL`, reads until the
-   payload closes the connection, giving the whole reply five seconds, and
+3. **Read deadline.** `read_message` gives the whole request, header
+   included, one second, as long as the daemon waits. Each wait (`poll`, in
+   `socket_deadline.h`, shared with the handshake) lasts only for the time
+   left, so a peer that sends a byte at a time cannot stretch it, and a header
+   that arrives in two pieces is still read. Without a deadline for the whole
+   request, one trickled in a byte every 300 ms was accepted after 2.4 s.
+4. **Handshake.** `--load-sa` accepts the listener only when it is the running
+   Dock, signed by Apple (`anchor apple and identifier "com.apple.dock"`),
+   sends with `MSG_NOSIGNAL`, reads until the payload closes the connection,
+   giving the whole reply five seconds, and
    `scripting_addition_parse_handshake` accepts only a reply with a NUL and
    four bytes after it, and a version that fits the caller's buffer.
 5. **Bounded pattern search.** `hex_find_seq` takes an end and returns only a
@@ -98,10 +103,13 @@ of the same user. The daemon does not check who listens on the payload socket
    end of `__TEXT,__text`; `pattern_check` passes the end of each slice's
    section, and its output on macOS 27.2 is unchanged for both slices.
 6. **Window scale.** The handler returns when the window's bounds or
-   transform cannot be read, when the bounds are not finite, or when the
-   scaled height, computed in floating point, would be under one point or
-   beyond 65536.
-7. **Payload version** `2.1.31-lcs.15`.
+   transform cannot be read, when the bounds are not finite, when the scaled
+   height, computed in floating point, would be under one point or beyond what
+   an `int` holds, or when the scale or the transform would not be finite.
+7. **Proxy swaps.** Both handlers check the whole list, a one-word entry for a
+   skipped window and two words otherwise, before they create a transaction,
+   so a malformed request commits nothing.
+8. **Payload version** `2.1.31-lcs.16`, with the loader corrections.
 
 ## Performance
 
@@ -128,8 +136,9 @@ infinite bounds and of a very tall window failed on it (UBSan reported the
 overflowing conversion) and pass now. The read-deadline and pattern-bound
 tests were written with the interfaces they needed.
 
-- Debug CTest: 16/16, unit runner 43/43.
-- ASan/UBSan and TSan/UBSan: 16/16 each. Release: 16/16.
+- Debug CTest: 16/16, unit runner 43/43; with the loader corrections merged,
+  17/17 and 44/44.
+- ASan/UBSan, TSan/UBSan and Release: 16/16 each, 17/17 after the merge.
 - Analyzer: no findings for the payload and loader, no new ones for the
   daemon. Area headers: 27/27.
 - `pattern_check` against the local Dock: the same output as before the
@@ -144,8 +153,4 @@ Limits:
   since the version differs. The cache, the read deadline and the replies run
   in test processes through the production functions; the cache itself is
   covered by `socket_identity_tests`.
-- The proxy-swap handlers check their count against the words left, but an
-  entry is one word when skipped and two otherwise: a malformed request that
-  passes the peer check can commit a partial transaction. The daemon always
-  packs complete requests.
 - The open hypotheses above remain.

@@ -21,6 +21,8 @@
 #include <dlfcn.h>
 
 #include <pthread.h>
+#include <limits.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -28,6 +30,7 @@
 #include "common.h"
 #include "socket_path.h"
 #include "socket_identity.h"
+#include "socket_deadline.h"
 #include "pattern.h"
 
 #ifdef __x86_64__
@@ -741,6 +744,9 @@ static void do_window_scale(char *message)
 
     CGRect frame = {};
     if (SLSGetWindowBounds(SLSMainConnectionID(), wid, &frame) != 0) return;
+    if (!isfinite(frame.origin.x) || !isfinite(frame.origin.y) ||
+        !isfinite(frame.size.width) || !isfinite(frame.size.height) ||
+        !(frame.size.width > 0.0 && frame.size.height > 0.0)) return;
     CGAffineTransform original_transform = CGAffineTransformMakeTranslation(-frame.origin.x, -frame.origin.y);
 
     // Without the current transform we cannot tell whether to scale or restore.
@@ -759,25 +765,28 @@ static void do_window_scale(char *message)
         // values that cannot describe a display and windows without an area.
         //
 
-        if (!isfinite(dx) || !isfinite(dy) || !(dw >= 4.0f && dw <= 65536.0f)) return;
-        if (!(frame.size.width > 0 && frame.size.height > 0)) return;
-        if (!isfinite(frame.size.width) || !isfinite(frame.size.height)) return;
+        if (!isfinite(dx) || !isfinite(dy) || !isfinite(dh) ||
+            !(dw >= 4.0f && dw <= 65536.0f)) return;
 
-        // A window much wider than high would scale to no height, by an
-        // infinite factor; one much higher than wide, past what an int holds.
         int target_width = dw / 4;
-        double height = target_width / (frame.size.width/frame.size.height);
-        if (!(height >= 1.0 && height <= 65536.0)) return;
-        int target_height = height;
+        double height = (double) target_width * frame.size.height / frame.size.width;
+        // Check the floating result before converting it to an integer.
+        if (!isfinite(height) || height < 1.0 || height > INT_MAX) return;
+        int target_height = (int) height;
 
-        float x_scale = frame.size.width/target_width;
-        float y_scale = frame.size.height/target_height;
+        CGFloat x_scale = frame.size.width / target_width;
+        CGFloat y_scale = frame.size.height / target_height;
+        if (!isfinite(x_scale) || !isfinite(y_scale) ||
+            !(x_scale > 0.0 && y_scale > 0.0)) return;
 
-        CGFloat transformed_x = -(dx+dw) + (frame.size.width * (1/x_scale));
+        CGFloat transformed_x = -(dx + dw) + (frame.size.width / x_scale);
         CGFloat transformed_y = -dy;
 
-        CGAffineTransform scale = CGAffineTransformConcat(CGAffineTransformIdentity, CGAffineTransformMakeScale(x_scale, y_scale));
+        CGAffineTransform scale = CGAffineTransformMakeScale(x_scale, y_scale);
         CGAffineTransform transform = CGAffineTransformTranslate(scale, transformed_x, transformed_y);
+        if (!isfinite(transform.a) || !isfinite(transform.b) ||
+            !isfinite(transform.c) || !isfinite(transform.d) ||
+            !isfinite(transform.tx) || !isfinite(transform.ty)) return;
         SLSSetWindowTransform(SLSMainConnectionID(), wid, transform);
     } else {
         SLSSetWindowTransform(SLSMainConnectionID(), wid, original_transform);
@@ -892,11 +901,29 @@ static void do_window_shadow(char *message)
     }
 }
 
+// A zero window ID is a one-word sentinel; every other entry needs a proxy ID.
+// Validate the entire request before making any WindowServer transaction.
+static bool proxy_swap_request_complete(const char *cursor, int count)
+{
+    for (int i = 0; i < count; ++i) {
+        if (cursor > message_end || (size_t) (message_end - cursor) < sizeof(uint32_t)) return false;
+        uint32_t wid;
+        memcpy(&wid, cursor, sizeof(wid));
+        cursor += sizeof(wid);
+        if (wid) {
+            if (cursor > message_end || (size_t) (message_end - cursor) < sizeof(uint32_t)) return false;
+            cursor += sizeof(uint32_t);
+        }
+    }
+    return true;
+}
+
 static void do_window_swap_proxy_in(char *message)
 {
     int count = 0;
     unpack(count);
-    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t))) return;
+    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t)) ||
+        !proxy_swap_request_complete(message, count)) return;
 
     CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
     for (int i = 0; i < count; ++i) {
@@ -918,7 +945,8 @@ static void do_window_swap_proxy_out(char *message)
 {
     int count = 0;
     unpack(count);
-    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t))) return;
+    if (count <= 0 || count > unpack_capacity(sizeof(uint32_t)) ||
+        !proxy_swap_request_complete(message, count)) return;
 
     CFTypeRef transaction = SLSTransactionCreate(SLSMainConnectionID());
     for (int i = 0; i < count; ++i) {
@@ -1112,55 +1140,19 @@ static void handle_message(int sockfd, char *message)
     }
 }
 
-//
-// NOTE: A daemon gives up on a request after a second, so a peer has as long
-// to send all of it. Each read waits only for the time left: one that stops
-// sending, stopped in a debugger for instance, or sends a byte at a time,
-// cannot hold the only thread that serves the daemon.
-//
-
-#define PAYLOAD_READ_TIMEOUT_NS 1000000000ULL
-
-// One read that waits until `deadline` at the latest; -1 once it has passed,
-// or when the peer has gone and the wait cannot be set.
-static ssize_t payload_read_until(int sockfd, void *bytes, size_t length, uint64_t deadline)
-{
-    uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-    if (now >= deadline) return -1;
-
-    // A zero timeout would wait forever.
-    uint64_t left = deadline - now;
-    struct timeval timeout = { .tv_sec = left / 1000000000ULL, .tv_usec = (left % 1000000000ULL) / 1000 };
-    if (!timeout.tv_sec && !timeout.tv_usec) timeout.tv_usec = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) return -1;
-
-    return read(sockfd, bytes, length);
-}
+// The complete framed request, including its header, has one deadline.
+#define PAYLOAD_READ_TIMEOUT_SECONDS 1
 
 static inline bool read_message(int sockfd, char *message)
 {
-    uint64_t deadline = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) + PAYLOAD_READ_TIMEOUT_NS;
-    int bytes_read    = 0;
-    int bytes_to_read = 0;
-
-    if (payload_read_until(sockfd, &bytes_to_read, sizeof(int16_t), deadline) == sizeof(int16_t)) {
-        if (bytes_to_read >= SA_SOCKET_BUFF_LEN) return false;
-        if (bytes_to_read <= 0)                  return false;
-
-        do {
-            int cur_read = payload_read_until(sockfd, message+bytes_read, bytes_to_read-bytes_read, deadline);
-            if (cur_read <= 0) break;
-
-            bytes_read += cur_read;
-        } while (bytes_read < bytes_to_read);
-
-        if (bytes_read != bytes_to_read) return false;
-
-        message_end = message + bytes_read;
-        return true;
-    }
-
-    return false;
+    uint64_t deadline;
+    int16_t bytes_to_read;
+    if (!yabai_socket_deadline_after_seconds(PAYLOAD_READ_TIMEOUT_SECONDS, &deadline)) return false;
+    if (!yabai_socket_read_exact_before_deadline(sockfd, &bytes_to_read, sizeof(bytes_to_read), deadline)) return false;
+    if (bytes_to_read <= 0 || bytes_to_read >= SA_SOCKET_BUFF_LEN) return false;
+    if (!yabai_socket_read_exact_before_deadline(sockfd, message, bytes_to_read, deadline)) return false;
+    message_end = message + bytes_to_read;
+    return true;
 }
 
 //

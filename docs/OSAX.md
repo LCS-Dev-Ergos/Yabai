@@ -20,9 +20,10 @@ so most macOS releases break part of it.
 The payload and loader are embedded in the yabai binary. `yabai --load-sa`
 (as root) installs them to `/Library/ScriptingAdditions/yabai.osax` when the
 installed version differs from `OSAX_VERSION` and restarts Dock; otherwise it
-runs the loader and validates the handshake. A Dock restart drops the payload,
-so the usual yabairc runs `sudo yabai --load-sa` from a `dock_did_restart`
-signal.
+runs the loader and validates the handshake. Installation or a requested Dock
+restart returns a nonzero status because the new payload has not yet answered.
+Run `sudo yabai --load-sa` again after Dock returns; only a verified handshake
+returns zero. The usual yabairc runs it from a `dock_did_restart` signal.
 
 ## Protocol
 
@@ -40,11 +41,12 @@ that do not fit in it.
 Every request is a new connection from the same daemon, which waits while the
 payload checks it. The payload remembers the code-directory hashes of peers
 that passed, as the daemon does for its clients, so a request costs a kernel
-query instead of a signature check of about half a millisecond. A request
-has one second in all to arrive, as long as the daemon waits for an answer,
-so a peer that stops sending, or sends a byte at a time, cannot hold the one
-thread that serves requests; a request whose sender has already gone is not
-read.
+query instead of a signature check of about half a millisecond. The complete
+framed request, header included, has one second to arrive, as long as the
+daemon waits for an answer, so a peer that stops sending, or sends a byte at
+a time, cannot hold the one thread that serves requests. A daemon that stopped
+waiting before its connection was accepted fails the peer check, so its
+request is not read.
 Replies, the handshake and the status byte of an opacity batch, are sent with
 `MSG_NOSIGNAL`: a daemon that stopped waiting has closed its end, and Dock
 neither ignores nor catches `SIGPIPE`.
@@ -63,8 +65,9 @@ bits, one per lookup that succeeded:
 | `0x40` | space switch animation instruction, patched to a zero duration | instant space switching |
 
 On macOS 27.2 the handshake reports `0x5D`. `--load-sa` reads the reply until
-the payload closes the connection, for at most five seconds, and refuses one
-without the NUL or the four bytes after it. `--load-sa` requires the lookups
+the payload closes the connection, within one five-second deadline. It accepts
+only the Apple-signed Dock process as the listener and refuses a reply without
+the NUL or the four bytes after it. `--load-sa` requires the lookups
 available on that macOS version: on macOS 27 it does not require `dppm` or
 `set_front_window`.
 

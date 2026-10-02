@@ -42,9 +42,9 @@ The two sockets:
   applies the same directory and audit-token checks. It validates peers
   against a requirement saved by the root installer in its bundle, and
   remembers the code-directory hashes that passed, so the daemon's requests
-  after the first cost a kernel query instead of a signature check. A request
-  has one second in all to arrive, and replies cannot raise `SIGPIPE` in
-  Dock. Each request opens its own connection
+  after the first cost a kernel query instead of a signature check. The
+  complete request has one second to arrive, and replies cannot raise
+  `SIGPIPE` in Dock. Each request opens its own connection
   (`scripting_addition_send_bytes`), builds its message in a stack buffer of
   `SA_SOCKET_BUFF_LEN` (4 KiB), the payload's message size, refusing one that
   does not fit, and waits up to one second for Dock to close the connection

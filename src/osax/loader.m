@@ -118,21 +118,17 @@ static pid_t get_dock_pid(void)
     return 0;
 }
 
-int main(int argc, char **argv)
+static int loader_inject(pid_t pid)
 {
-    int result = 0;
+    int result = 1;
     mach_port_t task = 0;
     thread_act_t thread = 0;
     mach_vm_address_t code = 0;
     mach_vm_address_t stack = 0;
+    bool thread_started = false;
+    bool thread_terminated = false;
     vm_size_t stack_size = 16 * 1024;
     uint64_t stack_contents = 0x00000000CAFEBABE;
-    pid_t pid = get_dock_pid();
-
-    if (!pid) {
-        fprintf(stderr, "could not locate Dock.app pid\n");
-        return 1;
-    }
 
     if (task_for_pid(mach_task_self(), pid, &task) != KERN_SUCCESS) {
         fprintf(stderr, "could not retrieve task port for pid: %d\n", pid);
@@ -141,22 +137,22 @@ int main(int argc, char **argv)
 
     if (mach_vm_allocate(task, &stack, stack_size, VM_FLAGS_ANYWHERE) != KERN_SUCCESS) {
         fprintf(stderr, "could not allocate stack segment\n");
-        return 1;
+        goto cleanup;
     }
 
     if (mach_vm_write(task, stack, (vm_address_t) &stack_contents, sizeof(uint64_t)) != KERN_SUCCESS) {
         fprintf(stderr, "could not copy dummy return address into stack segment\n");
-        return 1;
+        goto cleanup;
     }
 
     if (vm_protect(task, stack, stack_size, 1, VM_PROT_READ | VM_PROT_WRITE) != KERN_SUCCESS) {
         fprintf(stderr, "could not change protection for stack segment\n");
-        return 1;
+        goto cleanup;
     }
 
     if (mach_vm_allocate(task, &code, sizeof(shell_code), VM_FLAGS_ANYWHERE) != KERN_SUCCESS) {
         fprintf(stderr, "could not allocate code segment\n");
-        return 1;
+        goto cleanup;
     }
 
 #ifdef __x86_64__
@@ -177,12 +173,12 @@ int main(int argc, char **argv)
 
     if (mach_vm_write(task, code, (vm_address_t) shell_code, sizeof(shell_code)) != KERN_SUCCESS) {
         fprintf(stderr, "could not copy shellcode into code segment\n");
-        return 1;
+        goto cleanup;
     }
 
     if (vm_protect(task, code, sizeof(shell_code), 0, VM_PROT_EXECUTE | VM_PROT_READ) != KERN_SUCCESS) {
         fprintf(stderr, "could not change protection for code segment\n");
-        return 1;
+        goto cleanup;
     }
 
 #ifdef __x86_64__
@@ -196,8 +192,9 @@ int main(int argc, char **argv)
     kern_return_t error = thread_create_running(task, thread_flavor, (thread_state_t)&thread_state, thread_flavor_count, &thread);
     if (error != KERN_SUCCESS) {
         fprintf(stderr, "could not spawn remote thread: %s\n", mach_error_string(error));
-        return 1;
+        goto cleanup;
     }
+    thread_started = true;
 #elif __arm64__
     void *handle = dlopen("/usr/lib/system/libsystem_kernel.dylib", RTLD_GLOBAL | RTLD_LAZY);
     if (handle) {
@@ -207,7 +204,7 @@ int main(int argc, char **argv)
 
     if (!_thread_convert_thread_state) {
         fprintf(stderr, "could not load symbol: thread_convert_thread_state\n");
-        return 1;
+        goto cleanup;
     }
 
     arm_thread_state64_t thread_state = {}, machine_thread_state = {};
@@ -220,36 +217,44 @@ int main(int argc, char **argv)
     kern_return_t error = thread_create(task, &thread);
     if (error != KERN_SUCCESS) {
         fprintf(stderr, "could not create remote thread: %s\n", mach_error_string(error));
-        return 1;
+        goto cleanup;
     }
 
     error = _thread_convert_thread_state(thread, 2, thread_flavor, (thread_state_t) &thread_state, thread_flavor_count, (thread_state_t) &machine_thread_state, &machine_thread_flavor_count);
     if (error != KERN_SUCCESS) {
         fprintf(stderr, "could not convert thread state: %s\n", mach_error_string(error));
-        return 1;
+        goto cleanup;
     }
 
     NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo] operatingSystemVersion];
     if ((os_version.majorVersion == 14 && os_version.minorVersion >= 4) ||
         (os_version.majorVersion >= 15)) {
-        thread_terminate(thread);
+        error = thread_terminate(thread);
+        if (error != KERN_SUCCESS) {
+            fprintf(stderr, "could not terminate preliminary remote thread: %s\n", mach_error_string(error));
+            goto cleanup;
+        }
+        mach_port_deallocate(mach_task_self(), thread);
+        thread = 0;
         error = thread_create_running(task, thread_flavor, (thread_state_t)&machine_thread_state, machine_thread_flavor_count, &thread);
         if (error != KERN_SUCCESS) {
             fprintf(stderr, "could not spawn remote thread: %s\n", mach_error_string(error));
-            return 1;
+            goto cleanup;
         }
+        thread_started = true;
     } else {
         error = thread_set_state(thread, thread_flavor, (thread_state_t)&machine_thread_state, machine_thread_flavor_count);
         if (error != KERN_SUCCESS) {
             fprintf(stderr, "could not set thread state: %s\n", mach_error_string(error));
-            return 1;
+            goto cleanup;
         }
 
         error = thread_resume(thread);
         if (error != KERN_SUCCESS) {
             fprintf(stderr, "could not resume remote thread: %s\n", mach_error_string(error));
-            return 1;
+            goto cleanup;
         }
+        thread_started = true;
     }
 #endif
 
@@ -259,8 +264,7 @@ int main(int argc, char **argv)
         kern_return_t error = thread_get_state(thread, thread_flavor, (thread_state_t)&thread_state, &thread_flavor_count);
 
         if (error != KERN_SUCCESS) {
-            result = 1;
-            goto terminate;
+            goto cleanup;
         }
 
 #ifdef __x86_64__
@@ -269,17 +273,43 @@ int main(int argc, char **argv)
         if (thread_state.__x[0] == 0x79616265) {
 #endif
             result = 0;
-            goto terminate;
+            goto cleanup;
         }
 
         usleep(20000);
     }
 
-terminate:
-    error = thread_terminate(thread);
-    if (error != KERN_SUCCESS) {
-        fprintf(stderr, "failed to terminate remote thread: %s\n", mach_error_string(error));
+cleanup:
+    if (thread) {
+        kern_return_t termination = thread_terminate(thread);
+        if (termination == KERN_SUCCESS) {
+            thread_terminated = true;
+        } else {
+            fprintf(stderr, "failed to terminate remote thread: %s\n", mach_error_string(termination));
+            result = 1;
+        }
+        mach_port_deallocate(mach_task_self(), thread);
     }
 
+    // The first thread no longer uses its stack. Its child may still run the
+    // embedded dlopen code, so free that code only if no thread was started.
+    if (stack && (!thread || thread_terminated)) {
+        mach_vm_deallocate(task, stack, stack_size);
+    }
+    if (code && !thread_started && (!thread || thread_terminated)) {
+        mach_vm_deallocate(task, code, sizeof(shell_code));
+    }
+    mach_port_deallocate(mach_task_self(), task);
+
     return result;
+}
+
+int main(int argc, char **argv)
+{
+    pid_t pid = get_dock_pid();
+    if (!pid) {
+        fprintf(stderr, "could not locate Dock.app pid\n");
+        return 1;
+    }
+    return loader_inject(pid);
 }
