@@ -743,12 +743,15 @@ static void expect_veil_blur(void)
     expect_released();
 
     // Cancelled during the fade-in: it stops writing, fails and leaves nothing
-    // alive. The window had been ordered in.
+    // alive. The window had been ordered in. On a loaded runner the third write can
+    // come past the fade-in's 100 ms, at alpha 1: the cancellation then follows a
+    // fade-in that was complete, and the veil counts as shown.
     alpha_log_count = 0;
     orders_before = orders;
     cancel_at_alpha_write = 3;
-    assert(!veil());
+    bool shown = veil();
     cancel_at_alpha_write = 0;
+    assert(!shown || alpha_log[2] == 1.0f);
     assert(alpha_log_count == 3 && orders == orders_before + 1);
     assert(!live_windows && !live_spaces);
     expect_released();
