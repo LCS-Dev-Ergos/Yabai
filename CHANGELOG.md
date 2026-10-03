@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- Window animations draw each window's image in the colour space it was captured in. Any other space made CoreGraphics convert every pixel, about 70 ms instead of 15 ms for a window filling a 5K display, and keep a buffer the size of the window for each conversion until the daemon quit: after two hours with animations on, 34 buffers held 1.8 GB of address space and 110 MB in swap. A window below full opacity, whose alpha is restored first, keeps its colour space and pixel layout the same way
 
 ## [8.0.1] - 2026-10-03
 ### Changed

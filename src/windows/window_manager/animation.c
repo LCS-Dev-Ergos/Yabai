@@ -50,6 +50,13 @@ static void window_manager_create_window_proxy(int animation_connection, float a
     sls_window_disable_shadow(proxy->id);
     SLSSetWindowOpacity(animation_connection, proxy->id, 0);
     SLSSetWindowResolution(animation_connection, proxy->id, 2.0f);
+    // The capture is in its display's colour space. A proxy in any other space makes
+    // the draw convert every pixel: about 70 ms against 15 ms for a 5072 x 2760
+    // window, and CoreGraphics then keeps a buffer the size of the window cached for
+    // the life of the process, one per converter. A refusal only costs the
+    // conversion.
+    CGColorSpaceRef colors = CGImageGetColorSpace(proxy->image);
+    if (colors) SLSSetWindowColorSpace(animation_connection, proxy->id, colors);
     SLSSetWindowAlpha(animation_connection, proxy->id, alpha);
     SLSSetWindowLevel(animation_connection, proxy->id, proxy->level);
     SLSSetWindowSubLevel(animation_connection, proxy->id, proxy->sub_level);

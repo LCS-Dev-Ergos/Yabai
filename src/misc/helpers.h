@@ -739,13 +739,21 @@ static CGImageRef cgimage_restore_alpha(CGImageRef image)
     uint8_t *data = (uint8_t *) calloc(height, pitch);
     if (!data) return NULL;
 
-    CGColorSpaceRef color_space = CGColorSpaceCreateDeviceRGB();
+    // A window capture's own colour space and pixel layout make the draw a copy. Any
+    // other space or layout converts every pixel, several times slower, and
+    // CoreGraphics keeps a buffer the size of the image cached for the life of the
+    // process. A space a bitmap cannot use falls back to device RGB. The restore
+    // treats the three colour channels alike and finds alpha in the high byte of
+    // each pixel, where this layout keeps it.
+    CGColorSpaceRef source = CGImageGetColorSpace(image);
+    bool own_space = source && CGColorSpaceGetModel(source) == kCGColorSpaceModelRGB && CGColorSpaceSupportsOutput(source);
+    CGColorSpaceRef color_space = own_space ? CGColorSpaceRetain(source) : CGColorSpaceCreateDeviceRGB();
     if (!color_space) {
         free(data);
         return NULL;
     }
 
-    CGContextRef context = CGBitmapContextCreate(data, width, height, 8, pitch, color_space, kCGBitmapByteOrder32Big | kCGImageAlphaPremultipliedLast);
+    CGContextRef context = CGBitmapContextCreate(data, width, height, 8, pitch, color_space, kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
     CGColorSpaceRelease(color_space);
     if (!context) {
         free(data);
