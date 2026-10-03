@@ -17,6 +17,8 @@ How it is checked:
   live checks with presented frames.
 - [Performance](PERFORMANCE.md): measurements of navigation and effects,
   release by release.
+- [Development and releases](RELEASING.md): versions, branches, the gates a
+  change passes and the release steps.
 
 Design:
 
@@ -33,8 +35,10 @@ Research:
 ## Reports
 
 [Reports](reports/) record what each investigated release or candidate showed
-live. Files are named `Title-Words_VERSION-lcsN.md`, where the version is the
-release the report examines or the candidate it led to. Raw measurements that
+live. Files are named `Title-Words_VERSION.md`, where the version is the
+release the report examines or the candidate it led to, as in
+`Title-Words_8.1.0.md`; reports up to 8.0.0-lcs.5 keep their
+`Title-Words_VERSION-lcsN.md` names. Raw measurements that
 support a report are kept in [reports/data](reports/data/).
 
 Version 7.1.25 (lcs.11 to lcs.32):

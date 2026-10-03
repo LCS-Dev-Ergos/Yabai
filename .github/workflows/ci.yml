@@ -1,15 +1,16 @@
 # Builds and tests every push and pull request to dev, once more with ASan and
 # UBSan, runs the static analyzer and fuzzes both socket parsers.
-# Tags named v<version>-lcs.<n>
+# Tags named v<major>.<minor>.<patch>, or with a pre-release such as -rc.1,
 # additionally produce a signed release tarball with yabai's archive layout
-# (archive/bin with yabai and yabai-msg, archive/doc, archive/examples).
+# (archive/bin with yabai and yabai-msg, archive/doc, archive/examples). A
+# pre-release is published as one. See docs/RELEASING.md.
 
 name: CI
 
 on:
   push:
     branches: [dev]
-    tags: ["v*-lcs.*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-*"]
   pull_request:
     branches: [dev]
   workflow_dispatch:
@@ -65,7 +66,8 @@ jobs:
           test "$(lipo -archs build/src/osax/payload)" = "x86_64 arm64e"
           if [ "$RELEASE" = "true" ]; then
             version="${GITHUB_REF_NAME#v}"
-            test "$(build/bin/yabai --version)" = "yabai-v${version%-lcs.*}"
+            # The binary carries the core version; a pre-release adds to it.
+            test "$(build/bin/yabai --version)" = "yabai-v${version%%-*}"
             grep -qx 'YABAI_ALLOW_UNSIGNED_LOCAL:BOOL=OFF' build/CMakeCache.txt
             for binary in build/bin/yabai build/bin/yabai-msg; do
               codesign --verify --strict --all-architectures "$binary"
@@ -99,7 +101,9 @@ jobs:
           - Nix hash: ${tick}${sri}${tick}
           - designated requirement: ${tick}${requirement}${tick}
           EOF
-          gh release create "$TAG" "$tarball" --verify-tag --title "$TAG" --notes-file notes.md
+          prerelease=""
+          case "$TAG" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$TAG" "$tarball" --verify-tag --title "$TAG" --notes-file notes.md $prerelease
 
       - name: Remove the signing keychain
         if: always() && env.RELEASE == 'true'

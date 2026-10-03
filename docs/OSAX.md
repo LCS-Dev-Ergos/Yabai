@@ -159,6 +159,13 @@ debug`). The tools land in `build/debug/tools/`.
 
 ## Versioning
 
-`OSAX_VERSION` is compared for equality only. This fork suffixes it with
-`-lcs.<n>` and bumps `<n>` for every payload change. When a merge brings a new
-upstream version, the result is `<upstream>-lcs.1`.
+`OSAX_VERSION` is compared for equality only: a different string makes
+`--load-sa` install the payload and restart Dock. It therefore changes only
+when the payload does, and then becomes the version of the yabai release that
+carries the change, without pre-release suffix: a payload changed for 8.1.0 is
+`8.1.0`. The original yabai's payloads are numbered 2.x, so neither can pass
+for the other. A release that leaves the payload alone keeps the version, and
+with it the payload already loaded in Dock.
+
+Payloads up to `2.1.31-lcs.16` were numbered `<original version>-lcs.<n>`;
+`2.1.31-lcs.16` stays until the payload next changes.
