@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [8.0.0] - 2026-10-03
 ### Added
 - `space --navigate` takes its effect from the daemon when a request names none, as in `yabai -m space --navigate focus next`: the `navigation_effect_type` setting, `crossfade` (default) or `veil`, and `navigation_effect_duration`, seconds in [0, 1] (0.25 by default), choose it when the request is read, so key bindings can change them while the daemon runs without changing the requests they send
 - Add the `navigation_effect` setting, `on` (default) or `off`: off, every Desktop switch of `space --navigate` runs without an effect, including one the request names and steps already queued, and still switches and activates
@@ -13,9 +15,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 - Under memory pressure a crossfade becomes the veil instead of a switch without an effect; `navigation_pressure_fallback none` keeps the previous behaviour
+- Releases follow Semantic Versioning without the `-lcs.<n>` suffix, tagged `vMAJOR.MINOR.PATCH`, with release candidates as `-rc.<n>` pre-releases; under SemVer the `8.0.0-lcs.<n>` tags were pre-releases of this version. The payload keeps `2.1.31-lcs.16` and is numbered by the release that next changes it (see docs/RELEASING.md)
 
 ### Fixed
 - `yabai --help` links this project's manual for the running version; it linked a tag of another repository that does not exist there
+
+### Verification and limits
+- Debug, ASan/UBSan and Release run every test, the TSan/UBSan subset passes, both fuzz targets ran 60 s each with a seed for the request without effect, the analyzer is clean and actionlint accepts the workflow. The settings, the request without effect and the pressure fallback have not run in an installed daemon; the veil that replaces a crossfade under pressure is the veil of 8.0.0-lcs.3, whose live behaviour under memory pressure has not been observed. The payload is unchanged, so installing this release does not restart Dock
 
 ## [8.0.0-lcs.5] - 2026-10-02
 ### Changed
@@ -952,7 +958,8 @@ The *window_destroyed* signal is now triggered for windows that are implicitly d
 ### Added
 - First official release
 
-[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.5...HEAD
+[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0...HEAD
+[8.0.0]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.5...v8.0.0
 [8.0.0-lcs.5]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.4...v8.0.0-lcs.5
 [8.0.0-lcs.4]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.3...v8.0.0-lcs.4
 [8.0.0-lcs.3]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.2...v8.0.0-lcs.3
