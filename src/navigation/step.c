@@ -168,24 +168,46 @@ static bool space_navigation_clicked_since(uint64_t time)
     return space_navigation_seconds_since_click() * 1e9 < (double) (read_os_timer() - time);
 }
 
-// The crossfade and the veil cover the whole display, so both stay under
-// Reduce Motion, whose own Desktop transition is a crossfade. They need a
-// hidden destination and ordinary Desktops on both sides, and a duration: a
-// fast request has none.
+// The daemon's settings over the effect a step was given. With navigation_effect
+// off no step shows one: a zero duration takes every effect out and still switches.
 //
 // NOTE: Under memory pressure WindowServer can put the crossfade's window on
 // screen after Dock has switched. We wait one refresh after ordering it; once
 // it came about 110 ms later, so the destination showed, then the outgoing
 // image, then the fade. No call tells us when the window is on screen, and on
 // a 6016 x 3384 display the capture and the window's copy take 81 MB each,
-// exactly when memory is short. So the crossfade is left out while macOS
-// reports pressure, and the switch is Dock's alone. The veil captures nothing
-// and keeps its effect.
+// exactly when memory is short. So while macOS reports pressure a crossfade
+// follows navigation_pressure_fallback: by default it becomes the veil, which
+// captures nothing; `keep` accepts the risk, and `none` leaves the switch to
+// Dock alone. The pressure is read only for a crossfade with a duration.
+static void space_navigation_resolve_effect(struct space_navigation_step *step)
+{
+    if (!g_window_manager.navigation_effect) {
+        step->duration = 0.0f;
+        return;
+    }
+
+    if (!step->crossfade || step->duration <= 0.0f) return;
+
+    int fallback = g_window_manager.navigation_pressure_fallback;
+    if (fallback == SPACE_NAVIGATION_PRESSURE_KEEP || !space_navigation_memory_pressure()) return;
+
+    if (fallback == SPACE_NAVIGATION_PRESSURE_VEIL) {
+        step->crossfade = false;
+        step->veil = true;
+    } else {
+        step->duration = 0.0f;
+    }
+}
+
+// The crossfade and the veil cover the whole display, so both stay under
+// Reduce Motion, whose own Desktop transition is a crossfade. They need a
+// hidden destination and ordinary Desktops on both sides, and a duration: a
+// fast request has none.
 static bool space_navigation_overlays(uint64_t current, struct space_navigation_step *step)
 {
     return (step->crossfade || step->veil) && step->duration > 0.0f && !space_navigation_space_visible(step->sid)
-        && !space_navigation_space_fullscreen(step->sid) && !space_navigation_space_fullscreen(current)
-        && !(step->crossfade && space_navigation_memory_pressure());
+        && !space_navigation_space_fullscreen(step->sid) && !space_navigation_space_fullscreen(current);
 }
 
 // What a step decides before Dock switches: the destination's display, the
@@ -323,9 +345,9 @@ static bool space_navigation_switch_fade(struct space_navigation_plan *plan, str
     return success && effects_ok;
 }
 
-// Runs a step to its end. A crossfade waits here for its capture, a veil for
-// its two refreshes.
-static bool space_navigation_run_step(uint64_t current, struct space_navigation_step *step)
+// Runs a step whose effect is resolved to its end. A crossfade waits here for
+// its capture, a veil for its two refreshes.
+static bool space_navigation_run_resolved(uint64_t current, struct space_navigation_step *step)
 {
     if (current == step->sid) return step->activate && step->settle ? space_navigation_settle(step->sid) : true;
 
@@ -353,6 +375,12 @@ static bool space_navigation_run_step(uint64_t current, struct space_navigation_
     return space_navigation_switch_overlay(&plan, prepared);
 }
 
+static bool space_navigation_run_step(uint64_t current, struct space_navigation_step *step)
+{
+    space_navigation_resolve_effect(step);
+    return space_navigation_run_resolved(current, step);
+}
+
 // The step waiting for its snapshot capture. Only the event loop touches it.
 static struct
 {
@@ -368,8 +396,10 @@ static struct
 // schedule. Any other step, a veil included, runs to its end here.
 static enum space_navigation_result space_navigation_begin_step(uint64_t current, struct space_navigation_step *step)
 {
+    space_navigation_resolve_effect(step);
+
     if (current == step->sid || !step->crossfade) {
-        return space_navigation_run_step(current, step) ? SPACE_NAVIGATION_SWITCHED : SPACE_NAVIGATION_FAILED;
+        return space_navigation_run_resolved(current, step) ? SPACE_NAVIGATION_SWITCHED : SPACE_NAVIGATION_FAILED;
     }
 
     struct space_navigation_plan plan;

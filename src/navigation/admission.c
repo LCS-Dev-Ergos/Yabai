@@ -96,9 +96,10 @@ static bool space_navigation_request_index(const char *token)
     return true;
 }
 
-// Returns 1 for `space --navigate focus next <effect> <duration>`, where the
+// Returns 1 for `space --navigate focus next [<effect> <duration>]`, where the
 // effect is crossfade, veil or a starting opacity, -1 for prev, and 0 for
-// anything else, including an incomplete message. A decimal index returns
+// anything else, including an incomplete message. Without an effect the
+// daemon's settings choose it. A decimal index returns
 // SPACE_NAVIGATION_ABSOLUTE: it carries timing but is never coalesced.
 static int space_navigation_request_direction(const char *bytes, int length)
 {
@@ -108,19 +109,25 @@ static int space_navigation_request_direction(const char *bytes, int length)
     memcpy(&size, bytes, sizeof(size));
     if (size <= 0 || size != length - (int) sizeof(size)) return 0;
 
+    // The message ends with an empty token: the fifth without an effect, the
+    // seventh with one.
     const char *cursor = bytes + sizeof(size);
     const char *end = cursor + size;
     const char *token[7];
+    int count = 0;
 
-    for (int i = 0; i < 7; ++i) {
-        if (!space_navigation_request_token(&cursor, end, &token[i])) return 0;
+    while (cursor != end) {
+        if (count == 7 || !space_navigation_request_token(&cursor, end, &token[count])) return 0;
+        ++count;
     }
 
-    if (cursor != end || *token[6] != '\0') return 0;
+    if ((count != 5 && count != 7) || *token[count - 1] != '\0') return 0;
     if (strcmp(token[0], "space") != 0 || strcmp(token[1], "--navigate") != 0 || strcmp(token[2], "focus") != 0) return 0;
-    if (strcmp(token[4], "crossfade") != 0 && strcmp(token[4], "veil") != 0
-        && !space_navigation_request_number(token[4], false)) return 0;
-    if (!space_navigation_request_number(token[5], true)) return 0;
+    if (count == 7) {
+        if (strcmp(token[4], "crossfade") != 0 && strcmp(token[4], "veil") != 0
+            && !space_navigation_request_number(token[4], false)) return 0;
+        if (!space_navigation_request_number(token[5], true)) return 0;
+    }
 
     if (strcmp(token[3], "next") == 0) return 1;
     if (strcmp(token[3], "prev") == 0) return -1;

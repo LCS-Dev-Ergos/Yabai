@@ -234,4 +234,112 @@ TEST_FUNC(config_navigation_veil_blur,
     g_window_manager.navigation_veil_blur = saved;
 });
 
+// A value is refused with the usual message and leaves the setting as it was.
+static bool config_refuses(const char *setting, const char *value)
+{
+    char expected[192];
+    snprintf(expected, sizeof(expected),
+             "\x07unknown value '%s' given to command '%s' for domain 'config'\n", value, setting);
+    char *output = TEST_COMMAND("config", setting, value);
+    bool refused = strcmp(output, expected) == 0;
+    if (!refused) printf("                   %s %s returned '%s'\n", setting, value, output);
+    free(output);
+    return refused;
+}
+
+// Whether a get prints `expected`.
+static bool config_prints(const char *setting, const char *expected)
+{
+    char *output = TEST_COMMAND("config", setting);
+    bool match = strcmp(output, expected) == 0;
+    if (!match) printf("                   %s printed '%s'\n", setting, output);
+    free(output);
+    return match;
+}
+
+// Whether a set is accepted silently.
+static bool config_sets(const char *setting, const char *value)
+{
+    char *output = TEST_COMMAND("config", setting, value);
+    bool accepted = strcmp(output, "") == 0;
+    if (!accepted) printf("                   %s %s returned '%s'\n", setting, value, output);
+    free(output);
+    return accepted;
+}
+
+// The navigation effect settings that requests without their own effect use,
+// and the switch and pressure fallback that apply to every step: each value
+// through get and set, and nothing else.
+TEST_FUNC(config_navigation_effect_settings,
+{
+    bool saved_effect = g_window_manager.navigation_effect;
+    int saved_type = g_window_manager.navigation_effect_type;
+    float saved_duration = g_window_manager.navigation_effect_duration;
+    int saved_fallback = g_window_manager.navigation_pressure_fallback;
+
+    g_window_manager.navigation_effect = true;
+    TEST_CHECK(config_prints("navigation_effect", "on\n"), true);
+    TEST_CHECK(config_sets("navigation_effect", "off"), true);
+    TEST_CHECK(g_window_manager.navigation_effect, false);
+    TEST_CHECK(config_prints("navigation_effect", "off\n"), true);
+    TEST_CHECK(config_sets("navigation_effect", "on"), true);
+    TEST_CHECK(g_window_manager.navigation_effect, true);
+    const char *invalid_switch[] = { "toggle", "On", "1", "true", "crossfade" };
+    for (int i = 0; i < array_count(invalid_switch); ++i) {
+        TEST_CHECK(config_refuses("navigation_effect", invalid_switch[i]), true);
+        TEST_CHECK(g_window_manager.navigation_effect, true);
+    }
+
+    g_window_manager.navigation_effect_type = SPACE_NAVIGATION_EFFECT_CROSSFADE;
+    TEST_CHECK(config_prints("navigation_effect_type", "crossfade\n"), true);
+    TEST_CHECK(config_sets("navigation_effect_type", "veil"), true);
+    TEST_CHECK(g_window_manager.navigation_effect_type, SPACE_NAVIGATION_EFFECT_VEIL);
+    TEST_CHECK(config_prints("navigation_effect_type", "veil\n"), true);
+    TEST_CHECK(config_sets("navigation_effect_type", "crossfade"), true);
+    TEST_CHECK(g_window_manager.navigation_effect_type, SPACE_NAVIGATION_EFFECT_CROSSFADE);
+    const char *invalid_type[] = { "fade", "Veil", "veils", "0.95", "off", "none" };
+    for (int i = 0; i < array_count(invalid_type); ++i) {
+        TEST_CHECK(config_refuses("navigation_effect_type", invalid_type[i]), true);
+        TEST_CHECK(g_window_manager.navigation_effect_type, SPACE_NAVIGATION_EFFECT_CROSSFADE);
+    }
+
+    // The duration takes the bounds a request's own duration has: [0, 1].
+    g_window_manager.navigation_effect_duration = 0.25f;
+    TEST_CHECK(config_prints("navigation_effect_duration", "0.250000\n"), true);
+    const char *accepted[] = { "0", "1", "0.4", "0.0", "1.0" };
+    const float values[] = { 0.0f, 1.0f, 0.4f, 0.0f, 1.0f };
+    for (int i = 0; i < array_count(accepted); ++i) {
+        TEST_CHECK(config_sets("navigation_effect_duration", accepted[i]), true);
+        TEST_CHECK(g_window_manager.navigation_effect_duration == values[i], true);
+    }
+    g_window_manager.navigation_effect_duration = 0.25f;
+    const char *invalid_duration[] = { "-0.1", "1.01", "2", "nan", "inf", "-inf", "1e999", "0.2s", "off" };
+    for (int i = 0; i < array_count(invalid_duration); ++i) {
+        TEST_CHECK(config_refuses("navigation_effect_duration", invalid_duration[i]), true);
+        TEST_CHECK(g_window_manager.navigation_effect_duration == 0.25f, true);
+    }
+
+    g_window_manager.navigation_pressure_fallback = SPACE_NAVIGATION_PRESSURE_VEIL;
+    TEST_CHECK(config_prints("navigation_pressure_fallback", "veil\n"), true);
+    const char *fallbacks[] = { "keep", "none", "veil" };
+    const int fallback_values[] = { SPACE_NAVIGATION_PRESSURE_KEEP, SPACE_NAVIGATION_PRESSURE_NONE, SPACE_NAVIGATION_PRESSURE_VEIL };
+    for (int i = 0; i < array_count(fallbacks); ++i) {
+        char expected[16];
+        snprintf(expected, sizeof(expected), "%s\n", fallbacks[i]);
+        TEST_CHECK(config_sets("navigation_pressure_fallback", fallbacks[i]), true);
+        TEST_CHECK(g_window_manager.navigation_pressure_fallback, fallback_values[i]);
+        TEST_CHECK(config_prints("navigation_pressure_fallback", expected), true);
+    }
+    const char *invalid_fallback[] = { "crossfade", "off", "skip", "Veil", "1" };
+    for (int i = 0; i < array_count(invalid_fallback); ++i) {
+        TEST_CHECK(config_refuses("navigation_pressure_fallback", invalid_fallback[i]), true);
+        TEST_CHECK(g_window_manager.navigation_pressure_fallback, SPACE_NAVIGATION_PRESSURE_VEIL);
+    }
+
+    g_window_manager.navigation_effect = saved_effect;
+    g_window_manager.navigation_effect_type = saved_type;
+    g_window_manager.navigation_effect_duration = saved_duration;
+    g_window_manager.navigation_pressure_fallback = saved_fallback;
+});
+
 #undef TEST_COMMAND

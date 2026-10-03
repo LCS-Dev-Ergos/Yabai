@@ -161,6 +161,7 @@ typedef TEST_SIG(function);
     TEST_ENTRY(command_domain_state_changes)                  \
     TEST_ENTRY(config_navigation_fade_curve)                  \
     TEST_ENTRY(config_navigation_veil_blur)                   \
+    TEST_ENTRY(config_navigation_effect_settings)             \
     TEST_ENTRY(config_decimal_values)                         \
     TEST_ENTRY(window_value_bounds)                           \
     TEST_ENTRY(rule_grid_bounds)                              \

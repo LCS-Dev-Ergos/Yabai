@@ -45,6 +45,8 @@ static struct
     float active_window_opacity;
     float normal_window_opacity;
     uint32_t focused_window_id;
+    bool navigation_effect;
+    int navigation_pressure_fallback;
 } g_window_manager;
 
 static int g_space_manager;
@@ -132,6 +134,8 @@ static void reset(void)
     g_window_manager.active_window_opacity = 1.0f;
     g_window_manager.normal_window_opacity = 0.975f;
     g_window_manager.focused_window_id = 9;
+    g_window_manager.navigation_effect = true;
+    g_window_manager.navigation_pressure_fallback = SPACE_NAVIGATION_PRESSURE_VEIL;
 
     active_space = 1;
     timestamp = 1000000000;

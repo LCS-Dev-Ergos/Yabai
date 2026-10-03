@@ -22,6 +22,7 @@ static uint64_t ingress_time(void) { return now; }
 #include "../../src/navigation/admission.c"
 
 struct space_manager g_space_manager;
+struct window_manager g_window_manager;
 uint32_t display_manager_active_display_id(void) { return 1; }
 uint64_t space_manager_mission_control_space(int index) { return index >= 1 && index <= 6 ? index : 0; }
 uint64_t space_manager_first_space(void) { return 1; }
@@ -86,14 +87,18 @@ static void reset(void)
     switches = skips = veil_runs = 0;
     click_seconds = 1000.0;
     dispatch_delay = 0;
+    g_window_manager.navigation_effect_type = SPACE_NAVIGATION_EFFECT_CROSSFADE;
+    g_window_manager.navigation_effect_duration = 0.25f;
 }
 
+// Without an effect (NULL) the request names neither effect nor duration.
 static bool submit(const char *selector, const char *action, const char *effect, const char *duration)
 {
     char bytes[256];
     char *cursor = bytes + sizeof(int);
     const char *args[] = { "space", "--navigate", action, selector, effect, duration };
-    for (int i = 0; i < 6; ++i) {
+    int count = effect ? 6 : 4;
+    for (int i = 0; i < count; ++i) {
         size_t size = strlen(args[i]) + 1;
         memcpy(cursor, args[i], size);
         cursor += size;
@@ -211,6 +216,56 @@ static void test_veil(void)
     g_space_navigation_schedule.pacing = true;
 }
 
+// A request without effect and duration takes both from the daemon's
+// settings when it is read, joins a waiting request like one that names them,
+// and keeps what it took once queued.
+static void test_settings(void)
+{
+    reset();
+    assert(submit("3", "focus", NULL, NULL));
+    assert(switches == 1 && target[0] == 3 && durations[0] == .25f && crossfades[0] && !veils[0]);
+
+    reset();
+    g_window_manager.navigation_effect_type = SPACE_NAVIGATION_EFFECT_VEIL;
+    g_window_manager.navigation_effect_duration = 0.4f;
+    assert(submit("3", "move", NULL, NULL));
+    assert(switches == 1 && durations[0] == .4f && veils[0] && !crossfades[0]);
+
+    reset();
+    g_window_manager.navigation_effect_duration = 0.0f;
+    assert(submit("3", "focus", NULL, NULL));
+    assert(switches == 1 && durations[0] == 0.0f);
+
+    // A request that names its effect keeps it whatever the settings say.
+    reset();
+    g_window_manager.navigation_effect_type = SPACE_NAVIGATION_EFFECT_VEIL;
+    assert(submit("3", "focus", "crossfade", "0.2"));
+    assert(switches == 1 && crossfades[0] && !veils[0] && durations[0] == .2f);
+
+    // Relative presses join as before.
+    reset();
+    assert(submit("next", "focus", NULL, NULL));
+    assert(switches == 1 && target[0] == 2);
+    now += 200000000ULL;
+    assert(submit("next", "focus", NULL, NULL));
+    drain();
+    assert(switches == 2 && target[1] == 3);
+
+    // The settings at the time of reading stay with a queued request.
+    reset();
+    assert(submit("3", "focus", NULL, NULL));
+    now += 30000000ULL;
+    assert(submit("6", "focus", NULL, NULL));
+    g_window_manager.navigation_effect_type = SPACE_NAVIGATION_EFFECT_VEIL;
+    drain();
+    assert(switches == 2 && crossfades[1] && !veils[1]);
+
+    // An effect without a duration is refused.
+    reset();
+    assert(!submit("3", "focus", "veil", ""));
+    assert(switches == 0 && strstr(last_reply, "optionally"));
+}
+
 static void test_invalid_and_cancel(void)
 {
     const char *invalid[] = { "0", "7", "2147483647", "2147483648", "-1", "1.0", "+1", "1x" };
@@ -287,8 +342,9 @@ int main(void)
     test_mixed_and_wrapping("crossfade");
     test_mixed_and_wrapping("veil");
     test_veil();
+    test_settings();
     test_invalid_and_cancel();
     test_rejection();
-    puts("navigation ingress: numeric and mixed bursts, veil, wrapping, validation, rejection and cancellation passed");
+    puts("navigation ingress: numeric and mixed bursts, veil, settings, wrapping, validation, rejection and cancellation passed");
     return 0;
 }

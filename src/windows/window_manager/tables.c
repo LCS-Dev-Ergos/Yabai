@@ -449,6 +449,10 @@ void window_manager_init(struct window_manager *wm)
     wm->window_animation_easing = ease_out_circ_type;
     wm->navigation_fade_curve = SPACE_SNAPSHOT_CURVE_SMOOTH;
     wm->navigation_veil_blur = 0;
+    wm->navigation_effect = true;
+    wm->navigation_effect_type = SPACE_NAVIGATION_EFFECT_CROSSFADE;
+    wm->navigation_effect_duration = 0.25f;
+    wm->navigation_pressure_fallback = SPACE_NAVIGATION_PRESSURE_VEIL;
     wm->insert_feedback_color = rgba_color_from_hex(0xffd75f5f);
 
     table_init(&wm->application, 150, hash_wm, compare_wm);
