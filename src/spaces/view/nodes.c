@@ -330,15 +330,25 @@ struct window_node *window_node_fence(struct window_node *node, int dir)
 
 static struct window_node *view_find_min_depth_leaf_node(struct window_node *node)
 {
-    struct window_node *list[256] = { node };
+    int capacity = 256;
+    int count = 1;
+    struct window_node **list = ts_alloc_list(struct window_node *, capacity);
+    list[0] = node;
 
-    for (int i = 0, j = 0; i < 256; ++i) {
+    for (int i = 0; i < count; ++i) {
         if (window_node_is_leaf(list[i])) {
             return list[i];
         }
 
-        list[++j] = list[i]->left;
-        list[++j] = list[i]->right;
+        if (count + 2 > capacity) {
+            ts_expand(list,
+                      sizeof(struct window_node *) * capacity,
+                      sizeof(struct window_node *) * capacity);
+            capacity *= 2;
+        }
+
+        list[count++] = list[i]->left;
+        list[count++] = list[i]->right;
     }
 
     return NULL;

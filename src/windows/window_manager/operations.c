@@ -62,6 +62,10 @@ enum window_op_error window_manager_stack_window(struct space_manager *sm, struc
     struct view *a_view = window_manager_find_managed_window(wm, a);
     if (!a_view) return WINDOW_OP_ERROR_INVALID_SRC_NODE;
 
+    struct window_node *a_node = view_find_window_node(a_view, a->id);
+    if (!a_node) return WINDOW_OP_ERROR_INVALID_SRC_NODE;
+    if (a_node->window_count >= NODE_MAX_WINDOW_COUNT) return WINDOW_OP_ERROR_MAX_STACK;
+
     struct view *b_view = window_manager_find_managed_window(wm, b);
     if (b_view) {
         space_manager_untile_window(b_view, b);
@@ -73,10 +77,7 @@ enum window_op_error window_manager_stack_window(struct space_manager *sm, struc
         if (window_check_flag(b, WINDOW_STICKY)) window_manager_make_window_sticky(sm, wm, b, false);
     }
 
-    struct window_node *a_node = view_find_window_node(a_view, a->id);
-    if (a_node->window_count+1 >= NODE_MAX_WINDOW_COUNT) return WINDOW_OP_ERROR_MAX_STACK;
-
-    view_stack_window_node(a_node, b);
+    if (!view_stack_window_node(a_node, b)) return WINDOW_OP_ERROR_MAX_STACK;
     window_manager_add_managed_window(wm, b, a_view);
     window_manager_adjust_layer(b, LAYER_BELOW);
     scripting_addition_order_window(b->id, 1, a_node->window_order[1]);

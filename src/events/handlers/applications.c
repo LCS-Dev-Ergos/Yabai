@@ -55,6 +55,16 @@ static void application_ax_retry_succeeded(struct process *process)
     process->ax_retry_count = 0;
 }
 
+static bool application_batch_add_window(struct view *view, struct window *window, uint32_t insertion_point)
+{
+    if (!view_add_window_node_with_insertion_point(view, window, insertion_point)) return false;
+
+    window_manager_adjust_layer(window, LAYER_BELOW);
+    window_manager_add_managed_window(&g_window_manager, window, view);
+    view_set_flag(view, VIEW_IS_DIRTY);
+    return true;
+}
+
 static EVENT_HANDLER(APPLICATION_LAUNCHED)
 {
     struct process *process = context;
@@ -195,14 +205,10 @@ static EVENT_HANDLER(APPLICATION_LAUNCHED)
                 // This is necessary to make sure that we do not call the AX API for each modification to the tree.
                 //
 
-                window_manager_adjust_layer(window, LAYER_BELOW);
-                view_add_window_node_with_insertion_point(view, window, prev_window_id);
-                window_manager_add_managed_window(&g_window_manager, window, view);
-
-                view_set_flag(view, VIEW_IS_DIRTY);
-                view_list[view_count++] = view;
-
-                prev_window_id = window->id;
+                if (application_batch_add_window(view, window, prev_window_id)) {
+                    view_list[view_count++] = view;
+                    prev_window_id = window->id;
+                }
             }
         }
 
@@ -421,14 +427,10 @@ static EVENT_HANDLER(APPLICATION_VISIBLE)
             // This is necessary to make sure that we do not call the AX API for each modification to the tree.
             //
 
-            window_manager_adjust_layer(window, LAYER_BELOW);
-            view_add_window_node_with_insertion_point(view, window, prev_window_id);
-            window_manager_add_managed_window(&g_window_manager, window, view);
-
-            view_set_flag(view, VIEW_IS_DIRTY);
-            view_list[view_count++] = view;
-
-            prev_window_id = window->id;
+            if (application_batch_add_window(view, window, prev_window_id)) {
+                view_list[view_count++] = view;
+                prev_window_id = window->id;
+            }
         }
     }
 

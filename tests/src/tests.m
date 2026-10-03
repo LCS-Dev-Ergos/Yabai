@@ -103,6 +103,7 @@ typedef TEST_SIG(function);
 
 #include "area.c"
 #include "view_tree.c"
+#include "security_bounds.c"
 #include "view_layout.c"
 #include "window_rules.c"
 #include "command_domains.c"
@@ -152,6 +153,11 @@ typedef TEST_SIG(function);
     TEST_ENTRY(view_tree_rotation_and_mirror)                 \
     TEST_ENTRY(view_tree_balance_and_equalize)                \
     TEST_ENTRY(view_tree_fence_and_traversal)                  \
+    TEST_ENTRY(window_notifications_capacity)                 \
+    TEST_ENTRY(view_stack_capacity)                           \
+    TEST_ENTRY(view_stack_rejected_ingress)                   \
+    TEST_ENTRY(view_tree_min_depth_growth)                    \
+    TEST_ENTRY(cgimage_restore_alpha_tail)                    \
     TEST_ENTRY(view_layout_padding_and_gap_commands)          \
     TEST_ENTRY(view_layout_tree_commands)                      \
     TEST_ENTRY(view_layout_type_command)                       \
