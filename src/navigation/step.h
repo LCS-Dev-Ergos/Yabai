@@ -28,13 +28,48 @@
 // its activation over and hears its reports, including the end of a step in
 // flight.
 
+// The overlay a request without its own effect shows (config
+// navigation_effect_type).
+enum space_navigation_effect_type
+{
+    SPACE_NAVIGATION_EFFECT_CROSSFADE,
+    SPACE_NAVIGATION_EFFECT_VEIL,
+    SPACE_NAVIGATION_EFFECT_COUNT
+};
+
+static char *space_navigation_effect_type_str[] =
+{
+    [SPACE_NAVIGATION_EFFECT_CROSSFADE] = "crossfade",
+    [SPACE_NAVIGATION_EFFECT_VEIL]      = "veil"
+};
+
+// What a crossfade becomes while macOS reports memory pressure (config
+// navigation_pressure_fallback): the veil, which captures nothing; the
+// crossfade all the same; or Dock's switch alone.
+enum space_navigation_pressure_fallback
+{
+    SPACE_NAVIGATION_PRESSURE_VEIL,
+    SPACE_NAVIGATION_PRESSURE_KEEP,
+    SPACE_NAVIGATION_PRESSURE_NONE,
+    SPACE_NAVIGATION_PRESSURE_COUNT
+};
+
+static char *space_navigation_pressure_fallback_str[] =
+{
+    [SPACE_NAVIGATION_PRESSURE_VEIL] = "veil",
+    [SPACE_NAVIGATION_PRESSURE_KEEP] = "keep",
+    [SPACE_NAVIGATION_PRESSURE_NONE] = "none"
+};
+
 // One Desktop switch of a navigation. Its effect is the fade of the
 // destination's windows from `alpha`, a crossfade of the whole display, or a
 // veil over it; `crossfade` and `veil` exclude each other. A step that does
 // not activate only switches and shows its effect: another step queued after
 // it will. That step can find its Desktop current already,
 // a jump over a whole lap of Desktops or the number of the Desktop reached;
-// `settle` then still gives the Desktop's window focus.
+// `settle` then still gives the Desktop's window focus. The daemon's settings
+// apply when the step starts: with navigation_effect off it shows no effect,
+// and a crossfade under memory pressure follows navigation_pressure_fallback.
 struct space_navigation_step
 {
     uint64_t sid;

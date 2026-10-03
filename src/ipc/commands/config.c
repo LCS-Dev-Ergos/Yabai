@@ -218,6 +218,58 @@ static void handle_domain_config(FILE *rsp, struct token domain, char *message)
             } else {
                 daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.token.length, value.token.text, command.length, command.text, domain.length, domain.text);
             }
+        } else if (token_equals(command, COMMAND_CONFIG_NAVIGATION_EFFECT)) {
+            struct token value = get_token(&message);
+            if (!token_is_valid(value)) {
+                fprintf(rsp, "%s\n", bool_str[g_window_manager.navigation_effect]);
+            } else if (token_equals(value, ARGUMENT_COMMON_VAL_OFF)) {
+                g_window_manager.navigation_effect = false;
+            } else if (token_equals(value, ARGUMENT_COMMON_VAL_ON)) {
+                g_window_manager.navigation_effect = true;
+            } else {
+                daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
+            }
+        } else if (token_equals(command, COMMAND_CONFIG_NAVIGATION_EFFECT_TYPE)) {
+            struct token value = get_token(&message);
+            if (!token_is_valid(value)) {
+                fprintf(rsp, "%s\n", space_navigation_effect_type_str[g_window_manager.navigation_effect_type]);
+            } else {
+                bool match = false;
+                for (int i = 0; i < SPACE_NAVIGATION_EFFECT_COUNT; ++i) {
+                    if (token_equals(value, space_navigation_effect_type_str[i])) {
+                        g_window_manager.navigation_effect_type = i;
+                        match = true;
+                        break;
+                    }
+                }
+                if (!match) daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
+            }
+        } else if (token_equals(command, COMMAND_CONFIG_NAVIGATION_EFFECT_DURATION)) {
+            // The bounds of a duration that space --navigate names itself.
+            struct token_value value = token_to_value(get_token(&message));
+            float duration;
+            if (value.type == TOKEN_TYPE_INVALID) {
+                fprintf(rsp, "%f\n", g_window_manager.navigation_effect_duration);
+            } else if (token_value_to_finite_float(value, &duration) && duration >= 0.0f && duration <= 1.0f) {
+                g_window_manager.navigation_effect_duration = duration;
+            } else {
+                daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.token.length, value.token.text, command.length, command.text, domain.length, domain.text);
+            }
+        } else if (token_equals(command, COMMAND_CONFIG_NAVIGATION_PRESSURE_FALLBACK)) {
+            struct token value = get_token(&message);
+            if (!token_is_valid(value)) {
+                fprintf(rsp, "%s\n", space_navigation_pressure_fallback_str[g_window_manager.navigation_pressure_fallback]);
+            } else {
+                bool match = false;
+                for (int i = 0; i < SPACE_NAVIGATION_PRESSURE_COUNT; ++i) {
+                    if (token_equals(value, space_navigation_pressure_fallback_str[i])) {
+                        g_window_manager.navigation_pressure_fallback = i;
+                        match = true;
+                        break;
+                    }
+                }
+                if (!match) daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
+            }
         } else if (token_equals(command, COMMAND_CONFIG_SHADOW)) {
             struct token value = get_token(&message);
             if (!token_is_valid(value)) {

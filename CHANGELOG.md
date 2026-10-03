@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `space --navigate` takes its effect from the daemon when a request names none, as in `yabai -m space --navigate focus next`: the `navigation_effect_type` setting, `crossfade` (default) or `veil`, and `navigation_effect_duration`, seconds in [0, 1] (0.25 by default), choose it when the request is read, so key bindings can change them while the daemon runs without changing the requests they send
+- Add the `navigation_effect` setting, `on` (default) or `off`: off, every Desktop switch of `space --navigate` runs without an effect, including one the request names and steps already queued, and still switches and activates
+- Add the `navigation_pressure_fallback` setting for a crossfade while macOS reports memory pressure: `veil` (default) shows the veil, which captures nothing; `keep` crossfades all the same; `none` switches without an effect
+- The manual documents `space --navigate` and its settings, and the installed `yabai.1` is generated again from it: it had stopped at an earlier revision, without `yabai-msg`, the navigation settings and the refused values
+
+### Changed
+- Under memory pressure a crossfade becomes the veil instead of a switch without an effect; `navigation_pressure_fallback none` keeps the previous behaviour
+
+### Fixed
+- `yabai --help` links this project's manual for the running version; it linked a tag of another repository that does not exist there
 
 ## [8.0.0-lcs.5] - 2026-10-02
 ### Changed

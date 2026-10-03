@@ -60,6 +60,10 @@
 #define COMMAND_CONFIG_NAVIGATION_PACING     "space_navigation_pacing"
 #define COMMAND_CONFIG_NAVIGATION_FADE_CURVE "navigation_fade_curve"
 #define COMMAND_CONFIG_NAVIGATION_VEIL_BLUR  "navigation_veil_blur"
+#define COMMAND_CONFIG_NAVIGATION_EFFECT            "navigation_effect"
+#define COMMAND_CONFIG_NAVIGATION_EFFECT_TYPE       "navigation_effect_type"
+#define COMMAND_CONFIG_NAVIGATION_EFFECT_DURATION   "navigation_effect_duration"
+#define COMMAND_CONFIG_NAVIGATION_PRESSURE_FALLBACK "navigation_pressure_fallback"
 
 #define SELECTOR_CONFIG_SPACE                "--space"
 

@@ -273,6 +273,17 @@ int main(void)
     assert(DIRECTION("space", "--navigate", "focus", "next", "0.95x", "0.1") == 0);
     assert(DIRECTION("space", "--navigate", "focus", "next", "0.95") == 0);
     assert(DIRECTION("space", "--navigate", "focus", "next", "0.95", "0.1", "extra") == 0);
+
+    // Without effect and duration the daemon's settings choose them.
+    assert(DIRECTION("space", "--navigate", "focus", "next") == 1);
+    assert(DIRECTION("space", "--navigate", "focus", "prev") == -1);
+    assert(DIRECTION("space", "--navigate", "focus", "4") == SPACE_NAVIGATION_ABSOLUTE);
+    assert(DIRECTION("space", "--navigate", "move", "next") == 0);
+    assert(DIRECTION("space", "--navigate", "focus", "nexts") == 0);
+    assert(DIRECTION("space", "--navigate", "focus", "") == 0);
+    assert(DIRECTION("space", "--navigate", "focus", "next", "") == 0);
+    assert(DIRECTION("space", "--navigate", "focus", "next", "veil", "") == 0);
+    assert(DIRECTION("space", "--navigate", "focus") == 0);
     assert(DIRECTION("space", "--focus", "next") == 0);
     assert(DIRECTION("query", "--spaces") == 0);
 

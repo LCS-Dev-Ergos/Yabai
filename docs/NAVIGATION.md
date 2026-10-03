@@ -3,6 +3,7 @@
 This fork adds one daemon request for keyboard and bar navigation:
 
 ```sh
+yabai -m space --navigate focus next
 yabai -m space --navigate focus next crossfade 0.25
 yabai -m space --navigate focus next veil 0.25
 yabai -m space --navigate focus prev 0.95 0.1
@@ -10,16 +11,30 @@ yabai -m space --navigate focus 3 crossfade 0.25
 yabai -m space --navigate move 3 0.95 0.1
 ```
 
-Arguments are the action (`focus` or `move`), a space selector, the effect and
-its duration in `[0,1]` seconds. The effect is `crossfade`, a
+Arguments are the action (`focus` or `move`), a space selector and, optionally,
+the effect and its duration in `[0,1]` seconds. The effect is `crossfade`, a
 [crossfade of the display](EFFECTS.md#desktop-crossfade), `veil`, a
 [veil over the display](EFFECTS.md#desktop-veil), or the starting
 opacity in `(0,1]` of the destination's windows. A zero duration disables it.
-`yabai -m config navigation_fade_curve smooth|ease_out` sets how the crossfade
-and the veil fade out (see [effects](EFFECTS.md#fade-curve)).
-`yabai -m config navigation_veil_blur RADIUS` (0 to 100, off by default)
-blurs what lies below the veil, at the price of about 130 ms on the event loop
-(see [effects](EFFECTS.md#veil-background-blur)).
+A request that names neither takes both from the daemon's settings when it is
+read, so a key binding can stay the same while they change.
+
+### Effect settings
+
+| Setting | Values | Default | Applies to |
+|---|---|---|---|
+| `navigation_effect` | `on`, `off` | `on` | every step: `off` shows no effect, whatever the request named, and still switches |
+| `navigation_effect_type` | `crossfade`, `veil` | `crossfade` | requests that name no effect |
+| `navigation_effect_duration` | seconds in `[0,1]` | `0.25` | requests that name no effect |
+| `navigation_pressure_fallback` | `veil`, `keep`, `none` | `veil` | crossfade steps while macOS reports memory pressure (see [effects](EFFECTS.md#desktop-crossfade)) |
+| `navigation_fade_curve` | `smooth`, `ease_out` | `smooth` | how the crossfade and the veil fade out (see [effects](EFFECTS.md#fade-curve)) |
+| `navigation_veil_blur` | `0` to `100` | `0` | blur below the veil, at about 130 ms on the event loop (see [effects](EFFECTS.md#veil-background-blur)) |
+
+Each is read and set with `yabai -m config` and lasts until the daemon exits;
+the configuration file sets them at start. `navigation_effect` and
+`navigation_pressure_fallback` are read when a step starts, so they also reach
+steps already queued. The type and duration are taken when a request is read,
+the curve and the blur when an overlay is created.
 `next` and `prev` wrap to the first/last space, like the previous shell
 script. Other selectors follow the ordinary space selectors.
 `move` sends the focused window to the destination and follows it. It does
@@ -214,14 +229,23 @@ client's successful return acknowledges queuing, not completed navigation.
 
 ## Integration
 
-The Dotfiles `home/desktop/yabai/space.sh` can keep its existing entry points
-and delegate directly with `exec`:
+A key binding sends the action and selector only, and leaves the effect to
+the settings:
 
 ```sh
-exec "$yabai" -m space --navigate "$action" "$selector" "$effect" "$duration"
+exec "$yabai_msg" space --navigate "$action" "$selector"
 ```
 
-Update the package and script together. The current `crossfade` renderer runs
+Other bindings change the settings while the daemon runs, for instance:
+
+```sh
+yabai -m config navigation_effect off
+yabai -m config navigation_effect_type veil
+yabai -m config navigation_fade_curve ease_out
+```
+
+A release before 8.0.0 refuses a request without effect and the four effect
+settings, so update the package and the bindings together. The current `crossfade` renderer runs
 in the daemon and uses the ordinary payload Space-focus operation. It requires
 macOS 15.2+ and existing Screen Recording permission; unavailable capture falls
 back to an ordinary switch. The `veil` needs neither: it works wherever the
@@ -233,15 +257,17 @@ in `2.1.31-lcs.13` (see [effects](EFFECTS.md#space-alpha-crossfade-removed)).
 `navigation_tests` executes the production navigation implementation with
 simulated OS calls. It covers repeat bursts, opacity restoration on failure,
 custom opacity, window eligibility, display focus, window moves, the starting
-Desktop of relative navigation and the raise decision.
+Desktop of relative navigation, the raise decision, effects turned off and the
+three memory-pressure fallbacks of a crossfade step.
 `navigation_spaces_tests` reads a constructed `SLSCopyManagedDisplaySpaces`
 reply and checks its lookups and fallbacks. `navigation_queue_tests` covers request recognition and merging, and the
 daemon fuzz target runs the request check. The upstream unity-test executable
 also checks numeric argument validation. `navigation_ingress_tests` uses actual
 socket admission, the token/selector parser, command and schedule with simulated
 host services; it covers numeric and mixed bursts, wrapping, duplicate targets,
-invalid input, rejected queues and cancellation, and that `veil` reaches the
-step, is timed and merged like `crossfade`, and no other word is accepted. `navigation_captured_schedule_tests`
+invalid input, rejected queues and cancellation, that `veil` reaches the
+step, is timed and merged like `crossfade`, and no other word is accepted, and
+that a request without effect takes the type and duration set when it was read. `navigation_captured_schedule_tests`
 connects the real asynchronous step and schedule to check clicks, superseded
 captures, late callbacks, destination and focus decisions; `navigation_tests`
 and the schedule tests also run the veil step and distinguish it from the

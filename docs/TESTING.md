@@ -56,8 +56,10 @@ editor's root `compile_commands.json` symlink.
   gives a Desktop it finds current, and a queued crossfade that switches when
   its capture's event comes: with or without the image, stopped by a
   cancellation, a click, Mission Control or a display animation, abandoned by
-  another command, or with its window gone; numeric arguments are also
-  covered by the unity tests.
+  another command, or with its window gone. It also runs steps with
+  `navigation_effect` off and a crossfade under memory pressure with each
+  `navigation_pressure_fallback`; numeric arguments are also covered by the
+  unity tests.
 - `navigation_spaces_tests` reads a constructed Desktop snapshot: mission-control
   order across displays, visibility, fullscreen type, the Desktops visible on
   other displays, the fallback to WindowServer for unknown or unreadable data and
@@ -317,6 +319,11 @@ at run time: their endpoints, monotony and the point where 5% of the change
 becomes visible, and that an overlay keeps the curve configured when it was
 created. `navigation_tests`, the schedule and ingress tests and the unity tests
 cover the veil step, the `veil` request and `config navigation_fade_curve`.
+The unity tests check get, set and refusal of `navigation_effect`,
+`navigation_effect_type`, `navigation_effect_duration` (`[0,1]`, finite) and
+`navigation_pressure_fallback`; the ingress tests check that a request
+without effect takes the type and duration set when it was read, and the
+queue tests that it is recognised and merged like one that names them.
 
 ### Transition timing
 

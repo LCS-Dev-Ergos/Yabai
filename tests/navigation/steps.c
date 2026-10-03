@@ -151,12 +151,39 @@ static void test_captured_steps(void)
     assert(capture_calls == 1 && focus_calls == 1 && snapshot_starts == 0 && window_focus_calls == 1);
     assert(completed_calls == 0);
 
-    // Under memory pressure nothing is captured: the step switches at once.
+    // Under memory pressure nothing is captured. By default the crossfade
+    // becomes the veil, which runs to its end at once.
     reset();
     memory_pressure = true;
     assert(begin_step(2, true, true) == SPACE_NAVIGATION_SWITCHED);
-    assert(capture_calls == 0 && focus_calls == 1 && snapshot_starts == 0 && window_focus_calls == 1);
+    assert(capture_calls == 0 && veil_prepares == 1 && snapshot_starts == 1 && switched_duration == .2f);
+    assert(focus_calls == 1 && window_focus_calls == 1);
     assert(completed_calls == 0 && !space_navigation_flight.active);
+
+    // With `none` the step switches at once without an effect.
+    reset();
+    memory_pressure = true;
+    g_window_manager.navigation_pressure_fallback = SPACE_NAVIGATION_PRESSURE_NONE;
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_SWITCHED);
+    assert(capture_calls == 0 && veil_prepares == 0 && focus_calls == 1 && snapshot_starts == 0);
+    assert(window_focus_calls == 1 && completed_calls == 0 && !space_navigation_flight.active);
+
+    // With `keep` the crossfade captures as without pressure.
+    reset();
+    memory_pressure = true;
+    g_window_manager.navigation_pressure_fallback = SPACE_NAVIGATION_PRESSURE_KEEP;
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_PENDING);
+    assert(capture_calls == 1 && veil_prepares == 0 && focus_calls == 0);
+    space_navigation_step_captured(capture_token);
+    assert(snapshot_starts == 1 && focus_calls == 1 && completed_calls == 1 && completed_success);
+
+    // With effects off nothing is captured or shown, and the step still
+    // switches and activates.
+    reset();
+    g_window_manager.navigation_effect = false;
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_SWITCHED);
+    assert(capture_calls == 0 && veil_prepares == 0 && snapshot_starts == 0 && switched_duration == 0.0f);
+    assert(focus_calls == 1 && window_focus_calls == 1 && completed_calls == 0);
 
     // Steps without a capture run to their end at once.
     reset();
@@ -233,13 +260,47 @@ static void test_steps(void)
     assert(run_step(2, true, true));
     assert(snapshot_prepares == 1 && snapshot_starts == 1 && focus_calls == 1);
 
-    // Under memory pressure the step switches without a crossfade, and
-    // activates as usual.
+    // Under memory pressure the crossfade becomes the veil by default, gives
+    // way to Dock's switch alone with `none`, and stays with `keep`. Each
+    // step activates as usual.
     reset();
     memory_pressure = true;
     assert(run_step(2, true, true));
-    assert(snapshot_prepares == 0 && snapshot_starts == 0 && focus_calls == 1 && switched_duration == 0.0f);
+    assert(snapshot_prepares == 0 && veil_prepares == 1 && snapshot_starts == 1 && switched_duration == .2f);
+    assert(focus_calls == 1 && window_focus_calls == 1 && activated_id == 1);
+
+    reset();
+    memory_pressure = true;
+    g_window_manager.navigation_pressure_fallback = SPACE_NAVIGATION_PRESSURE_NONE;
+    assert(run_step(2, true, true));
+    assert(snapshot_prepares == 0 && veil_prepares == 0 && snapshot_starts == 0 && switched_duration == 0.0f);
+    assert(focus_calls == 1 && window_focus_calls == 1 && activated_id == 1);
+
+    reset();
+    memory_pressure = true;
+    g_window_manager.navigation_pressure_fallback = SPACE_NAVIGATION_PRESSURE_KEEP;
+    assert(run_step(2, true, true));
+    assert(snapshot_prepares == 1 && veil_prepares == 0 && snapshot_starts == 1 && switched_duration == .2f);
     assert(window_focus_calls == 1 && activated_id == 1);
+
+    // Without pressure the fallback changes nothing.
+    reset();
+    g_window_manager.navigation_pressure_fallback = SPACE_NAVIGATION_PRESSURE_NONE;
+    assert(run_step(2, true, true));
+    assert(snapshot_prepares == 1 && veil_prepares == 0 && snapshot_starts == 1);
+
+    // With effects off the step shows nothing, whatever its request named,
+    // and switches and activates as usual. The window fade is left out too.
+    reset();
+    g_window_manager.navigation_effect = false;
+    assert(run_step(2, true, true));
+    assert(snapshot_prepares == 0 && veil_prepares == 0 && snapshot_starts == 0 && switched_duration == 0.0f);
+    assert(focus_calls == 1 && window_focus_calls == 1 && activated_id == 1);
+
+    reset();
+    g_window_manager.navigation_effect = false;
+    assert(run_step(2, false, true));
+    assert(focus_calls == 1 && window_focus_calls == 1 && opacity_calls == 0);
 
     // An intermediate step switches with its effect, but activates nothing
     // and does not ask WindowServer about a raise.

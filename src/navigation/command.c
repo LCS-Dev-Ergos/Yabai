@@ -166,17 +166,22 @@ static void space_navigation_run_request(FILE *rsp, char **message)
     uint64_t current = space_navigation_active_space();
     struct selector selector = space_navigation_selector(message, current, move);
 
+    // A request that names no effect and duration takes both from the
+    // daemon's settings, so they can change without changing its sender.
     float alpha = 1.0f;
-    float duration;
+    float duration = g_window_manager.navigation_effect_duration;
     struct token from = get_token(message);
     struct token time = get_token(message);
-    bool crossfade = token_equals(from, "crossfade");
-    bool veil = token_equals(from, "veil");
+    bool settings = from.length == 0;
+    bool crossfade = settings ? g_window_manager.navigation_effect_type == SPACE_NAVIGATION_EFFECT_CROSSFADE
+                              : token_equals(from, "crossfade");
+    bool veil = settings ? g_window_manager.navigation_effect_type == SPACE_NAVIGATION_EFFECT_VEIL
+                         : token_equals(from, "veil");
 
     if (!current || !selector.did_parse || !selector.sid
-        || (!crossfade && !veil && (!space_navigation_number(from, &alpha) || alpha == 0.0f))
-        || !space_navigation_number(time, &duration)) {
-        daemon_fail(rsp, "navigate expects SPACE_SEL, crossfade, veil or an opacity in (0,1], and a duration in [0,1] seconds.\n");
+        || (!settings && !crossfade && !veil && (!space_navigation_number(from, &alpha) || alpha == 0.0f))
+        || (!settings && !space_navigation_number(time, &duration))) {
+        daemon_fail(rsp, "navigate expects SPACE_SEL, then optionally crossfade, veil or an opacity in (0,1] and a duration in [0,1] seconds.\n");
         return;
     }
 
