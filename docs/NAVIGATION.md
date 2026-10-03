@@ -100,8 +100,8 @@ Desktop from a bounded queue, in the order requested:
   takes focus once 150 ms have passed without a request, without a switch; a
   click or another command in that time decides the focus instead.
 - A veil step captures nothing, so it never waits for the schedule: it shows the
-  veil, waits two display refreshes for it to reach the screen (about 33 ms at
-  60 Hz), switches and activates within one run, as a window fade does. It
+  veil, waits three display refreshes for it to reach the screen (about 50 ms
+  at 60 Hz), switches and activates within one run, as a window fade does. It
   follows the rules of a crossfade step otherwise: a burst's quick steps, a
   visible or fullscreen destination and a fullscreen source show no veil.
   Neither does a destination without a window to show.

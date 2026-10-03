@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Fixed
+- The veil no longer flashes light grey as it appears, nor the crossfade's image white. WindowServer can show a new window's first frame from a white backing before its contents, whatever was drawn before the order: the veil, ordered in at its opacity, showed that frame in 4 of 45 switches. Every overlay is now ordered in at alpha 0 and raised one refresh later, which a probe of 80 orders never saw flash. The switch waits one refresh longer for the veil: 50 ms after its order at 60 Hz instead of 33 ms
 - Window animations draw each window's image in the colour space it was captured in. Any other space made CoreGraphics convert every pixel, about 70 ms instead of 15 ms for a window filling a 5K display, and keep a buffer the size of the window for each conversion until the daemon quit: after two hours with animations on, 34 buffers held 1.8 GB of address space and 110 MB in swap. A window below full opacity, whose alpha is restored first, keeps its colour space and pixel layout the same way
 
 ## [8.0.1] - 2026-10-03

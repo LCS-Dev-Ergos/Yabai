@@ -149,7 +149,11 @@ late the event loop comes to it.
 The image is drawn into the window's backing before the window is shown: a
 Core Animation remote surface presented uninitialized white frames during
 rapid preparation and cancellation (see the
-[lcs.24 report](reports/Snapshot-Continuity_7.1.25-lcs24.md)). The window takes the capture's
+[lcs.24 report](reports/Snapshot-Continuity_7.1.25-lcs24.md)). Drawing first
+is not enough on its own: WindowServer can composite a new window's first
+frame from a white backing and its contents from the next. The overlay is
+therefore ordered in at alpha 0 and raised to its alpha one refresh later, as
+the veil is (see [first frame](#first-frame)). The window takes the capture's
 colour space, the display's own profile, before its context is created.
 Without it every pixel was converted to the window's default space: the draw
 of a 4112 × 2658 capture took 46–69 ms, against 15–18 ms without conversion,
@@ -263,8 +267,10 @@ response after 35-60 ms, against about 280 ms for the crossfade, and the
 transition complete after 255-295 ms, against about 455 ms. Opacity 0.3 and 0.5
 were not perceptibly different from 0.4.
 
-Two display refreshes pass between ordering the veil and asking Dock to switch
-(`min(2 × interval, 1/30 s)`; 33 ms at 60 Hz). WindowServer can present a new
+The veil is ordered in at alpha 0 and takes its opacity one refresh later
+(see [first frame](#first-frame)); two more display refreshes pass before Dock
+is asked to switch (`min(2 × interval, 1/30 s)`; 50 ms at 60 Hz in all, 33
+ms through 8.0.1). WindowServer can present a new
 window on a new auxiliary Space after Dock has switched: switching straight
 after the order showed the destination unveiled in 2 of 6 trials, while
 waiting 17 or 34 ms did so in none of 18. Two refreshes covered every flash
@@ -283,8 +289,36 @@ transition under Reduce Motion is a crossfade.
 A veil step runs to its end within one request: unlike a queued
 crossfade it waits for no capture and never leaves the schedule pending.
 Mission Control and a display animation stop it when the step is planned; a
-click during its two refreshes removes the veil and stops the step, as it does
+click during its three refreshes removes the veil and stops the step, as it does
 during a synchronous crossfade's capture. Window moves keep their effect.
+
+### First frame
+
+WindowServer can composite a newly ordered window's first frame from a white
+backing, its contents arriving with the next frame, even when they were drawn
+and flushed before the order. In a process running AppKit, as the daemon does,
+`tools/effects/first_frame_probe.m` built the veil's window off the main
+thread and ordered it in over a dark Desktop: at 0.4 alpha, 11 of 40 orders
+showed one light grey frame (white at 0.4); a black full-screen window at
+alpha 1 with a 2× backing, like the crossfade's overlay, showed a white frame
+in 4 of 40. The installed 8.0.1 showed the grey frame in 4 of 45 veil
+switches, recorded at 60 frames per second. Waiting for the main queue, where
+SkyLight commits the contents, did not help (9 of 40). Ordered in at alpha 0
+and raised one refresh later, none of 80 orders flashed, so every overlay is
+ordered in invisible: the crossfade's image and the plain veil are raised one
+refresh after the order, and the blurred veil's fade-in starts then.
+
+Build and run the probe with Screen Recording permission; it dims the main
+display briefly once per trial and changes no Desktop:
+
+```sh
+xcrun clang -fobjc-arc -O2 tools/effects/first_frame_probe.m \
+  -F/System/Library/PrivateFrameworks -framework Cocoa -framework SkyLight \
+  -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo \
+  -o build/tools/first-frame-probe
+build/tools/first-frame-probe 40          # the veil: 0.4, one pixel per point
+build/tools/first-frame-probe 40 1 2      # the crossfade's overlay
+```
 
 ### Veil background blur
 
@@ -312,7 +346,7 @@ brightness still showed as a jump, and the blur doubled Dock's switch time
 reached the screen later than the two refreshes. Showing it completely first
 keeps both the pop and the contention out of the switch, at the price of the
 event loop being held for about 130 ms at 60 Hz (100 ms of fade-in, up to one
-refresh of rounding and the two refreshes), against 33 ms for the plain veil.
+refresh of rounding and the two refreshes), against 50 ms for the plain veil.
 That cost, and the GPU load of a live blur, are why the option is off by
 default. A radius of 0 is exactly the plain veil: opacity 0.4, an opaque fill
 and no fade-in.
