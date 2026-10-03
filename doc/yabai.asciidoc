@@ -227,7 +227,7 @@ Global Settings
 *navigation_effect_type* ['crossfade|veil']::
     Effect of a *space --navigate* request that names none. +
     'crossfade' blends the display from an image of the outgoing Desktop and needs Screen Recording permissions. +
-    'veil' fades a dark veil out over the destination and captures nothing. Default 'crossfade'.
+    'veil' fades a dark veil out over the destination and captures nothing; a Desktop without windows switches without it. Default 'crossfade'.
 
 *navigation_effect_duration* ['<0-1>']::
     Duration in seconds of the effect of a *space --navigate* request that names none. +

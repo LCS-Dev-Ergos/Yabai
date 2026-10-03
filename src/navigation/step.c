@@ -360,7 +360,12 @@ static bool space_navigation_run_resolved(uint64_t current, struct space_navigat
 
     bool prepared = false;
 
-    if (space_navigation_overlays(current, step)) {
+    // Over a Desktop without a window to show, the veil only darkens the
+    // wallpaper and lifts again, which reads as a flash: such a step switches
+    // without it. The window is the one the step would activate.
+    bool veil_shows = !step->veil || plan.focus_id != 0;
+
+    if (veil_shows && space_navigation_overlays(current, step)) {
         uint64_t capture_started = read_os_timer();
         float interval = space_navigation_frame_interval(plan.display);
         prepared = step->veil ? space_navigation_veil_prepare(plan.display, plan.sid, interval)

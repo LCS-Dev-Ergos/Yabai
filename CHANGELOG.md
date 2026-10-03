@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- The veil is left out when the destination Desktop has no window to show, the one the switch would activate or the window it moves there: over an empty Desktop it only darkened the wallpaper and lifted again, which read as a flash. The switch is then Dock's alone; the crossfade keeps blending to the wallpaper
 
 ## [8.0.0] - 2026-10-03
 ### Added
