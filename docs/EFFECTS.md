@@ -273,7 +273,11 @@ still reach the screen late. A veil still shown when Dock fails, or that Dock
 never answers, goes with the crossfade's one-second watchdog.
 
 The veil follows the crossfade's conditions: a duration (a quick burst has
-none), a destination that is hidden, and ordinary Desktops on both sides.
+none), a destination that is hidden, and ordinary Desktops on both sides. It
+also needs a window to reveal on the destination, the one the step would
+activate or the window it moves there: over an empty Desktop it only darkens
+the wallpaper and lifts again, which reads as a flash, so the switch is Dock's
+alone. The crossfade has no such condition; it blends to the wallpaper.
 Reduce Motion keeps it, as it keeps the crossfade, whose own Desktop
 transition under Reduce Motion is a crossfade.
 A veil step runs to its end within one request: unlike a queued

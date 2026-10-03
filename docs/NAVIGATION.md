@@ -22,7 +22,7 @@ read, so a key binding can stay the same while they change.
 ### Effect settings
 
 | Setting | Values | Default | Applies to |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `navigation_effect` | `on`, `off` | `on` | every step: `off` shows no effect, whatever the request named, and still switches |
 | `navigation_effect_type` | `crossfade`, `veil` | `crossfade` | requests that name no effect |
 | `navigation_effect_duration` | seconds in `[0,1]` | `0.25` | requests that name no effect |
@@ -104,6 +104,7 @@ Desktop from a bounded queue, in the order requested:
   60 Hz), switches and activates within one run, as a window fade does. It
   follows the rules of a crossfade step otherwise: a burst's quick steps, a
   visible or fullscreen destination and a fullscreen source show no veil.
+  Neither does a destination without a window to show.
 - A step with more queued behind it, and a step a held key repeats, blend in
   125 ms at most; the last of separate presses keeps the requested duration.
   The first step of a burst keeps it too: it starts before the next press is

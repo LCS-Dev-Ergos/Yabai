@@ -57,8 +57,8 @@ editor's root `compile_commands.json` symlink.
   its capture's event comes: with or without the image, stopped by a
   cancellation, a click, Mission Control or a display animation, abandoned by
   another command, or with its window gone. It also runs steps with
-  `navigation_effect` off and a crossfade under memory pressure with each
-  `navigation_pressure_fallback`; numeric arguments are also covered by the
+  `navigation_effect` off, a crossfade under memory pressure with each
+  `navigation_pressure_fallback`, and a veil over a Desktop without windows; numeric arguments are also covered by the
   unity tests.
 - `navigation_spaces_tests` reads a constructed Desktop snapshot: mission-control
   order across displays, visibility, fullscreen type, the Desktops visible on
