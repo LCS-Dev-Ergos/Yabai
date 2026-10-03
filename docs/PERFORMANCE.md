@@ -475,6 +475,42 @@ and lets presses queued during a step's capture take its activation over, so
 a held key's steps and a burst's first step no longer activate an application
 and wait for its focus. Raw evidence is in ignored `build/baseline/lcs29`.
 
+## Desktop switches and memory on 8.0.1
+
+On 2026-10-03 8.0.1 ran on the same MacBook Pro (16 GB) with the two
+U3223QE at 2560 × 1440 points, 5120 × 2880 pixels, while swap held about
+6 GB and the compressor 5–6 GB. Desktops 1–5 of the main display held one
+window each: two terminals, ChatGPT and two VS Code windows. Each run made 30
+switches 0.3 or 0.6 s apart; `top` gave each process's page faults, 16 KB
+each:
+
+| Run | All processes | WindowServer | yabai |
+| --- | --- | --- | --- |
+| Idle, 11 s | 0.6–1.5 GB | 80–210 MB | 0 |
+| `space --focus`, Dock's switch without the navigation schedule | 11.9–12.9 GB | 630–660 MB | 7–10 MB |
+| `space --navigate`, effects off | 10.4–13.1 GB | 640–830 MB | 6–20 MB |
+| Veil | 19.6 GB | 1.1 GB | 0.6 GB |
+| Crossfade 0.25 s, pressure fallback `keep` | 24.6 GB | 1.2 GB | 3.8 GB |
+
+Without an effect the daemon faults well under 1 MB per switch, and
+`space --navigate` costs what Dock's own switch costs. The rest is the
+applications whose windows come into view and draw them again: the ChatGPT
+and VS Code renderers 0.6–2 GB each per run, and a menu-bar utility with no
+window on those Desktops 1–3 GB. The veil adds its window's backing, one byte
+per point and channel, about 20 MB per switch; the crossfade the capture and
+its copy at full resolution, about 130 MB per switch in the daemon and 15 MB
+in WindowServer. Under memory pressure the crossfade becomes the veil by
+default (`navigation_pressure_fallback`).
+
+The daemon, two hours old with window animations on, held 34 blocks of
+23–78 MB that CoreGraphics' colour-converter cache kept: 1.8 GB of address
+space, 110 MB of it in swap. Each animation proxy drew its window's capture,
+in the display's profile, into a window in another colour space. An isolated
+probe of the same calls on a 5072 × 2760 window took 64–73 ms per draw and kept
+54 MB after the image was released; with the proxy in the capture's colour
+space, 10–16 ms and 0.3 MB. The crossfade already draws in the capture's
+space, and a sample of ten crossfades found only a memory copy.
+
 ## Command start-up after lcs.3
 
 A trivial `yabai -m config debug_output` against the idle lcs.3 daemon took
