@@ -1,7 +1,7 @@
 // Window animations: proxy windows built on short-lived threads, frames on a
-// CVDisplayLink thread that also asks Dock to swap proxies, and
-// JankyBorders notifications. window_animations_lock guards what those
-// threads share with the event loop.
+// CVDisplayLink thread that also asks Dock to swap proxies, and JankyBorders
+// notifications. window_animations_lock guards what those threads share with the
+// event loop.
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
@@ -306,13 +306,16 @@ void window_manager_animate_window(struct window_capture capture)
 void window_manager_set_window_frame(struct window *window, float x, float y, float width, float height)
 {
     //
-    // NOTE(asmvik): Attempting to check the window frame cache to prevent unnecessary movement and resize calls to the AX API
-    // is not reliable because it is possible to perform operations that should be applied, at a higher rate than the AX API events
-    // are received, causing our cache to become out of date and incorrectly guard against some changes that **should** be applied.
-    // This causes the window layout to **not** be modified the way we expect.
+    // NOTE(asmvik): Attempting to check the window frame cache to prevent
+    // unnecessary movement and resize calls to the AX API is not reliable because it
+    // is possible to perform operations that should be applied, at a higher rate
+    // than the AX API events are received, causing our cache to become out of date
+    // and incorrectly guard against some changes that **should** be applied. This
+    // causes the window layout to **not** be modified the way we expect.
     //
-    // A possible solution is to use the faster CG window notifications, as they are **a lot** more responsive, and can be used to
-    // track changes to the window frame in real-time without delay.
+    // A possible solution is to use the faster CG window notifications, as they are
+    // **a lot** more responsive, and can be used to track changes to the window
+    // frame in real-time without delay.
     //
 
     AX_ENHANCED_UI_WORKAROUND(window->application->ref, {
@@ -322,7 +325,8 @@ void window_manager_set_window_frame(struct window *window, float x, float y, fl
         CGSize size = CGSizeMake(width, height);
         CFTypeRef size_ref = AXValueCreate(kAXValueTypeCGSize, (void *) &size);
 
-        // NOTE(asmvik): Due to macOS constraints (visible screen-area), we might need to resize the window *before* moving it.
+        // NOTE(asmvik): Due to macOS constraints (visible screen-area), we might
+        // need to resize the window *before* moving it.
         if (size_ref) AXUIElementSetAttributeValue(window->ref, kAXSizeAttribute, size_ref);
 
         if (position_ref) {
@@ -330,7 +334,8 @@ void window_manager_set_window_frame(struct window *window, float x, float y, fl
             CFRelease(position_ref);
         }
 
-        // NOTE(asmvik): Due to macOS constraints (visible screen-area), we might need to resize the window *after* moving it.
+        // NOTE(asmvik): Due to macOS constraints (visible screen-area), we might
+        // need to resize the window *after* moving it.
         if (size_ref) {
             AXUIElementSetAttributeValue(window->ref, kAXSizeAttribute, size_ref);
             CFRelease(size_ref);
