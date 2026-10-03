@@ -345,7 +345,7 @@ static bool space_navigation_switch_fade(struct space_navigation_plan *plan, str
 }
 
 // Runs a step whose effect is resolved to its end. A crossfade waits here for its
-// capture, a veil for its two refreshes.
+// capture, a veil for its three refreshes.
 static bool space_navigation_run_resolved(uint64_t current, struct space_navigation_step *step)
 {
     if (current == step->sid) return step->activate && step->settle ? space_navigation_settle(step->sid) : true;
