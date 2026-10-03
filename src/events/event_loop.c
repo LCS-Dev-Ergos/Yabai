@@ -1,30 +1,58 @@
 // Owns the event queue consumer, shared event flags and handler dispatch.
 // The included domain handlers run on the event-loop thread.
 
+#include <limits.h>
+
 volatile bool __pending_window_focus;
 volatile uint32_t __pending_window_focus_id;
 volatile bool __pending_gesture;
 volatile uint64_t __last_gesture_time;
 volatile uint64_t __last_cmd_tab_time;
 
+static bool window_notification_list_append(uint32_t **window_list, int *window_count, int *capacity, uint32_t window_id)
+{
+    if (*window_count == *capacity) {
+        if (*capacity > INT_MAX / 2) return false;
+
+        int new_capacity = *capacity ? *capacity * 2 : 64;
+        uint32_t *resized = realloc(*window_list, sizeof(uint32_t) * new_capacity);
+        if (!resized) return false;
+
+        *window_list = resized;
+        *capacity = new_capacity;
+    }
+
+    (*window_list)[(*window_count)++] = window_id;
+    return true;
+}
+
 void update_window_notifications(void)
 {
     int window_count = 0;
-    uint32_t window_list[1024] = {0};
+    int capacity;
+    uint32_t *window_list;
+    bool success = true;
 
     if (workspace_is_macos_sequoia() || workspace_is_macos_tahoe() || workspace_is_macos_goldengate()) {
         // NOTE(asmvik): Subscribe to all windows because of window_destroyed (and ordered) notifications
+        capacity = g_window_manager.window.count;
+        window_list = capacity ? malloc(sizeof(uint32_t) * capacity) : NULL;
+        if (capacity && !window_list) return;
         table_for (struct window *window, g_window_manager.window, {
-            window_list[window_count++] = window->id;
+            if (success) success = window_notification_list_append(&window_list, &window_count, &capacity, window->id);
         })
     } else {
         // NOTE(asmvik): Subscribe to windows that have a feedback_border because of window_ordered notifications
+        capacity = g_window_manager.insert_feedback.count;
+        window_list = capacity ? malloc(sizeof(uint32_t) * capacity) : NULL;
+        if (capacity && !window_list) return;
         table_for (struct window_node *node, g_window_manager.insert_feedback, {
-            window_list[window_count++] = node->window_order[0];
+            if (success) success = window_notification_list_append(&window_list, &window_count, &capacity, node->window_order[0]);
         })
     }
 
-    SLSRequestNotificationsForWindows(g_connection, window_list, window_count);
+    if (success) SLSRequestNotificationsForWindows(g_connection, window_list, window_count);
+    free(window_list);
 }
 
 static void window_did_receive_focus(struct window_manager *wm, struct mouse_state *ms, struct window *window)

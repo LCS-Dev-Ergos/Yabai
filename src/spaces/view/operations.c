@@ -119,8 +119,10 @@ struct window_node *view_remove_window_node(struct view *view, struct window *wi
     return parent;
 }
 
-void view_stack_window_node(struct window_node *node, struct window *window)
+bool view_stack_window_node(struct window_node *node, struct window *window)
 {
+    if (node->window_count < 0 || node->window_count >= NODE_MAX_WINDOW_COUNT) return false;
+
     int insert_index = node->window_count;
 
     for (int i = 0; i < node->window_count; ++i) {
@@ -138,6 +140,7 @@ void view_stack_window_node(struct window_node *node, struct window *window)
     memmove(node->window_order + 1, node->window_order, sizeof(uint32_t) * node->window_count);
     node->window_order[0] = window->id;
     ++node->window_count;
+    return true;
 }
 
 struct window_node *view_add_window_node_with_insertion_point(struct view *view, struct window *window, uint32_t insertion_point)
@@ -167,8 +170,7 @@ struct window_node *view_add_window_node_with_insertion_point(struct view *view,
                 leaf->insert_dir = 0;
                 insert_feedback_destroy(leaf);
 
-                if (do_stack) {
-                    view_stack_window_node(leaf, window);
+                if (do_stack && view_stack_window_node(leaf, window)) {
                     return leaf;
                 }
             }
@@ -196,8 +198,7 @@ struct window_node *view_add_window_node_with_insertion_point(struct view *view,
 
         return leaf;
     } else if (view->layout == VIEW_STACK) {
-        view_stack_window_node(view->root, window);
-        return view->root;
+        return view_stack_window_node(view->root, window) ? view->root : NULL;
     }
 
     return NULL;
@@ -216,9 +217,13 @@ uint32_t *view_find_window_list(struct view *view, int *window_count)
     uint32_t *window_list = ts_alloc_list(uint32_t, capacity);
 
     for (struct window_node *node = window_node_find_first_leaf(view->root); node; node = window_node_find_next_leaf(node)) {
-        if (*window_count + node->window_count >= capacity) {
-            ts_expand(window_list, sizeof(uint32_t) * capacity, sizeof(uint32_t) * capacity);
-            capacity *= 2;
+        int required = *window_count + node->window_count;
+        if (required > capacity) {
+            int old_capacity = capacity;
+            while (capacity < required) capacity *= 2;
+            ts_expand(window_list,
+                      sizeof(uint32_t) * old_capacity,
+                      sizeof(uint32_t) * (capacity - old_capacity));
         }
 
         for (int i = 0; i < node->window_count; ++i) {

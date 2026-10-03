@@ -78,10 +78,11 @@ static void window_manager_check_for_windows_on_space(struct window_manager *wm,
             // This is necessary to make sure that we do not call the AX API for each modification to the tree.
             //
 
-            view_add_window_node(view, window);
-            window_manager_adjust_layer(window, LAYER_BELOW);
-            window_manager_add_managed_window(wm, window, view);
-            view_set_flag(view, VIEW_IS_DIRTY);
+            if (view_add_window_node(view, window)) {
+                window_manager_adjust_layer(window, LAYER_BELOW);
+                window_manager_add_managed_window(wm, window, view);
+                view_set_flag(view, VIEW_IS_DIRTY);
+            }
         }
     }
 }
