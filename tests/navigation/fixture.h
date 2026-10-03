@@ -72,6 +72,7 @@ static int opacity_fail_at;
 static bool expect_fade_started;
 static bool reduce_motion;
 static bool memory_pressure;
+static bool empty_space;
 static int batch_calls;
 static int window_list_queries, focus_cancels;
 static bool defer_activation;
@@ -169,6 +170,7 @@ static void reset(void)
     expect_fade_started = false;
     reduce_motion = false;
     memory_pressure = false;
+    empty_space = false;
     batch_calls = 0;
     window_list_queries = focus_cancels = 0;
     switches_at_query = -1;

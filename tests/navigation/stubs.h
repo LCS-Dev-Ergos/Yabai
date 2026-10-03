@@ -60,6 +60,10 @@ static void window_manager_send_window_to_space(void *sm, void *wm, struct windo
 
 static uint32_t *space_window_list(uint64_t sid, int *count, bool minimized)
 {
+    if (empty_space) {
+        *count = 0;
+        return NULL;
+    }
 #ifdef NAVIGATION_REAL_SCHEDULE
     *count = 1;
     return &ids[sid % 2]; // Different focus candidates on alternating Desktops.

@@ -478,6 +478,42 @@ static void test_veil_steps(void)
     assert(space_navigation_run_step(active_space, &step));
     assert(move_calls == 1 && veil_prepares == 1 && snapshot_starts == 1 && click_raise_calls == 1);
 
+    // A Desktop without a window to show gets no veil, which would only dim
+    // the wallpaper: the step switches without an effect and activates
+    // nothing. The crossfade keeps its blend there.
+    reset();
+    empty_space = true;
+    step = veil_step(2, true, .2f);
+    assert(space_navigation_run_step(active_space, &step));
+    assert(veil_prepares == 0 && snapshot_starts == 0 && switched_duration == 0.0f);
+    assert(focus_calls == 1 && window_focus_calls == 0 && activated_id == 0);
+
+    reset();
+    empty_space = true;
+    step = veil_step(2, true, .2f);
+    assert(space_navigation_begin_step(active_space, &step) == SPACE_NAVIGATION_SWITCHED);
+    assert(veil_prepares == 0 && snapshot_starts == 0 && focus_calls == 1);
+
+    reset();
+    empty_space = true;
+    assert(run_step(2, true, true));
+    assert(snapshot_prepares == 1 && snapshot_starts == 1 && veil_prepares == 0);
+
+    // A crossfade that pressure turns into the veil follows the same rule.
+    reset();
+    empty_space = true;
+    memory_pressure = true;
+    assert(begin_step(2, true, true) == SPACE_NAVIGATION_SWITCHED);
+    assert(capture_calls == 0 && veil_prepares == 0 && snapshot_starts == 0 && focus_calls == 1);
+
+    // A moved window makes the destination worth the veil.
+    reset();
+    empty_space = true;
+    step = veil_step(2, true, .2f);
+    step.move = true;
+    assert(space_navigation_run_step(active_space, &step));
+    assert(move_calls == 1 && veil_prepares == 1 && snapshot_starts == 1);
+
     // The effects exclude each other: a step with both is a veil.
     reset();
     step = veil_step(2, true, .2f);
