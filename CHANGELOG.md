@@ -5,9 +5,18 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [8.0.2] - 2026-10-03
 ### Fixed
 - The veil no longer flashes light grey as it appears, nor the crossfade's image white. WindowServer can show a new window's first frame from a white backing before its contents, whatever was drawn before the order: the veil, ordered in at its opacity, showed that frame in 4 of 45 switches. Every overlay is now ordered in at alpha 0 and raised one refresh later, which a probe of 80 orders never saw flash. The switch waits one refresh longer for the veil: 50 ms after its order at 60 Hz instead of 33 ms
 - Window animations draw each window's image in the colour space it was captured in. Any other space made CoreGraphics convert every pixel, about 70 ms instead of 15 ms for a window filling a 5K display, and keep a buffer the size of the window for each conversion until the daemon quit: after two hours with animations on, 34 buffers held 1.8 GB of address space and 110 MB in swap. A window below full opacity, whose alpha is restored first, keeps its colour space and pixel layout the same way
+
+### Security
+- Lists sized for a fixed number of entries grow or refuse instead of writing past their end: the windows the daemon asks WindowServer to report on (1024 before), the nodes of a layout tree walked breadth first (256), and the windows collected from stacks. Stacking a window onto a node that already holds the most a stack can is refused before anything changes
+- The alpha restore of a translucent window for an animation no longer reads past the image when its pixel count is not a multiple of four, and checks the sizes and the allocation of its bitmap
+
+### Verification and limits
+- Debug, ASan/UBSan, TSan/UBSan and Release run every test, the analyzer is clean and the Makefile builds; the new tests fail without their fixes. The colour-space fix was measured with a probe of the same calls on a 5072 × 2760 window (64–73 ms and 54 MB kept per conversion before, 10–16 ms and 0.3 MB after), not yet in the installed daemon. The first-frame fix was measured with `tools/effects/first_frame_probe.m` (15 of 80 orders flashed before, none of 80 after) and the flash was recorded from the installed 8.0.1 (4 of 45 veil switches); 8.0.2 has not run installed yet. The payload is unchanged
 
 ## [8.0.1] - 2026-10-03
 ### Changed
@@ -968,7 +977,8 @@ The *window_destroyed* signal is now triggered for windows that are implicitly d
 ### Added
 - First official release
 
-[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.1...HEAD
+[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.2...HEAD
+[8.0.2]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.1...v8.0.2
 [8.0.1]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0...v8.0.1
 [8.0.0]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.5...v8.0.0
 [8.0.0-lcs.5]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.4...v8.0.0-lcs.5
