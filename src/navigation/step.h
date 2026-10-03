@@ -14,7 +14,7 @@
 //
 // Thread: event loop. A step waits for WindowServer queries, for Dock to switch (up
 // to one second), for an application's AX raise and, when run to its end at once,
-// for the snapshot capture or the veil's two refreshes.
+// for the snapshot capture or the veil's three refreshes.
 // State: the anchor, the Desktop the last step reached, which relative navigation
 // starts from for a second while WindowServer's active display may still follow an
 // application elsewhere; when the last window fade ran; and the step waiting for its

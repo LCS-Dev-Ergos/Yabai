@@ -56,10 +56,11 @@ static enum space_snapshot_result space_navigation_snapshot_present(int token);
 // Drop only this token's pending presentation; its framework callback retains
 // ownership and its unresolved slot until it really returns. Active overlays stay.
 static enum space_snapshot_result space_navigation_snapshot_discard(int token);
-// Event loop: shows a solid black veil over the display without capturing it, and
-// waits two refreshes for it to reach the screen. With navigation_veil_blur above 0
-// and Reduce Transparency off, the veil blurs what lies below it and is faded in
-// completely first. False when none is shown.
+// Event loop: shows a solid black veil over the display without capturing it,
+// ordered in invisible and raised to its opacity a refresh later, and waits two more
+// refreshes for it to reach the screen. With navigation_veil_blur above 0 and Reduce
+// Transparency off, the veil blurs what lies below it and is faded in completely
+// first. False when none is shown.
 static bool space_navigation_veil_prepare(uint32_t display, uint64_t target, float interval);
 // Starts the fade of the overlay prepared or presented, once Dock switched.
 static bool space_navigation_snapshot_start(float duration, bool switched);

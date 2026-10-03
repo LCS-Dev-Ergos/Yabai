@@ -505,14 +505,16 @@ static void expect_veil(void)
     int orders_before = orders;
     int blurs_before = blur_calls;
 
-    // It is shown at its opacity before it is ordered in, on a backing of one pixel
-    // per point drawn without a capture's colour space, and its preparation waits
-    // two refreshes (1/120 s each) before returning.
+    // It is ordered in at alpha 0 and takes its opacity a refresh later, on a
+    // backing of one pixel per point drawn without a capture's colour space, and its
+    // preparation waits that refresh and two more (1/120 s each) before returning.
     uint64_t began = read_os_timer();
+    alpha_log_count = 0;
     assert(veil());
-    assert(read_os_timer() - began >= 15000000ULL);
+    assert(read_os_timer() - began >= 24000000ULL);
     assert(live_windows == 1 && live_spaces == 1 && orders == orders_before + 1);
-    assert(last_resolution == 1.0 && alpha_at_order == SPACE_SNAPSHOT_VEIL_OPACITY);
+    assert(last_resolution == 1.0 && alpha_at_order == 0.0f);
+    assert(alpha_log_count == 2 && alpha_log[0] == 0.0f && alpha_log[1] == SPACE_SNAPSHOT_VEIL_OPACITY);
     assert(context_color_space_writes == 0);
     expect_fill(last_context, 255);
     float peak;
@@ -589,6 +591,16 @@ static void expect_veil(void)
     fail_order = true;
     assert(!veil());
     fail_order = false;
+    expect_released();
+
+    // A failed raise to its opacity ends the veil, which had been ordered in
+    // invisible, and leaves nothing alive.
+    alpha_log_count = 0;
+    orders_before = orders;
+    fail_at_alpha_write = 2;
+    assert(!veil());
+    fail_at_alpha_write = 0;
+    assert(alpha_log_count == 2 && orders == orders_before + 1);
     expect_released();
 
     // An inactive display, no target, a refresh interval out of range and an empty
@@ -689,7 +701,7 @@ static void expect_veil_blur(void)
     reduce_transparency_on = true;
     blurs_before = blur_calls;
     assert(veil());
-    assert(blur_calls == blurs_before && alpha_at_order == SPACE_SNAPSHOT_VEIL_OPACITY);
+    assert(blur_calls == blurs_before && alpha_at_order == 0.0f && last_alpha == SPACE_SNAPSHOT_VEIL_OPACITY);
     expect_fill(last_context, 255);
     snapshot_fields(&peak, &curve);
     assert(peak == SPACE_SNAPSHOT_VEIL_OPACITY);
@@ -701,7 +713,7 @@ static void expect_veil_blur(void)
     g_window_manager.navigation_veil_blur = 0;
     blurs_before = blur_calls;
     assert(veil());
-    assert(blur_calls == blurs_before && alpha_at_order == SPACE_SNAPSHOT_VEIL_OPACITY);
+    assert(blur_calls == blurs_before && alpha_at_order == 0.0f && last_alpha == SPACE_SNAPSHOT_VEIL_OPACITY);
     space_navigation_snapshot_cancel();
     expect_released();
     g_window_manager.navigation_veil_blur = 40;
@@ -811,11 +823,15 @@ int main(void)
         fixture_image = CGBitmapContextCreateImage(ctx);
         CGContextRelease(ctx);
         wrong_image = CGImageCreateWithImageInRect(fixture_image, CGRectMake(0, 0, 8, 8));
-        // The image keeps its capture's colour space and its full opacity, and the
-        // curve is the configured one at the moment it is created.
+        // The image keeps its capture's colour space and its full opacity, which it
+        // takes a refresh after it is ordered in at alpha 0, and the curve is the
+        // configured one at the moment it is created.
         g_window_manager.navigation_fade_curve = SPACE_SNAPSHOT_CURVE_EASE_OUT;
+        alpha_log_count = 0;
         assert(prepare());
         g_window_manager.navigation_fade_curve = SPACE_SNAPSHOT_CURVE_SMOOTH;
+        assert(alpha_at_order == 0.0f);
+        assert(alpha_log_count == 2 && alpha_log[0] == 0.0f && alpha_log[1] == 1.0f);
         float image_peak;
         int image_curve;
         snapshot_fields(&image_peak, &image_curve);
@@ -869,11 +885,26 @@ int main(void)
         assert(!prepare());
         fail_order = false;
         expect_released();
+        // Without alpha writes nothing is ordered in; a failed raise ends the
+        // overlay it had ordered in invisible, a failed fade write the fade.
         fail_alpha = true;
+        int image_orders = orders;
+        assert(!prepare());
+        assert(orders == image_orders);
+        fail_alpha = false;
+        expect_released();
+        alpha_log_count = 0;
+        fail_at_alpha_write = 2;
+        assert(!prepare());
+        fail_at_alpha_write = 0;
+        assert(orders == image_orders + 1);
+        expect_released();
+        alpha_log_count = 0;
+        fail_at_alpha_write = 3;
         assert(prepare());
         assert(space_navigation_snapshot_start(.05f, true));
         expect_released();
-        fail_alpha = false;
+        fail_at_alpha_write = 0;
         deny_capture = true;
         assert(!prepare());
         deny_capture = false;

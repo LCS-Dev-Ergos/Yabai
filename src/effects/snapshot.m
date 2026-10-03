@@ -259,7 +259,8 @@ static struct space_snapshot *space_snapshot_create(uint32_t display, uint64_t t
 }
 
 // Lock held. The overlay's window, not yet drawn into or ordered in, whose backing
-// is `resolution` pixels per point. No activation or mouse events. An auxiliary
+// is `resolution` pixels per point, at alpha 0 until space_snapshot_reveal or the
+// blurred veil's fade-in raises it. No activation or mouse events. An auxiliary
 // Space, rather than the sticky tag, keeps the overlay visible while Dock hides the
 // source Space.
 static bool space_snapshot_window_create(struct space_snapshot *snapshot, CGRect bounds, double resolution)
@@ -278,10 +279,35 @@ static bool space_snapshot_window_create(struct space_snapshot *snapshot, CGRect
     if (success) {
         success = SLSSetWindowResolution(cid, snapshot->window, resolution) == kCGErrorSuccess
             && SLSSetWindowOpacity(cid, snapshot->window, false) == kCGErrorSuccess
-            && SLSSetWindowLevel(cid, snapshot->window, 1) == kCGErrorSuccess;
+            && SLSSetWindowLevel(cid, snapshot->window, 1) == kCGErrorSuccess
+            && SLSSetWindowAlpha(cid, snapshot->window, 0.0f) == kCGErrorSuccess;
     }
 
     return success;
+}
+
+// Event loop. Raises the overlay, ordered in at alpha 0, to `alpha` one refresh
+// later. WindowServer can composite a new window's first frame from a white backing,
+// its contents following in the next: in a process running AppKit, as we do, a veil
+// ordered in at 0.4 flashed light grey in 11 of 40 trials and a black full-screen
+// window at alpha 1 went white in 4 of 40 (tools/effects/first_frame_probe.m); the
+// installed 8.0.1 flashed in 4 of 45 switches. Raised one refresh after the order,
+// none of 80 did. False when the overlay was cancelled meanwhile or the write
+// failed; nothing is left alive then. The snapshot may be freed once it is
+// cancelled, so it is dereferenced only while it is the active one.
+static bool space_snapshot_reveal(struct space_snapshot *snapshot, float interval, float alpha)
+{
+    // A refresh is at most 1 s (see the callers' range check), which would outlast
+    // the watchdog: cap the sleep like the wait for the order-in.
+    usleep((useconds_t) (fminf(interval, 1.0f / 30.0f) * 1e6f));
+
+    pthread_mutex_lock(&space_snapshot_lock);
+    bool written = space_snapshot_active == snapshot
+        && SLSSetWindowAlpha(SLSMainConnectionID(), snapshot->window, alpha) == kCGErrorSuccess;
+    if (!written) space_snapshot_cancel_locked();
+    pthread_mutex_unlock(&space_snapshot_lock);
+
+    return written;
 }
 
 // Event loop. Capture permission is never requested here: unavailable, over-budget
@@ -405,9 +431,15 @@ static bool space_snapshot_request_finish(struct space_snapshot_request *request
     if (!success) space_snapshot_cancel_locked();
     pthread_mutex_unlock(&space_snapshot_lock);
 
+    if (success) {
+        SNAP_DIAG("reveal_begin", generation, token);
+        success = space_snapshot_reveal(snapshot, interval, 1.0f);
+        SNAP_DIAG("reveal_end", generation, token);
+    }
+
     space_snapshot_trace(success ? "ready" : "failed", began, captured);
 
-    // Allow one refresh for the outgoing image before hiding the source. This is a
+    // Allow one refresh for the raised image before hiding the source. This is a
     // bounded presentation opportunity, not a presentation fence. Local probes can
     // compile it out to check whether the switch then exposes the destination before
     // the overlay.
@@ -512,11 +544,12 @@ static bool space_snapshot_blur_in(struct space_snapshot *snapshot, float interv
 }
 
 // Event loop: shows a solid black veil over the display, ready to fade, and returns
-// once it has had two refreshes to reach the screen. It captures nothing, so it
-// needs neither Screen Recording permission nor macOS 26, and costs one window
-// order-in. With a background blur configured and Reduce Transparency off, the veil
-// is a blurred, lightly tinted window that fades in before it returns. False when no
-// veil is shown.
+// once it has taken its opacity, a refresh after its order, and had two more
+// refreshes to reach the screen. It captures nothing, so it needs neither Screen
+// Recording permission nor macOS 26, and costs one window order-in. With a
+// background blur configured and Reduce Transparency off, the veil is a blurred,
+// lightly tinted window that fades in before it returns. False when no veil is
+// shown.
 static bool space_navigation_veil_prepare(uint32_t display, uint64_t target, float interval)
 {
     space_navigation_snapshot_cancel();
@@ -551,13 +584,11 @@ static bool space_navigation_veil_prepare(uint32_t display, uint64_t target, flo
     space_snapshot_active = snapshot;
     dispatch_resume(snapshot->timer);
     int cid = SLSMainConnectionID();
-    // One backing pixel per point: the veil has no detail to resolve. The blurred
-    // veil starts at alpha 0 and is ordered in invisible, so that the blur does not
-    // appear at full strength in one frame.
+    // One backing pixel per point: the veil has no detail to resolve. Like every
+    // overlay it is ordered in at alpha 0.
     bool success = space_snapshot_window_create(snapshot, bounds, 1.0)
         && (!blur || SLSSetWindowBackgroundBlurRadiusStyle(cid, snapshot->window, radius, 1) == kCGErrorSuccess)
         && space_snapshot_surface_fill(snapshot, bounds, blur ? SPACE_SNAPSHOT_VEIL_BLUR_TINT : 1.0)
-        && SLSSetWindowAlpha(cid, snapshot->window, blur ? 0.0f : SPACE_SNAPSHOT_VEIL_OPACITY) == kCGErrorSuccess
         && space_snapshot_space_create(snapshot)
         && SLSOrderWindow(cid, snapshot->window, 1, 0) == kCGErrorSuccess;
     if (!success) space_snapshot_cancel_locked();
@@ -568,10 +599,15 @@ static bool space_navigation_veil_prepare(uint32_t display, uint64_t target, flo
     // the GPU: with it at full strength only after the switch began, Dock took about
     // twice as long and the veil once arrived later than the two refreshes below. So
     // it is shown completely before the switch. That holds the event loop for about
-    // 130 ms at 60 Hz, which is why the blur is opt-in.
+    // 130 ms at 60 Hz, which is why the blur is opt-in. Its fade-in starts one
+    // refresh after the order, at alpha 0, so it also keeps the first frame
+    // invisible. The plain veil takes its opacity one refresh after the order.
     if (success && blur) {
         success = space_snapshot_blur_in(snapshot, interval);
         SNAP_DIAG("veil_blur_in_end", 0, 0);
+    } else if (success) {
+        success = space_snapshot_reveal(snapshot, interval, SPACE_SNAPSHOT_VEIL_OPACITY);
+        SNAP_DIAG("veil_reveal_end", 0, 0);
     }
 
     space_snapshot_trace(success ? shown : failed, began, 0);
