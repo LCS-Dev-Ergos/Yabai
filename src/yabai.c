@@ -24,7 +24,7 @@ int64_t (* SLSPerformAsynchronousBridgedWindowManagementOperation)(void *);
 
 #define MAJOR  8
 #define MINOR  0
-#define PATCH 0
+#define PATCH 1
 
 struct signal *g_signal_event[SIGNAL_TYPE_COUNT];
 struct process_manager g_process_manager;
