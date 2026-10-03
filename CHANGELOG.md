@@ -5,8 +5,13 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [8.0.1] - 2026-10-03
 ### Changed
 - The veil is left out when the destination Desktop has no window to show, the one the switch would activate or the window it moves there: over an empty Desktop it only darkened the wallpaper and lifted again, which read as a flash. The switch is then Dock's alone; the crossfade keeps blending to the wallpaper
+
+### Verification and limits
+- Debug, ASan/UBSan and Release run every test and the analyzer is clean; a removed check fails the new tests. The rule has not run installed, and a Desktop whose only windows belong to applications yabai does not track counts as empty. The payload is unchanged
 
 ## [8.0.0] - 2026-10-03
 ### Added
@@ -960,7 +965,8 @@ The *window_destroyed* signal is now triggered for windows that are implicitly d
 ### Added
 - First official release
 
-[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0...HEAD
+[Unreleased]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.1...HEAD
+[8.0.1]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0...v8.0.1
 [8.0.0]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.5...v8.0.0
 [8.0.0-lcs.5]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.4...v8.0.0-lcs.5
 [8.0.0-lcs.4]: https://github.com/LCS-Dev-Ergos/Yabai/compare/v8.0.0-lcs.3...v8.0.0-lcs.4
