@@ -14,6 +14,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 - Under memory pressure a crossfade becomes the veil instead of a switch without an effect; `navigation_pressure_fallback none` keeps the previous behaviour
 
+### Fixed
+- `yabai --help` links this project's manual for the running version; it linked a tag of another repository that does not exist there
+
 ## [8.0.0-lcs.5] - 2026-10-02
 ### Changed
 - The Dock payload checks the daemon's signature once per build instead of on every request, a check of about half a millisecond that the daemon waited for on each Space focus, opacity batch and mouse move of a modifier drag
