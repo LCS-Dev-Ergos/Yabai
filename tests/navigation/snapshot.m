@@ -6,8 +6,8 @@
 #include <pthread.h>
 #include <unistd.h>
 
-// The test runs its 26+ mock only after the runtime guard in main. Keep the
-// target at macOS 11 so the unsupported-system fallback can also be checked.
+// The test runs its 26+ mock only after the runtime guard in main. Keep the target
+// at macOS 11 so the unsupported-system fallback can also be checked.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
 
@@ -25,8 +25,8 @@ static int orders;
 static CGContextRef last_context;
 static int context_color_space_writes;
 static bool deny_capture, fail_create, fail_context, fail_order, fail_attach, fail_alpha;
-// The blurred veil: what it asked of the blur, the alphas it wrote in order,
-// and hooks that fail or cancel it at a given alpha write (1-based, 0 = off).
+// The blurred veil: what it asked of the blur, the alphas it wrote in order, and
+// hooks that fail or cancel it at a given alpha write (1-based, 0 = off).
 static bool fail_blur, reduce_transparency_on;
 static int blur_calls, last_blur_radius, last_blur_style, orders_at_blur;
 #define ALPHA_LOG_MAX 512
@@ -213,8 +213,8 @@ static CGContextRef bitmap(void)
     return ctx;
 }
 
-// The window takes the capture's colour space before its context exists, so
-// that drawing the image converts nothing.
+// The window takes the capture's colour space before its context exists, so that
+// drawing the image converts nothing.
 static CGError SLSSetWindowColorSpace(int c, uint32_t w, CGColorSpaceRef space)
 {
     (void)c;
@@ -336,18 +336,16 @@ static CFUUIDRef fake_uuid(uint32_t display)
 }
 
 // The timer's cancel handler frees the snapshot on a queue thread as soon as
-// cancellation lets it run. Give it that chance before cancel returns, so a
-// read of the snapshot afterwards touches freed memory. A handler that cancels
-// its own timer delays its cancel handler until it returns, so waiting there
-// proves nothing.
+// cancellation lets it run. Give it that chance before cancel returns, so a read of
+// the snapshot afterwards touches freed memory. A handler that cancels its own timer
+// delays its cancel handler until it returns, so waiting there proves nothing.
 static void cancel_and_let_handler_run(dispatch_source_t source)
 {
     dispatch_source_cancel(source);
     if (pthread_main_np()) usleep(20000);
 }
 
-// The reports of asynchronous captures: from the callback, and at the
-// deadline.
+// The reports of asynchronous captures: from the callback, and at the deadline.
 static int captured_reports, captured_token;
 
 static void space_navigation_snapshot_captured(int token)
@@ -356,8 +354,8 @@ static void space_navigation_snapshot_captured(int token)
     __atomic_add_fetch(&captured_reports, 1, __ATOMIC_SEQ_CST);
 }
 
-// The fade curve and the veil's blur radius the event loop reads when it
-// creates an overlay, and the Reduce Transparency setting it asks the system.
+// The fade curve and the veil's blur radius the event loop reads when it creates an
+// overlay, and the Reduce Transparency setting it asks the system.
 static struct { int navigation_fade_curve; int navigation_veil_blur; } g_window_manager;
 
 static bool space_navigation_reduce_transparency(void)
@@ -436,10 +434,10 @@ static void deliver_lost(int index)
     Block_release(handler);
 }
 
-// Each curve starts fully opaque, ends transparent, never brightens again and
-// stays within [0, 1] even when a late tick lands outside the interval. The
-// point where 5% of the change becomes visible is the documented one: 13.5% of
-// the duration for the smooth curve, 2.5% for ease-out.
+// Each curve starts fully opaque, ends transparent, never brightens again and stays
+// within [0, 1] even when a late tick lands outside the interval. The point where 5%
+// of the change becomes visible is the documented one: 13.5% of the duration for the
+// smooth curve, 2.5% for ease-out.
 static void expect_alpha_curve(void)
 {
     double visible[SPACE_SNAPSHOT_CURVE_COUNT] = {
@@ -484,8 +482,8 @@ static void snapshot_fields(float *peak, int *curve)
     pthread_mutex_unlock(&space_snapshot_lock);
 }
 
-// The backing the veil drew: every pixel black at the given alpha byte, give
-// or take the rounding of the fill alpha.
+// The backing the veil drew: every pixel black at the given alpha byte, give or take
+// the rounding of the fill alpha.
 static void expect_fill(CGContextRef ctx, int alpha)
 {
     assert(ctx && CGBitmapContextGetWidth(ctx) == 16 && CGBitmapContextGetHeight(ctx) == 16);
@@ -499,17 +497,17 @@ static void expect_fill(CGContextRef ctx, int alpha)
     }
 }
 
-// The veil needs no capture and no macOS 26: it is a window, a Space and a
-// fade, and every failure on the way leaves nothing behind.
+// The veil needs no capture and no macOS 26: it is a window, a Space and a fade, and
+// every failure on the way leaves nothing behind.
 static void expect_veil(void)
 {
     int modern = modern_capture_calls, legacy = legacy_capture_calls;
     int orders_before = orders;
     int blurs_before = blur_calls;
 
-    // It is shown at its opacity before it is ordered in, on a backing of one
-    // pixel per point drawn without a capture's colour space, and its
-    // preparation waits two refreshes (1/120 s each) before returning.
+    // It is shown at its opacity before it is ordered in, on a backing of one pixel
+    // per point drawn without a capture's colour space, and its preparation waits
+    // two refreshes (1/120 s each) before returning.
     uint64_t began = read_os_timer();
     assert(veil());
     assert(read_os_timer() - began >= 15000000ULL);
@@ -522,8 +520,8 @@ static void expect_veil(void)
     snapshot_fields(&peak, &curve);
     assert(peak == SPACE_SNAPSHOT_VEIL_OPACITY && curve == SPACE_SNAPSHOT_CURVE_SMOOTH);
 
-    // The fade writes alphas that never exceed the veil's opacity or rise
-    // again, and the endpoint releases the window and its Space.
+    // The fade writes alphas that never exceed the veil's opacity or rise again, and
+    // the endpoint releases the window and its Space.
     int writes = __atomic_load_n(&alpha_writes, __ATOMIC_SEQ_CST);
     max_alpha = 0.0f;
     alpha_rises = 0;
@@ -557,13 +555,13 @@ static void expect_veil(void)
     space_navigation_snapshot_cancel();
     expect_released();
 
-    // An unprepared veil is a watchdog case like any overlay: Dock never
-    // replying removes it.
+    // An unprepared veil is a watchdog case like any overlay: Dock never replying
+    // removes it.
     assert(veil());
     expect_released();
 
-    // A failure at any step leaves no window and no Space, and orders nothing
-    // unless it fails at the order itself.
+    // A failure at any step leaves no window and no Space, and orders nothing unless
+    // it fails at the order itself.
     fail_create = true;
     assert(!veil());
     fail_create = false;
@@ -593,8 +591,8 @@ static void expect_veil(void)
     fail_order = false;
     expect_released();
 
-    // An inactive display, no target, a refresh interval out of range and an
-    // empty display show nothing.
+    // An inactive display, no target, a refresh interval out of range and an empty
+    // display show nothing.
     assert(!space_navigation_veil_prepare(2, 2, 1.0f / 120.0f));
     assert(!space_navigation_veil_prepare(1, 0, 1.0f / 120.0f));
     assert(!space_navigation_veil_prepare(1, 2, 0.0f));
@@ -606,8 +604,8 @@ static void expect_veil(void)
     fixture_bounds = bounds;
     expect_released();
 
-    // The curve is the configured one when the overlay is created, and
-    // changing it afterwards leaves that overlay alone.
+    // The curve is the configured one when the overlay is created, and changing it
+    // afterwards leaves that overlay alone.
     g_window_manager.navigation_fade_curve = SPACE_SNAPSHOT_CURVE_EASE_OUT;
     assert(veil());
     snapshot_fields(&peak, &curve);
@@ -626,11 +624,10 @@ static void expect_veil(void)
     assert(modern_capture_calls == modern && legacy_capture_calls == legacy);
 }
 
-// The blurred veil: the plain veil's setup with a blur radius, a light tint
-// and an alpha of 0 before it is ordered in, then a fade-in to exactly 1 and
-// the usual two-refresh wait, all before the step switches. Reduce
-// Transparency, a failing blur and a cancellation during the fade-in each end
-// with nothing alive.
+// The blurred veil: the plain veil's setup with a blur radius, a light tint and an
+// alpha of 0 before it is ordered in, then a fade-in to exactly 1 and the usual
+// two-refresh wait, all before the step switches. Reduce Transparency, a failing
+// blur and a cancellation during the fade-in each end with nothing alive.
 static void expect_veil_blur(void)
 {
     // The fade-in's curve: a quadratic ease-out from 0 to exactly 1.
@@ -652,9 +649,9 @@ static void expect_veil_blur(void)
     assert(veil());
     uint64_t took = read_os_timer() - began;
 
-    // The blur is asked for with the configured radius and style 1 before the
-    // window is ordered in, which happens at alpha 0 and on a light tint, and
-    // the preparation covers the fade-in and the two refreshes (1/120 s each).
+    // The blur is asked for with the configured radius and style 1 before the window
+    // is ordered in, which happens at alpha 0 and on a light tint, and the
+    // preparation covers the fade-in and the two refreshes (1/120 s each).
     assert(blur_calls == blurs_before + 1 && last_blur_radius == 40 && last_blur_style == 1);
     assert(orders_at_blur == orders_before && orders == orders_before + 1);
     assert(live_windows == 1 && live_spaces == 1);
@@ -673,8 +670,8 @@ static void expect_veil_blur(void)
     snapshot_fields(&peak, &curve);
     assert(peak == 1.0f && curve == SPACE_SNAPSHOT_CURVE_SMOOTH);
 
-    // The fade after the switch runs from the full window alpha down and
-    // releases the window and its Space.
+    // The fade after the switch runs from the full window alpha down and releases
+    // the window and its Space.
     int writes = __atomic_load_n(&alpha_writes, __ATOMIC_SEQ_CST);
     max_alpha = 0.0f;
     alpha_rises = 0;
@@ -733,8 +730,8 @@ static void expect_veil_blur(void)
     assert(alpha_log_count == 3);
     expect_released();
 
-    // Cancelled during the fade-in: it stops writing, fails and leaves
-    // nothing alive. The window had been ordered in.
+    // Cancelled during the fade-in: it stops writing, fails and leaves nothing
+    // alive. The window had been ordered in.
     alpha_log_count = 0;
     orders_before = orders;
     cancel_at_alpha_write = 3;
@@ -748,8 +745,8 @@ static void expect_veil_blur(void)
     g_window_manager.navigation_veil_blur = 0;
 }
 
-// A veil retires the capture waiting for its step, whether the image arrived
-// or its callback is still missing, and needs none of the capture admission.
+// A veil retires the capture waiting for its step, whether the image arrived or its
+// callback is still missing, and needs none of the capture admission.
 static void expect_veil_retires_capture(void)
 {
     capture_delay = SPACE_SNAPSHOT_CAPTURE_NS / 2;
@@ -814,8 +811,8 @@ int main(void)
         fixture_image = CGBitmapContextCreateImage(ctx);
         CGContextRelease(ctx);
         wrong_image = CGImageCreateWithImageInRect(fixture_image, CGRectMake(0, 0, 8, 8));
-        // The image keeps its capture's colour space and its full opacity, and
-        // the curve is the configured one at the moment it is created.
+        // The image keeps its capture's colour space and its full opacity, and the
+        // curve is the configured one at the moment it is created.
         g_window_manager.navigation_fade_curve = SPACE_SNAPSHOT_CURVE_EASE_OUT;
         assert(prepare());
         g_window_manager.navigation_fade_curve = SPACE_SNAPSHOT_CURVE_SMOOTH;
@@ -827,9 +824,9 @@ int main(void)
         space_navigation_snapshot_cancel();
         expect_released();
 
-        // The endpoint releases the overlay, with actual timer callbacks. The
-        // fade lasts long enough for a tick to write alpha on a loaded runner:
-        // a tick past the deadline only releases.
+        // The endpoint releases the overlay, with actual timer callbacks. The fade
+        // lasts long enough for a tick to write alpha on a loaded runner: a tick
+        // past the deadline only releases.
         assert(prepare());
         assert(space_navigation_snapshot_start(.25f, true));
         expect_released();
@@ -906,8 +903,8 @@ int main(void)
         space_navigation_snapshot_cancel();
         expect_released();
 
-        // When it finally comes, it releases only its own image and leaves a
-        // newer capture in flight alone.
+        // When it finally comes, it releases only its own image and leaves a newer
+        // capture in flight alone.
         capture_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
         assert(!prepare() && space_snapshot_capture_pending());
         deliver_lost(0);
@@ -916,8 +913,8 @@ int main(void)
             usleep(1000);
         capture_delay = 0;
 
-        // Two callbacks may remain missing across the stale retry. A third
-        // request must fall back without retaining another capture context.
+        // Two callbacks may remain missing across the stale retry. A third request
+        // must fall back without retaining another capture context.
         capture_lost = true;
         int first_lost = lost_count;
         assert(!prepare());
@@ -931,8 +928,8 @@ int main(void)
         assert(modern_capture_calls == calls_at_bound);
         assert(space_snapshot_capture_unresolved() == SPACE_SNAPSHOT_MAX_UNRESOLVED);
 
-        // The newer callback returns first. Its slot is reusable; an older
-        // callback must not clear the third generation's pending marker.
+        // The newer callback returns first. Its slot is reusable; an older callback
+        // must not clear the third generation's pending marker.
         deliver_lost(first_lost + 1);
         assert(!space_snapshot_capture_pending());
         assert(space_snapshot_capture_unresolved() == 1);
@@ -967,9 +964,9 @@ int main(void)
         space_navigation_snapshot_cancel();
         expect_released();
 
-        // Dropping a pending presentation does not cancel the framework
-        // request or return its unresolved slot. Wrong/old tokens cannot
-        // discard a newer request. No overlay is constructed by this path.
+        // Dropping a pending presentation does not cancel the framework request or
+        // return its unresolved slot. Wrong/old tokens cannot discard a newer
+        // request. No overlay is constructed by this path.
         capture_lost = true;
         int discard_lost = lost_count;
         assert(capture(70));
@@ -1010,8 +1007,8 @@ int main(void)
         space_navigation_snapshot_cancel();
         expect_released();
 
-        // An asynchronous capture reports its callback, and presents its
-        // image; the deadline reports too and finds nothing left.
+        // An asynchronous capture reports its callback, and presents its image; the
+        // deadline reports too and finds nothing left.
         assert(capture(5));
         expect_reports(1);
         assert(__atomic_load_n(&captured_token, __ATOMIC_SEQ_CST) == 5);
@@ -1030,8 +1027,8 @@ int main(void)
         expect_released();
         expect_reports(2);
 
-        // A late callback: the deadline reports first and the image is
-        // missing; the callback reports later and releases its image.
+        // A late callback: the deadline reports first and the image is missing; the
+        // callback reports later and releases its image.
         capture_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
         assert(capture(8));
         expect_reports(1);
@@ -1042,8 +1039,8 @@ int main(void)
         capture_delay = 0;
         expect_released();
 
-        // A capture that arrived in time stays usable however late the event
-        // loop presents it.
+        // A capture that arrived in time stays usable however late the event loop
+        // presents it.
         assert(capture(9));
         expect_reports(1);
         usleep((useconds_t) (SPACE_SNAPSHOT_CAPTURE_NS * 2 / 1000));
@@ -1068,8 +1065,8 @@ int main(void)
         assert(space_navigation_snapshot_present(11) == SPACE_SNAPSHOT_MISSING);
         expect_reports(2);
 
-        // Cancelled while captured: presenting finds it cancelled, and the
-        // callback still releases its image.
+        // Cancelled while captured: presenting finds it cancelled, and the callback
+        // still releases its image.
         assert(capture(12));
         space_navigation_snapshot_cancel();
         assert(space_navigation_snapshot_present(12) == SPACE_SNAPSHOT_CANCELLED);
@@ -1090,8 +1087,8 @@ int main(void)
 
         expect_veil_retires_capture();
 
-        // No capture starts while another is in flight: the step switches
-        // without one and nothing reports.
+        // No capture starts while another is in flight: the step switches without
+        // one and nothing reports.
         capture_delay = SPACE_SNAPSHOT_CAPTURE_NS * 2;
         assert(capture(14));
         expect_reports(1);

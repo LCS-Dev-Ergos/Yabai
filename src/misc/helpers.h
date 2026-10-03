@@ -304,8 +304,8 @@ static inline char *ts_string_escape(char *s)
         } else if (*cursor >= 0x00 && *cursor <= 0x1f) {
             *dst++ = '\\';
             *dst++ = 'u';
-            // Four digits and a terminator the next character, or the
-            // final one, overwrites.
+            // Four digits and a terminator the next character, or the final one,
+            // overwrites.
             snprintf(dst, 5, "%04x", (int)*cursor);
             dst += 4;
         } else {
@@ -316,8 +316,8 @@ static inline char *ts_string_escape(char *s)
     return result;
 }
 
-// The text of a JSON string value: escaped when it needs to be, as it is
-// otherwise, and empty for none. For labels and names a client chose.
+// The text of a JSON string value: escaped when it needs to be, as it is otherwise,
+// and empty for none. For labels and names a client chose.
 static inline char *ts_json_text(char *s)
 {
     if (!s) return "";
@@ -484,12 +484,11 @@ static void exec_config_file(char *config_file, int config_file_size)
         return;
     }
 
-    // The path is an argument, never shell text, so spaces and shell
-    // characters in it stay part of the name. An executable file runs as sh's
-    // "$0", which honours its interpreter line and falls back to sh without
-    // one; any other file is a script for sh. Unlike a signal action, the
-    // configuration keeps our permissions: it is the user's own file, which
-    // we run once at start.
+    // The path is an argument, never shell text, so spaces and shell characters in
+    // it stay part of the name. An executable file runs as sh's "$0", which honours
+    // its interpreter line and falls back to sh without one; any other file is a
+    // script for sh. Unlike a signal action, the configuration keeps our
+    // permissions: it is the user's own file, which we run once at start.
     char *executable[] = { "/usr/bin/env", "sh", "-c", "\"$0\"", config_file, NULL };
     char *script[] = { "/usr/bin/env", "sh", config_file, NULL };
     char **exec = file_can_execute(config_file) ? executable : script;
@@ -502,9 +501,8 @@ static void exec_config_file(char *config_file, int config_file_size)
         if (status) posix_spawnattr_destroy(&attributes);
     }
 
-    // We are multithreaded by now, so a fork could inherit a lock some other
-    // thread held; and the file gets our standard streams but none of our
-    // sockets.
+    // We are multithreaded by now, so a fork could inherit a lock some other thread
+    // held; and the file gets our standard streams but none of our sockets.
     if (!status) {
         status = posix_spawnattr_setflags(&attributes, POSIX_SPAWN_CLOEXEC_DEFAULT);
         for (int fd = STDIN_FILENO; !status && fd <= STDERR_FILENO; ++fd) {
