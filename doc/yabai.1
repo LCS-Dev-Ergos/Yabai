@@ -2,12 +2,12 @@
 .\"     Title: yabai
 .\"    Author: [see the "AUTHOR(S)" section]
 .\" Generator: Asciidoctor 2.0.26
-.\"      Date: 2026-05-08
+.\"      Date: 2026-10-03
 .\"    Manual: Yabai Manual
 .\"    Source: Yabai
 .\"  Language: English
 .\"
-.TH "YABAI" "1" "2026-05-08" "Yabai" "Yabai Manual"
+.TH "YABAI" "1" "2026-10-03" "Yabai" "Yabai Manual"
 .ie \n(.g .ds Aq \(aq
 .el       .ds Aq '
 .ss \n[.ss] 0
@@ -32,6 +32,8 @@ yabai \- window manager
 .SH "SYNOPSIS"
 .sp
 \fByabai\fP [\fB\-\-load\-sa\fP|\fB\-\-uninstall\-sa\fP|\fB\-\-install\-service\fP|\fB\-\-uninstall\-service\fP|\fB\-\-start\-service\fP|\fB\-\-restart\-service\fP|\fB\-\-stop\-service\fP|\fB\-\-message\fP,\fB\-m\fP \fImsg\fP|\fB\-\-config\fP,\fB\-c\fP \fIconfig_file\fP|\fB\-\-verbose\fP,\fB\-V\fP|\fB\-\-version\fP,\fB\-v\fP|\fB\-\-help\fP,\fB\-h\fP]
+.sp
+\fByabai\-msg\fP \fImsg\fP
 .SH "DESCRIPTION"
 .sp
 \fByabai\fP is a tiling window manager for macOS based on binary space partitioning.
@@ -91,13 +93,19 @@ Stops a running instance of the service and unloads it.
 \fB\-\-message\fP, \fB\-m\fP \fI<msg>\fP
 .RS 4
 Send message to a running instance of yabai.
+.br
+\fByabai\-msg\fP \fI<msg>\fP does the same and starts faster, as it loads none of the frameworks the window manager needs.
+.br
+It is signed like \fByabai\fP; yabai refuses a client signed otherwise, and says so.
+.br
+Both exit with status 1 if yabai reports a failure or refuses the message.
 .RE
 .sp
 \fB\-\-config\fP, \fB\-c\fP \fI<config_file>\fP
 .RS 4
 Use the specified configuration file.
 .br
-Executes using \f(CR/usr/bin/env sh \-c <config_file>\fP if the exec\-bit is set.
+Executed as a program if the exec\-bit is set, through \f(CR/usr/bin/env sh \-c \*(Aq"$0"\*(Aq <config_file>\fP.
 .br
 Interpreted using \f(CR/usr/bin/env sh <config_file>\fP if the exec\-bit is unset.
 .RE
@@ -123,6 +131,8 @@ Print options to stdout and exit.
 .fam C
 REGEX\&       := \c
 .URL "https://www.gnu.org/software/findutils/manual/html_node/find_html/posix_002dextended\-regular\-expression\-syntax.html" "POSIX extended regular expression syntax" ""
+               A pattern whose nested repetitions or runs of optional parts would expand
+               far beyond its length is refused as too complex.
 
 LABEL\&       := arbitrary string/text used as an identifier
 
@@ -130,7 +140,7 @@ LAYER\&       := below | normal | above | auto
 
 BOOL_SEL\&    := on | off
 
-FLOAT_SEL\&   := 0 < <value> <= 1.0
+FLOAT_SEL\&   := 0 < <value> <= 1.0 (a decimal or a whole number)
 
 RULE_SEL\&    := <index> | LABEL
 
@@ -270,6 +280,8 @@ System Integrity Protection must be partially disabled.
 .RS 4
 Duration of transition between active / normal opacity.
 .br
+Seconds, 0 or more; negative and non\-finite values are refused.
+.br
 System Integrity Protection must be partially disabled.
 .RE
 .sp
@@ -291,6 +303,8 @@ System Integrity Protection must be partially disabled.
 .RS 4
 Duration of window frame animation.
 .br
+Seconds, 0 or more; negative and non\-finite values are refused.
+.br
 If 0.0, the change in dimension is not animated.
 .br
 Requires Screen Recording permissions.
@@ -305,6 +319,62 @@ Easing function to use for window animations.
 See \c
 .URL "https://easings.net" "" ""
 for details.
+.RE
+.sp
+\fBnavigation_effect\fP [\fIon|off\fP]
+.RS 4
+Show the effects of \fBspace \-\-navigate\fP.
+.br
+\fIoff\fP leaves every Desktop switch without an effect, whatever the request named; navigation itself is unchanged.
+.br
+Read when each switch starts, so it also reaches switches already queued. Default \fIon\fP.
+.RE
+.sp
+\fBnavigation_effect_type\fP [\fIcrossfade|veil\fP]
+.RS 4
+Effect of a \fBspace \-\-navigate\fP request that names none.
+.br
+\fIcrossfade\fP blends the display from an image of the outgoing Desktop and needs Screen Recording permissions.
+.br
+\fIveil\fP fades a dark veil out over the destination and captures nothing. Default \fIcrossfade\fP.
+.RE
+.sp
+\fBnavigation_effect_duration\fP [\fI<0\-1>\fP]
+.RS 4
+Duration in seconds of the effect of a \fBspace \-\-navigate\fP request that names none.
+.br
+0 switches without an effect; values outside [0, 1] and non\-finite values are refused. Default 0.25.
+.RE
+.sp
+\fBnavigation_pressure_fallback\fP [\fIveil|keep|none\fP]
+.RS 4
+What a crossfade of \fBspace \-\-navigate\fP becomes while macOS reports memory pressure.
+.br
+The overlay can then reach the screen after the switch, and its image takes memory when it is short.
+.br
+\fIveil\fP shows the veil instead, \fIkeep\fP crossfades all the same, \fInone\fP switches without an effect. Default \fIveil\fP.
+.RE
+.sp
+\fBnavigation_fade_curve\fP [\fIsmooth|ease_out\fP]
+.RS 4
+Opacity curve of the crossfade and the veil that \fBspace \-\-navigate\fP shows over a Desktop switch.
+.br
+\fIsmooth\fP starts slowly and ends slowly: 5% of the change takes 13.5% of the duration.
+.br
+\fIease_out\fP changes fastest at the start: 5% of the change takes 2.5% of the duration.
+.br
+The duration is the same for both.
+.RE
+.sp
+\fBnavigation_veil_blur\fP [\fI<0\-100>\fP]
+.RS 4
+Blur radius of the veil that \fBspace \-\-navigate\fP shows over a Desktop switch.
+.br
+The veil then blurs what lies below it, and fades in over 100 ms before Desktop is switched.
+.br
+This holds the event loop for about 130 ms at 60 Hz and loads the GPU, so it is off by default.
+.br
+0 disables the blur. The veil is plain when Reduce Transparency is enabled.
 .RE
 .sp
 \fBinsert_feedback_color\fP [\fI0xAARRGGBB\fP]
@@ -420,6 +490,21 @@ yabai \-m space [\fI<SPACE_SEL>\fP] \fI<COMMAND>\fP
 \fB\-\-focus\fP \fI<SPACE_SEL>\fP
 .RS 4
 Focus the given space.
+.RE
+.sp
+\fB\-\-navigate\fP \fIfocus|move\fP \fI<SPACE_SEL>\fP [\fIcrossfade|veil|<0\-1>\fP \fI<0\-1>\fP]
+.RS 4
+Switch to the given space with an effect, for key bindings and bars.
+.br
+\fImove\fP sends the focused window there first and follows it.
+.br
+The effect is \fIcrossfade\fP, \fIveil\fP or the starting opacity of the destination\(cqs windows, followed by its duration in seconds.
+.br
+Without them, \fBnavigation_effect_type\fP and \fBnavigation_effect_duration\fP choose; \fBnavigation_effect\fP \fIoff\fP shows none.
+.br
+Presses of \fInext\fP and \fIprev\fP that arrive while one waits are merged.
+.br
+System Integrity Protection must be partially disabled.
 .RE
 .sp
 \fB\-\-switch\fP \fI<SPACE_SEL>\fP
@@ -607,6 +692,8 @@ If the current splitting mode matches the selected mode, the action will be undo
 \fB\-\-grid\fP \fI<rows>:<cols>:<start\-x>:<start\-y>:<width>:<height>\fP
 .RS 4
 Set the frame of the selected window based on a self\-defined grid.
+.br
+A grid has at least one row and one column, and no value is negative.
 .RE
 .sp
 \fB\-\-move\fP \fIabs|rel:<dx>:<dy>\fP
@@ -994,6 +1081,8 @@ Window should enter native macOS fullscreen mode.
 \fBgrid=\fI<rows>:<cols>:<start\-x>:<start\-y>:<width>:<height>\fP\fP
 .RS 4
 Set window frame based on a self\-defined grid.
+.br
+A grid has at least one row and one column, and no value is negative.
 .RE
 .sp
 \fBscratchpad=\fI<LABEL>\fP\fP
@@ -1052,6 +1141,8 @@ yabai \-m signal \fI<COMMAND>\fP
 Add an optionally labelled signal to execute an action after processing an event of the given type.
 .br
 Some signals can be specified to trigger based on the application name and/or window title, and its active/focused state.
+.br
+The action runs with its own privacy permissions: it does not inherit the Accessibility or Screen Recording access granted to yabai.
 .RE
 .sp
 \fB\-\-remove \fI<SIGNAL_SEL>\fP\fP

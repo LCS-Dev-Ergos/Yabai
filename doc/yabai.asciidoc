@@ -219,6 +219,25 @@ Global Settings
     Easing function to use for window animations. +
     See https://easings.net for details.
 
+*navigation_effect* ['on|off']::
+    Show the effects of *space --navigate*. +
+    'off' leaves every Desktop switch without an effect, whatever the request named; navigation itself is unchanged. +
+    Read when each switch starts, so it also reaches switches already queued. Default 'on'.
+
+*navigation_effect_type* ['crossfade|veil']::
+    Effect of a *space --navigate* request that names none. +
+    'crossfade' blends the display from an image of the outgoing Desktop and needs Screen Recording permissions. +
+    'veil' fades a dark veil out over the destination and captures nothing. Default 'crossfade'.
+
+*navigation_effect_duration* ['<0-1>']::
+    Duration in seconds of the effect of a *space --navigate* request that names none. +
+    0 switches without an effect; values outside [0, 1] and non-finite values are refused. Default 0.25.
+
+*navigation_pressure_fallback* ['veil|keep|none']::
+    What a crossfade of *space --navigate* becomes while macOS reports memory pressure. +
+    The overlay can then reach the screen after the switch, and its image takes memory when it is short. +
+    'veil' shows the veil instead, 'keep' crossfades all the same, 'none' switches without an effect. Default 'veil'.
+
 *navigation_fade_curve* ['smooth|ease_out']::
     Opacity curve of the crossfade and the veil that *space --navigate* shows over a Desktop switch. +
     'smooth' starts slowly and ends slowly: 5% of the change takes 13.5% of the duration. +
@@ -316,6 +335,14 @@ COMMAND
 
 *--focus* '<SPACE_SEL>'::
     Focus the given space.
+
+*--navigate* 'focus|move' '<SPACE_SEL>' ['crossfade|veil|<0-1>' '<0-1>']::
+    Switch to the given space with an effect, for key bindings and bars. +
+    'move' sends the focused window there first and follows it. +
+    The effect is 'crossfade', 'veil' or the starting opacity of the destination's windows, followed by its duration in seconds. +
+    Without them, *navigation_effect_type* and *navigation_effect_duration* choose; *navigation_effect* 'off' shows none. +
+    Presses of 'next' and 'prev' that arrive while one waits are merged. +
+    System Integrity Protection must be partially disabled.
 
 *--switch* '<SPACE_SEL>'::
     The selected space will always be the currently focused space. +
