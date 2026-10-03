@@ -104,6 +104,7 @@ typedef TEST_SIG(function);
 #include "area.c"
 #include "view_tree.c"
 #include "security_bounds.c"
+#include "image_restore.c"
 #include "view_layout.c"
 #include "window_rules.c"
 #include "command_domains.c"
@@ -158,6 +159,7 @@ typedef TEST_SIG(function);
     TEST_ENTRY(view_stack_rejected_ingress)                   \
     TEST_ENTRY(view_tree_min_depth_growth)                    \
     TEST_ENTRY(cgimage_restore_alpha_tail)                    \
+    TEST_ENTRY(cgimage_restore_alpha_colour_space)            \
     TEST_ENTRY(view_layout_padding_and_gap_commands)          \
     TEST_ENTRY(view_layout_tree_commands)                      \
     TEST_ENTRY(view_layout_type_command)                       \
