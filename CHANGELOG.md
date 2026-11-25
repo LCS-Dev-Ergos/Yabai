@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- `window --space`, `window --display` and `space --navigate move` move windows again on macOS 27.3. WindowManager there rejects the bridged move yabai used whenever SkyLight offered it, so the commands exited 0 and the window stayed where it was. With the scripting addition loaded, the move now goes through Dock, as before macOS 26; without it, macOS 27.3 offers no route, and `window --space` and `window --display` fail with a message instead of reporting success
+- A move that did not take effect leaves the layout and focus as they were: `window --space` and `window --display` exit nonzero, a rule does not follow the window to its Space, and a navigation step does not switch the Desktop without its window. Navigation with pacing on still answers when the request is queued, before the move runs
+
+### Verification and limits
+- Debug, ASan/UBSan and Release run every test and the analyzer is clean. The move was checked live on macOS 27.3 beta 2 (26C5047e) with the scripting addition loaded, one display and a disposable window: numeric, `next` and `prev` destinations for both commands, three quick `navigate move` presses each way, and ten direct moves in a row, with the window's Space read from SkyLight after each. Multiple displays and the SIP-enabled case were not tested. The payload is unchanged
 
 ## [8.0.2] - 2026-10-03
 ### Fixed
