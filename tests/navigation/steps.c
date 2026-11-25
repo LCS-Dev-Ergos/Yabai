@@ -370,6 +370,13 @@ static void test_veil_steps(void)
     struct space_navigation_step step;
 
     reset();
+    move_rejected = true;
+    step = veil_step(2, true, .2f);
+    step.move = true;
+    assert(!space_navigation_run_step(active_space, &step));
+    assert(move_calls == 1 && !veil_prepares && !focus_calls && !window_focus_calls);
+
+    reset();
     step = veil_step(2, true, .2f);
     assert(space_navigation_run_step(active_space, &step));
     assert(veil_prepares == 1 && snapshot_prepares == 0 && capture_calls == 0);

@@ -52,10 +52,11 @@ static bool space_navigation_space_fullscreen(uint64_t sid)
     return fullscreen;
 }
 
-static void window_manager_send_window_to_space(void *sm, void *wm, struct window *w, uint64_t sid, bool rule)
+static bool window_manager_send_window_to_space(void *sm, void *wm, struct window *w, uint64_t sid, bool rule)
 {
     ++move_calls;
     move_sid = sid;
+    return !move_rejected;
 }
 
 static uint32_t *space_window_list(uint64_t sid, int *count, bool minimized)
