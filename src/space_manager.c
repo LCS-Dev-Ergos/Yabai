@@ -664,6 +664,13 @@ uint64_t space_manager_active_space(void)
 
 void space_manager_move_window_list_to_space(uint64_t sid, uint32_t *window_list, int window_count)
 {
+    // WindowManager in macOS 27.3 rejects every bridged operation from a client,
+    // while SkyLight still exports the entry point. A move issued from the Dock's
+    // connection still works, so try the scripting addition first.
+
+    bool workaround = workspace_use_macos_space_workaround();
+    if (workaround && scripting_addition_move_window_list_to_space(sid, window_list, window_count)) return;
+
     if (SLSPerformAsynchronousBridgedWindowManagementOperation) {
         CFArrayRef window_list_ref = cfarray_of_cfnumbers(window_list, sizeof(uint32_t), window_count, kCFNumberSInt32Type);
         Class cls = objc_getClass("SLSBridgedMoveWindowsToManagedSpaceOperation");
@@ -672,11 +679,11 @@ void space_manager_move_window_list_to_space(uint64_t sid, uint32_t *window_list
         SLSPerformAsynchronousBridgedWindowManagementOperation(operation);
         [operation release];
         CFRelease(window_list_ref);
-    } else if (!workspace_use_macos_space_workaround()) {
+    } else if (!workaround) {
         CFArrayRef window_list_ref = cfarray_of_cfnumbers(window_list, sizeof(uint32_t), window_count, kCFNumberSInt32Type);
         SLSMoveWindowsToManagedSpace(g_connection, window_list_ref, sid);
         CFRelease(window_list_ref);
-    } else if (!scripting_addition_move_window_list_to_space(sid, window_list, window_count)) {
+    } else {
         SLSSpaceSetCompatID(g_connection, sid, 0x79616265);
         SLSSetWindowListWorkspace(g_connection, window_list, window_count, 0x79616265);
         SLSSpaceSetCompatID(g_connection, sid, 0x0);
@@ -685,23 +692,7 @@ void space_manager_move_window_list_to_space(uint64_t sid, uint32_t *window_list
 
 void space_manager_move_window_to_space(uint64_t sid, struct window *window)
 {
-    if (SLSPerformAsynchronousBridgedWindowManagementOperation) {
-        CFArrayRef window_list_ref = cfarray_of_cfnumbers(&window->id, sizeof(uint32_t), 1, kCFNumberSInt32Type);
-        Class cls = objc_getClass("SLSBridgedMoveWindowsToManagedSpaceOperation");
-        SEL sel = sel_registerName("initWithWindows:spaceID:");
-        id operation = ((id (*)(id, SEL, id, uint64_t))objc_msgSend)([cls alloc], sel, (__bridge id)window_list_ref, sid);
-        SLSPerformAsynchronousBridgedWindowManagementOperation(operation);
-        [operation release];
-        CFRelease(window_list_ref);
-    } else if (!workspace_use_macos_space_workaround()) {
-        CFArrayRef window_list_ref = cfarray_of_cfnumbers(&window->id, sizeof(uint32_t), 1, kCFNumberSInt32Type);
-        SLSMoveWindowsToManagedSpace(g_connection, window_list_ref, sid);
-        CFRelease(window_list_ref);
-    } else if (!scripting_addition_move_window_to_space(sid, window->id)) {
-        SLSSpaceSetCompatID(g_connection, sid, 0x79616265);
-        SLSSetWindowListWorkspace(g_connection, &window->id, 1, 0x79616265);
-        SLSSpaceSetCompatID(g_connection, sid, 0x0);
-    }
+    space_manager_move_window_list_to_space(sid, &window->id, 1);
 }
 
 static inline uint64_t space_manager_find_first_user_space_for_display(uint32_t did)
