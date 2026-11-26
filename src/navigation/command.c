@@ -198,7 +198,7 @@ static void space_navigation_run_request(FILE *rsp, char **message)
         };
 
         if (!space_navigation_run_step(current, &step)) {
-            daemon_fail(rsp, "navigation failed: check scripting addition, Mission Control, display animation and window eligibility.\n");
+            daemon_fail(rsp, "navigation failed: check window space membership, scripting addition, Mission Control, display animation and window eligibility.\n");
         }
 
         return;

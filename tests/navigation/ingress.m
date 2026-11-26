@@ -58,6 +58,7 @@ static enum space_navigation_result space_navigation_begin_step(uint64_t from, s
     return SPACE_NAVIGATION_SWITCHED;
 }
 static int veil_runs;
+static bool run_failed;
 static bool last_run_veil, last_run_crossfade;
 static float last_run_duration;
 static bool space_navigation_run_step(uint64_t from, struct space_navigation_step *step)
@@ -66,7 +67,7 @@ static bool space_navigation_run_step(uint64_t from, struct space_navigation_ste
     last_run_veil = step->veil;
     last_run_crossfade = step->crossfade;
     last_run_duration = step->duration;
-    return true;
+    return !run_failed;
 }
 #define event_loop_post(...) ((void)0)
 #include "../../src/navigation/schedule.c"
@@ -331,6 +332,16 @@ static void test_rejection(void)
 
 int main(void)
 {
+    // Unpaced, a move that fails reaches the client for every selector.
+    reset();
+    g_space_navigation_schedule.pacing = false;
+    run_failed = true;
+    assert(!submit("2", "move", NULL, NULL));
+    assert(!submit("prev", "move", NULL, NULL));
+    assert(!submit("next", "move", NULL, NULL));
+    assert(strstr(last_reply, "membership"));
+    run_failed = false;
+    assert(submit("2", "move", NULL, NULL));
     reset();
     assert(submit("3", "focus", "crossfade", "0.25"));
     assert(switches == 1 && target[0] == 3 && durations[0] == .25f);

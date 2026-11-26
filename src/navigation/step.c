@@ -236,7 +236,7 @@ static bool space_navigation_plan(uint64_t current, struct space_navigation_step
             return false;
         }
 
-        window_manager_send_window_to_space(&g_space_manager, &g_window_manager, focus, sid, false);
+        if (!window_manager_send_window_to_space(&g_space_manager, &g_window_manager, focus, sid, false)) return false;
     }
 
     *count = 0;

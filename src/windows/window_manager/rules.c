@@ -33,8 +33,8 @@ void window_manager_apply_rule_effects_to_window(struct space_manager *sm, struc
     if (effects->sid || effects->did) {
         if (!window_is_fullscreen(window) && !space_is_fullscreen(window_space(window->id))) {
             uint64_t sid = effects->sid ? effects->sid : display_space_id(effects->did);
-            window_manager_send_window_to_space(sm, wm, window, sid, true);
-            if (rule_effects_check_flag(effects, RULE_FOLLOW_SPACE) || effects->fullscreen == RULE_PROP_ON) {
+            bool sent = window_manager_send_window_to_space(sm, wm, window, sid, true);
+            if (sent && (rule_effects_check_flag(effects, RULE_FOLLOW_SPACE) || effects->fullscreen == RULE_PROP_ON)) {
                 space_manager_focus_space(sid);
             }
         }

@@ -816,14 +816,6 @@ bool scripting_addition_move_window_list_to_space(uint64_t sid, uint32_t *window
     return sa_payload_send(SA_OPCODE_WINDOW_LIST_TO_SPACE);
 }
 
-bool scripting_addition_move_window_to_space(uint64_t sid, uint32_t wid)
-{
-    sa_payload_init();
-    pack(sid);
-    pack(wid);
-    return sa_payload_send(SA_OPCODE_WINDOW_TO_SPACE);
-}
-
 #undef sa_payload_init
 #undef pack
 #undef sa_payload_send

@@ -53,6 +53,7 @@ static int g_space_manager;
 static uint64_t active_space, timestamp, visible_space, other_window_space;
 static bool visible, fullscreen, mission_control, animating, focus_success, single_display, single_window;
 static bool other_window_tiled;
+static bool move_rejected;
 static int focus_calls, opacity_calls, window_focus_calls, raise_calls, move_calls, display_calls;
 static int click_raise_calls;
 static bool crossfade_success;
@@ -126,6 +127,7 @@ static void reset(void)
     g_space_navigation_schedule.pacing = true;
 #endif
     memset(&app, 0, sizeof(app));
+    move_rejected = false;
     app.connection = 7;
 
     windows[0] = (struct window) { .id = 1, .application = &app };
